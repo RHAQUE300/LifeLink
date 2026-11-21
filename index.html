@@ -516,6 +516,7 @@ function freshUserData(name){
     ],
     sessions:[],
     oauth:{githubClientId:'',googleClientId:'',connected:{}},
+    googleServices:[],
     links:[{t:'Google Classroom',u:'https://classroom.google.com'},{t:'Gmail',u:'https://mail.google.com'},{t:'Google Drive',u:'https://drive.google.com'},{t:'Notion',u:'https://www.notion.so'}],
     p:{theme:'light',cursor:'chroma',bg:'pastel',blur:18,op:55,fs:15,motion:'on',density:'cozy',nTasks:true,nMsgs:true,nEdu:true,nFiles:true,nCal:true,nSys:true,nBrowser:false,dPri:'Medium',hideDone:false,confirmDel:true,wk:'Sun',fLen:25,bLen:5,autoB:false,aiHistory:true,aiSidebar:true,logoSize:28,logoIcon:'default'}
   };
@@ -554,6 +555,7 @@ function loadUserSession(){
   ['tasks','events','notes','notifs','sessions','links','chats'].forEach(k=>{ if(!Array.isArray(S[k])) S[k] = base[k] || []; });
   if(!S.oauth || typeof S.oauth!=='object') S.oauth = base.oauth;
   if(!S.oauth.connected || typeof S.oauth.connected!=='object') S.oauth.connected = {};
+  if(!Array.isArray(S.googleServices))S.googleServices=[];
   S.aiCfg = {provider:'LifeLink Built-in AI',apiKey:'',model:'',customUrl:''};
    if(!S.aiModel)S.aiModel='auto';
   if(!S.aiLearning||typeof S.aiLearning!=='object')S.aiLearning={enabled:true,memories:[],feedback:[]};
@@ -782,19 +784,18 @@ function tl(){const R={High:0,Medium:1,Low:2},q=U.q.toLowerCase();
 function nl(){const q=U.nq.toLowerCase();$('#nl').innerHTML=S.notes.filter(n=>(n.title+n.body).toLowerCase().includes(q)).sort((a,b)=>b.ts-a.ts).map(n=>`<div class="row" data-a="pick" data-i="${n.id}" style="cursor:pointer;${n.id==U.nid?'font-weight:600':''}"><div style="min-width:0"><div>${esc(n.title||'Untitled')}</div><div class="sub" style="margin:0;font-size:12px">${ago(n.ts)}</div></div></div>`).join('')||empty('No matches')}
 function al(){
   if(S?.loggedIn&&googleConnectionStatus===null)refreshGoogleConnectionStatus();
-  const q=U.aq.toLowerCase();
-  $('#al').innerHTML=A.filter(a=>(U.ac==='All'||CATS[a[1]]===U.ac)&&a[0].toLowerCase().includes(q)).map(([n,c,status,url])=>{
-    if(url==='oauth:google'){
-      return `<div class="glass card" style="padding:14px"><b>${n}</b><div class="sub" style="margin:2px 0 10px;font-size:12px">${CATS[c]}</div><span class="tag">${status}</span> <button class="btn pri" data-a="googlepopup" aria-label="Manage Google accounts" style="margin-top:6px;width:100%;font-size:12px;padding:5px">Manage</button></div>`;
-    }
+  const q=U.aq.toLowerCase(),selected=Array.isArray(S.googleServices)?S.googleServices:[];
+  const googleTiles=GOOGLE_SERVICE_CATALOG.filter(service=>selected.includes(service.id)).map(service=>[service.name,8,'Available',service.url,service.id]);
+  $('#al').innerHTML=[...A,...googleTiles].filter(a=>(U.ac==='All'||CATS[a[1]]===U.ac)&&a[0].toLowerCase().includes(q)).map(([n,c,status,url,serviceId])=>{
+    if(url==='oauth:google')return `<div class="glass card" style="padding:14px"><b>${n}</b><div class="sub" style="margin:2px 0 10px;font-size:12px">${CATS[c]}</div><span class="tag">${status}</span> <button class="btn pri" data-a="googlepopup" aria-label="Manage Google accounts" style="margin-top:6px;width:100%;font-size:12px;padding:5px">Manage</button></div>`;
     if(url==='oauth:github'){
       const conn=S.oauth&&S.oauth.connected&&S.oauth.connected.github;
       return `<div class="glass card" style="padding:14px"><b>${n}</b><div class="sub" style="margin:2px 0 10px;font-size:12px">${CATS[c]}</div><span class="tag ${conn?'low':''}">${conn?'Connected: @'+esc(conn):'Not connected'}</span> <button class="btn pri" data-a="${conn?'ghdisc':'ghconn'}" style="margin-top:6px;width:100%;font-size:12px;padding:5px">${conn?'Disconnect GitHub':'Connect GitHub'}</button></div>`;
     }
+    if(serviceId)return `<div class="glass card" style="padding:14px"><b>${n}</b><div class="sub" style="margin:2px 0 10px;font-size:12px">Google service</div><span class="tag">Added to Apps</span><button class="btn pri" onclick="openBrowser('${url}')" style="margin-top:6px;width:100%;font-size:12px;padding:5px">Open ↗</button><button class="btn" data-a="googleserviceremove" data-i="${serviceId}" style="margin-top:6px;width:100%;font-size:12px;padding:5px">Remove tile</button></div>`;
     return `<div class="glass card" style="padding:14px"><b>${n}</b><div class="sub" style="margin:2px 0 10px;font-size:12px">${CATS[c]}</div><span class="tag">${status}</span> ${url?`<button class="btn pri" onclick="openBrowser('${url}')" style="margin-top:6px;width:100%;font-size:12px;padding:5px">Open ↗</button>`:''}</div>`;
   }).join('')||empty('No services match');
 }
-
 function render(){
   if(!S || !S.loggedIn){
     $('#app-header').style.display='none';
@@ -943,6 +944,23 @@ let islandMode=null;
 const AI_GREETING='Hi! I’m <b>LifeLink AI</b>. I can manage your tasks, events and notes, and chat with a connected model. I can also learn your preferences from feedback over time. What’s on your mind?';
 let aiHistory=[{role:'bot',html:AI_GREETING}];
 
+const GOOGLE_SERVICE_CATALOG=[
+  {id:'gmail',name:'Gmail',detail:'Email and inbox',url:'https://mail.google.com'},
+  {id:'calendar',name:'Google Calendar',detail:'Events and schedules',url:'https://calendar.google.com'},
+  {id:'drive',name:'Google Drive',detail:'Cloud files and storage',url:'https://drive.google.com'},
+  {id:'contacts',name:'Google Contacts',detail:'Contacts and address book',url:'https://contacts.google.com'},
+  {id:'tasks',name:'Google Tasks',detail:'Tasks and to-do lists',url:'https://tasks.google.com'},
+  {id:'classroom',name:'Google Classroom',detail:'Classes and coursework',url:'https://classroom.google.com'},
+  {id:'search',name:'Google Search',detail:'Search the web',url:'https://www.google.com'}
+];
+function setGoogleService(serviceId,add){
+  const service=GOOGLE_SERVICE_CATALOG.find(item=>item.id===serviceId);
+  if(!service)return;
+  const selected=Array.isArray(S.googleServices)?S.googleServices.slice():[];
+  S.googleServices=add?[...new Set([...selected,serviceId])]:selected.filter(id=>id!==serviceId);
+  save();renderGoogleManager();if(location.hash.includes('/apps'))al();
+  toast(add?service.name+' added to Apps':'Google service tile removed');
+}
 function googleManagerMarkup(){
   const accounts=Array.isArray(googleConnectionStatus?.accounts)?googleConnectionStatus.accounts:[];
   const activeId=accounts.some(a=>a.id===S.googleActiveAccountId)?S.googleActiveAccountId:(accounts[0]?.id||null);
@@ -956,15 +974,14 @@ function googleManagerMarkup(){
   }else{
     accountContent=accounts.map(a=>{
       const active=a.id===activeId;
-      return `<div class="row google-manager-account" style="gap:14px;align-items:center"><span class="num" style="width:46px;height:46px;font-size:18px">G</span><div style="flex:1;min-width:0"><b style="display:block;overflow-wrap:anywhere;font-size:14px">${esc(a.email||'Google account')}</b><div class="sub" style="margin:4px 0 0;font-size:12px">${active?'Default account':'Connected Google account'}${a.legacy?' · older connection':''}</div></div>${active?'<span class="tag low">Default</span>':`<button class="btn" data-a="googleuse" data-i="${esc(a.id)}" style="padding:7px 12px;font-size:12px">Make default</button>`}<button class="btn" data-a="googledisc" data-i="${esc(a.id)}" style="padding:7px 12px;font-size:12px">Disconnect</button></div>`;
+      return `<div class="row google-manager-account" style="gap:14px;align-items:center"><span class="num" style="width:46px;height:46px;font-size:18px">G</span><div style="flex:1;min-width:0"><b style="display:block;overflow-wrap:anywhere;font-size:14px">${esc(a.email||'Google account')}</b><div class="sub" style="margin:4px 0 0;font-size:12px">${active?'Default account':'Connected Google account'}${a.legacy?' · older connection':''}</div></div>${active?'<span class="tag low">Default</span>':`<button class="btn" data-a="googleuse" data-i="${esc(a.id)}" style="padding:7px 12px;font-size:12px">Set as default</button>`}<button class="btn" data-a="googledisc" data-i="${esc(a.id)}" style="padding:7px 12px;font-size:12px">Disconnect</button></div>`;
     }).join('');
   }
-  const services=[
-    {name:'Gemini',detail:'Google AI assistant',url:'https://gemini.google.com'},
-    {name:'Google Search',detail:'Search the web',url:'https://www.google.com'},
-    {name:'Google Classroom',detail:'Classes and coursework',url:'https://classroom.google.com'}
-  ];
-  const serviceCards=services.map(service=>`<div class="glass card google-service-card" style="padding:14px"><b>${service.name}</b><div class="sub">${service.detail}</div><span class="tag">Available</span><button class="btn pri" onclick="openBrowser('${service.url}')" style="margin-top:6px;width:100%;font-size:12px;padding:5px">Open ↗</button></div>`).join('');
+  const selected=Array.isArray(S.googleServices)?S.googleServices:[];
+  const serviceCards=GOOGLE_SERVICE_CATALOG.map(service=>{
+    const added=selected.includes(service.id);
+    return `<div class="glass card google-service-card" style="padding:14px"><b>${service.name}</b><div class="sub">${service.detail}</div><span class="tag">${added?'Added to Apps':'Available to add'}</span><button class="btn ${added?'':'pri'}" data-a="googleservice" data-i="${service.id}" data-k="${added?'remove':'add'}" style="margin-top:6px;width:100%;font-size:12px;padding:5px">${added?'Remove from Apps':'＋ Add to Apps'}</button></div>`;
+  }).join('');
   return `<div class="google-manager-section" style="margin-bottom:28px"><div style="display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:14px;flex-wrap:wrap"><div><b style="font-size:18px">Google accounts</b><div class="sub" style="margin:4px 0 0;font-size:13px">${accounts.length} connected account${accounts.length===1?'':'s'}</div></div><div style="display:flex;gap:8px"><button class="btn" data-a="googlerefresh" style="white-space:nowrap">Refresh</button><button class="btn pri" data-a="googleconn" style="white-space:nowrap">＋ Add account</button></div></div>${accountContent}</div><div class="google-manager-section"><h2 style="margin-bottom:14px">Google services</h2><div class="google-services-grid">${serviceCards}</div></div>`;
 }
 function renderGoogleManager(){if(islandMode==='google')$('#island-body').innerHTML=googleManagerMarkup()}
@@ -2026,7 +2043,7 @@ const X=(i,b)=>{const t=S.tasks.find(x=>x.id==i),delT=()=>{S.tasks=S.tasks.filte
  aiundo:()=>{const sn=aiUndo[i];if(!sn){toast('Undo is no longer available for this change.');return}delete aiUndo[i];aiRestore(sn);toast('Undone ✓')},
  openlink:()=>{const arr=b.dataset.k==='home'?S.links:((S.tasks.find(x=>x.id==U.tid)||{}).links||[]);const l=arr[+i];if(l)openBrowser(l.u)},
  nologo:()=>{S.logo='';save();applyPrefs();updateAvatar();if(islandMode=='account')refreshIsland();toast('Profile picture reset')},
- ghconn:()=>startGitHubConnect(),ghdisc:()=>disconnectGitHub(),googlepopup:()=>openIsland('google'),googleconn:()=>startGoogleConnect(),googlerefresh:()=>{googleConnectionStatus=null;googleConnectionError='';refreshGoogleConnectionStatus()},googleuse:()=>{S.googleActiveAccountId=i;save();renderGoogleManager();if(location.hash.includes('/apps'))al()},googledisc:()=>disconnectGoogleAccount(i),
+ ghconn:()=>startGitHubConnect(),ghdisc:()=>disconnectGitHub(),googlepopup:()=>openIsland('google'),googleconn:()=>startGoogleConnect(),googleservice:()=>setGoogleService(i,b.dataset.k==='add'),googleserviceremove:()=>setGoogleService(i,false),googlerefresh:()=>{googleConnectionStatus=null;googleConnectionError='';refreshGoogleConnectionStatus()},googleuse:()=>{S.googleActiveAccountId=i;save();renderGoogleManager();if(location.hash.includes('/apps'))al()},googledisc:()=>disconnectGoogleAccount(i),
  tgo:()=>{if(T.run){clearInterval(iv);T.left=Math.max(0,Math.round((T.end-Date.now())/1000));T.run=false;document.title='LifeLink'}else{T.run=true;T.end=Date.now()+T.left*1000;iv=setInterval(tick,500)}render()},
  trs:()=>{clearInterval(iv);T.run=false;T.brk=false;T.left=T.len*60;document.title='LifeLink';render()},
  tset:()=>{if(!T.run){T.len=+i;T.brk=false;T.left=T.len*60;render()}},
