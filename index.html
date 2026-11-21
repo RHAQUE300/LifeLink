@@ -647,6 +647,11 @@ function render(){
     return;
   }
 
+  // Keep the shared navigation visible whenever the authenticated app renders.
+  // This also covers sessions restored by bootAuth() after a page refresh.
+  $('#app-header').style.display='flex';
+  $('#dock').style.display='flex';
+
   const [r,id]=(location.hash.slice(2)||'home').split('/');
   const rt=Object.prototype.hasOwnProperty.call(V,r)?r:'home';
   $('main').innerHTML=V[rt](id);
