@@ -1672,7 +1672,15 @@ async function getAIResponse(raw){
       return{err:true,html:`⚠️ <b>${esc(S.aiCfg.provider)} error:</b> ${esc(msg)}${hint?'<br>'+esc(hint):''}<br><br><i>Built-in assistant instead:</i><br>${fb}`};
     }
   }
-  return{html:await builtInGeneralAI(raw)};
+  // In built-in mode, send open-ended questions through the authenticated
+  // Cloudflare Worker. Workspace commands above remain local and free.
+  try{
+    return applyAIActions(await callLLM(aiMessages()));
+  }catch(err){
+    const msg=String(err&&err.message||err),hint=aiHint(err&&err.status);
+    const fb=await builtInGeneralAI(raw);
+    return{err:true,html:`⚠️ <b>LifeLink AI backend error:</b> ${esc(msg)}${hint?'<br>'+esc(hint):''}<br><br><i>Built-in assistant instead:</i><br>${fb}`};
+  }
 }
 
 /* ---------- password reset by email ---------- */
