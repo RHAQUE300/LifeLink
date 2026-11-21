@@ -1310,7 +1310,7 @@ function aiActionPreview(a){
   return 'Destructive action';
 }
 function applyAIActions(text){
-  const re=new RegExp(FENCE+'lifelink\\\\s*([\\\\s\\\\S]*?)'+FENCE,'ig');
+  const re=new RegExp(FENCE+'lifelink\\s*([\\s\\S]*?)'+FENCE,'ig');
   const done=[],pending=[],snap=aiSnap();
   const clean=text.replace(re,(all,json)=>{
     try{
