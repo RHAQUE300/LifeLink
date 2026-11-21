@@ -198,7 +198,7 @@ main.in{animation:pg .45s cubic-bezier(.22,1,.36,1)}@keyframes pg{from{opacity:0
 #modal-card{transition-duration:.36s}
 #browser-modal{transition-duration:.38s}
 main.in{animation-duration:.55s}
-.af-side{transition-duration:.4s,.34s}
+#af-side{transition-duration:.4s,.34s}
 #island-header{touch-action:none;user-select:none;-webkit-user-select:none}
 .google-app-card{transition:transform .34s var(--motion-ease),background-color .34s var(--motion-ease),box-shadow .34s var(--motion-ease)}
 .google-app-card:hover{transform:translateY(-3px);background:rgba(255,255,255,.78);box-shadow:0 14px 34px rgba(60,80,140,.16)}
@@ -345,11 +345,6 @@ async function refreshGoogleConnectionStatus(){
     if(location.hash.includes('/apps'))al();
     if(islandMode==='google')renderGoogleManager();
   }catch(error){console.warn('Google connection status unavailable:',error.message)}
-}
-function googleAccountsPage(){
-  if(S?.loggedIn&&googleConnectionStatus===null)refreshGoogleConnectionStatus();
-  const accounts=googleConnectionStatus?.accounts||[];
-  return `<h1>Connect Google</h1><p class="sub">Connect and manage multiple Google accounts. Each account stays separate.</p><div class="glass card" style="max-width:760px"><div class="row" style="border:0;justify-content:space-between;flex-wrap:wrap"><div><h2 style="margin:0">Your Google accounts</h2><p class="sub" style="margin:4px 0 0;font-size:13px">Manage Gmail, Drive, Calendar and other Google services here.</p></div><button class="btn pri" data-a="googleconn">＋ Connect another account</button></div>`+(accounts.length?accounts.map(a=>{const active=(S.googleActiveAccountId||accounts[0].id)===a.id;return `<div class="row" style="gap:12px"><span class="num" style="width:40px;height:40px">G</span><div style="flex:1;min-width:0"><b>${esc(a.email||'Google account')}</b><div class="sub" style="margin:2px 0 0;font-size:12px">${active?'Selected for Google services':'Connected to LifeLink'}</div></div>${active?'<span class="tag low">Selected</span>':`<button class="btn" data-a="googleuse" data-i="${esc(a.id)}">Use account</button>`}<button class="btn" data-a="googledisc" data-i="${esc(a.id)}">Disconnect</button></div>`}).join(''):`<div style="padding:26px 8px;text-align:center"><div style="font-size:34px;margin-bottom:8px">◎</div><b>No Google accounts connected</b><p class="sub" style="margin:5px 0 14px">Connect a Google account to start linking its services.</p><button class="btn pri" data-a="googleconn">Connect Google account</button></div>`)+`</div>`;
 }
 async function startGoogleConnect(){
   const accountId=crypto.randomUUID();
@@ -2012,6 +2007,10 @@ const X=(i,b)=>{const t=S.tasks.find(x=>x.id==i),delT=()=>{S.tasks=S.tasks.filte
    enterApp('Account data reset');
  })}};
 
+document.addEventListener('keydown',e=>{
+  const card=e.target.closest('.google-app-card');
+  if(card&&(e.key==='Enter'||e.key===' ')){e.preventDefault();openIsland('google')}
+});
 document.addEventListener('click',e=>{
   const b=e.target.closest('[data-a]');if(!b||!S||!S.loggedIn)return;
   const a=e.target.closest('a[href]');if(a&&a!==b)return;   // a real link inside a clickable card: let the link win
