@@ -272,7 +272,10 @@ export default {
         return json({ connected: false });
       }
 
-      if (!env.GOOGLE_CLIENT_ID || !env.GOOGLE_CLIENT_SECRET) {
+      // Trim accidental whitespace copied into Cloudflare variables/secrets.
+      const googleClientId = typeof env.GOOGLE_CLIENT_ID === "string" ? env.GOOGLE_CLIENT_ID.trim() : "";
+      const googleClientSecret = typeof env.GOOGLE_CLIENT_SECRET === "string" ? env.GOOGLE_CLIENT_SECRET.trim() : "";
+      if (!googleClientId || !googleClientSecret) {
         return json({ error: "Google OAuth is not configured on the server" }, 500);
       }
       const contentLength = Number(request.headers.get("Content-Length") || 0);
@@ -289,8 +292,8 @@ export default {
         headers: { "Content-Type": "application/x-www-form-urlencoded" },
         body: new URLSearchParams({
           code: body.code,
-          client_id: env.GOOGLE_CLIENT_ID,
-          client_secret: env.GOOGLE_CLIENT_SECRET,
+          client_id: googleClientId,
+          client_secret: googleClientSecret,
           redirect_uri: ALLOWED_ORIGIN,
           grant_type: "authorization_code"
         }),
@@ -299,8 +302,12 @@ export default {
       let tokens = {};
       try { tokens = await tokenResponse.json(); } catch {}
       if (!tokenResponse.ok || !tokens.access_token) {
-        console.error("Google authorization-code exchange failed:", tokenResponse.status, tokens.error || "unknown error");
-        return json({ error: "Google authorization failed. Please try connecting again." }, 400);
+        const googleError = typeof tokens.error === "string" ? tokens.error : "unknown error";
+        const googleDescription = typeof tokens.error_description === "string" ? tokens.error_description.slice(0, 240) : "";
+        console.error("Google authorization-code exchange failed:", tokenResponse.status, googleError, googleDescription);
+        return json({
+          error: "Google authorization failed: " + googleError + (googleDescription ? " — " + googleDescription : "")
+        }, 400);
       }
 
       const existing = await env.GOOGLE_TOKENS.get(key, "json");
