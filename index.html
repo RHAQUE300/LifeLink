@@ -336,8 +336,15 @@ async function googleApi(path,method='GET',body){
 }
 async function refreshGoogleConnectionStatus(){
   if(!S?.loggedIn)return;
-  try{googleConnectionStatus=await googleApi('/api/google/status');googleConnectionStatus.accounts=Array.isArray(googleConnectionStatus.accounts)?googleConnectionStatus.accounts:[];if(S.oauth){S.oauth.connected=S.oauth.connected||{};S.oauth.connected.google=googleConnectionStatus.accounts.length>0;save()}if(location.hash.includes('/google'))render()}
-  catch(error){console.warn('Google connection status unavailable:',error.message)}
+  try{
+    googleConnectionStatus=await googleApi('/api/google/status');
+    googleConnectionStatus.accounts=Array.isArray(googleConnectionStatus.accounts)?googleConnectionStatus.accounts:[];
+    const ids=googleConnectionStatus.accounts.map(a=>a.id);
+    if(S.googleActiveAccountId&&!ids.includes(S.googleActiveAccountId)){S.googleActiveAccountId=ids[0]||null;save()}
+    if(S.oauth){S.oauth.connected=S.oauth.connected||{};S.oauth.connected.google=ids.length>0;save()}
+    if(location.hash.includes('/apps'))al();
+    if(islandMode==='google')renderGoogleManager();
+  }catch(error){console.warn('Google connection status unavailable:',error.message)}
 }
 function googleAccountsPage(){
   if(S?.loggedIn&&googleConnectionStatus===null)refreshGoogleConnectionStatus();
@@ -366,7 +373,7 @@ async function startGoogleConnect(){
           await refreshGoogleConnectionStatus();
           toast('Google account connected to LifeLink.');
         }catch(error){toast('Google connection failed: '+error.message)}
-        finally{googleConnectionBusy=false;if(location.hash.includes('/apps'))al();if(location.hash.includes('/google'))render()}
+        finally{googleConnectionBusy=false;if(location.hash.includes('/apps'))al();if(islandMode==='google')renderGoogleManager()}
       },
       error_callback:error=>{
         googleConnectionBusy=false;
@@ -749,12 +756,19 @@ function nl(){const q=U.nq.toLowerCase();$('#nl').innerHTML=S.notes.filter(n=>(n
 function al(){
   if(S?.loggedIn&&googleConnectionStatus===null)refreshGoogleConnectionStatus();
   const q=U.aq.toLowerCase();
-  $('#al').innerHTML=A.filter(a=>!['Gmail','Google Drive','Google Calendar'].includes(a[0])&&(U.ac==='All'||CATS[a[1]]===U.ac)&&a[0].toLowerCase().includes(q)).map(([n,c,status,url])=>{
+  $('#al').innerHTML=A.filter(a=>(U.ac==='All'||CATS[a[1]]===U.ac)&&a[0].toLowerCase().includes(q)).map(([n,c,status,url])=>{
+    if(url==='oauth:google'){
+      const accounts=googleConnectionStatus?.accounts||[],count=accounts.length;
+      const accountLines=googleConnectionStatus===null
+        ? '<span class="sub" style="margin:0;font-size:12px">Loading connected accounts…</span>'
+        : count?accounts.map(a=>`<span class="tag" style="display:inline-block;margin:3px 4px 0 0">${esc(a.email||'Google account')}</span>`).join('')
+        : '<span class="sub" style="margin:0;font-size:12px">No Google accounts connected yet</span>';
+      return `<div class="glass card google-app-card" role="button" tabindex="0" data-a="googlepopup" aria-label="Manage Google accounts" style="padding:14px;cursor:pointer"><div style="display:flex;align-items:center;gap:10px;margin-bottom:10px"><span class="num" style="width:40px;height:40px;font-size:17px">G</span><div style="flex:1;min-width:0"><b>Google</b><div class="sub" style="margin:2px 0 0;font-size:12px">Google account manager</div></div><span class="tag ${count?'low':''}">${count} connected</span></div><div style="min-height:24px;margin-bottom:10px">${accountLines}</div><span class="sub" style="margin:0;font-size:12px">Manage accounts <span aria-hidden="true">↗</span></span></div>`;
+    }
     if(url==='oauth:github'){
       const conn=S.oauth&&S.oauth.connected&&S.oauth.connected.github;
       return `<div class="glass card" style="padding:14px"><b>${n}</b><div class="sub" style="margin:2px 0 10px;font-size:12px">${CATS[c]}</div><span class="tag ${conn?'low':''}">${conn?'Connected: @'+esc(conn):'Not connected'}</span> <button class="btn pri" data-a="${conn?'ghdisc':'ghconn'}" style="margin-top:6px;width:100%;font-size:12px;padding:5px">${conn?'Disconnect GitHub':'Connect GitHub'}</button></div>`;
     }
-    if(['Gmail','Google Drive','Google Calendar'].includes(n))return '';
     return `<div class="glass card" style="padding:14px"><b>${n}</b><div class="sub" style="margin:2px 0 10px;font-size:12px">${CATS[c]}</div><span class="tag">${status}</span> ${url?`<button class="btn pri" onclick="openBrowser('${url}')" style="margin-top:6px;width:100%;font-size:12px;padding:5px">Open ↗</button>`:''}</div>`;
   }).join('')||empty('No services match');
 }
@@ -907,11 +921,25 @@ let islandMode=null;
 const AI_GREETING='Hi! I’m <b>LifeLink AI</b>. I can manage your tasks, events and notes, and chat with a connected model. I can also learn your preferences from feedback over time. What’s on your mind?';
 let aiHistory=[{role:'bot',html:AI_GREETING}];
 
+function googleManagerMarkup(){
+  if(googleConnectionStatus===null)return '<div class="sub" style="margin:0">Loading connected Google accounts…</div>';
+  const accounts=googleConnectionStatus.accounts||[];
+  if(!accounts.length)return `<div style="padding:20px 8px;text-align:center"><div class="num" style="width:48px;height:48px;margin:0 auto 12px;font-size:20px">G</div><b>No Google accounts connected</b><p class="sub" style="margin:6px 0 16px;font-size:13px">Connect a Google account to manage its Google services in LifeLink.</p><button class="btn pri" data-a="googleconn">＋ Connect Google account</button></div>`;
+  const activeId=accounts.some(a=>a.id===S.googleActiveAccountId)?S.googleActiveAccountId:accounts[0].id;
+  return `<div style="display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:8px"><div><b>Connected accounts</b><div class="sub" style="margin:2px 0 0;font-size:12px">${accounts.length} Google account${accounts.length===1?'':'s'}</div></div><button class="btn pri" data-a="googleconn" style="padding:6px 12px;white-space:nowrap">＋ Add account</button></div>`+
+    accounts.map(a=>{const active=a.id===activeId;return `<div class="row google-manager-account" style="gap:9px;align-items:center"><span class="num" style="width:36px;height:36px">G</span><div style="flex:1;min-width:0"><b style="display:block;overflow-wrap:anywhere;font-size:13px">${esc(a.email||'Google account')}</b><div class="sub" style="margin:2px 0 0;font-size:11px">${active?'Default Google account':'Connected account'}</div></div>${active?'<span class="tag low">Default</span>':`<button class="btn" data-a="googleuse" data-i="${esc(a.id)}" style="padding:5px 10px;font-size:11px">Use</button>`}<button class="btn" data-a="googledisc" data-i="${esc(a.id)}" style="padding:5px 9px;font-size:11px">✕</button></div>`}).join('');
+}
+function renderGoogleManager(){if(islandMode==='google')$('#island-body').innerHTML=googleManagerMarkup()}
 function openIsland(mode){
   const isl=$('#island'),tit=$('#island-title'),body=$('#island-body'),exp=$('#island-expand');
   if(isl.classList.contains('open') && islandMode === mode){closeIsland();return;}
   islandMode=mode;isl.classList.add('open');exp.style.display='inline-block';
-  if(mode=='ai'){
+  if(mode==='google'){
+    tit.textContent='Google accounts';exp.style.display='none';body.innerHTML=googleManagerMarkup();
+    if(googleConnectionStatus===null)refreshGoogleConnectionStatus();
+  }
+  else if(mode=='ai'){
+    exp.style.display='inline-block';
     const activeProvider = S.aiModel&&S.aiModel!=='auto' ? S.aiModel : 'Auto';
     tit.innerHTML=`✦ AI <span class="tag" style="margin-left:6px;font-size:10px">${esc(activeProvider)}</span>`;exp.textContent='Show more';
     exp.onclick=()=>{const rect=$('#island').getBoundingClientRect();closeIsland();openAIFull(rect)};
@@ -1917,11 +1945,21 @@ async function startPasswordReset(){
 function queueResetPrompt(){return;}
 function clearResetFlag(n){}
 
-let isDragging=false,startX,startY,initialX,initialY;
+let isDragging=false,startX,startY,initialX,initialY,dragPointerId=null;
 const isl=$('#island'),ish=$('#island-header');
-ish.onmousedown=e=>{if(e.target.closest('button'))return;isDragging=true;isl.classList.add('dragging');startX=e.clientX;startY=e.clientY;initialX=isl.offsetLeft;initialY=isl.offsetTop;e.preventDefault();};
-document.addEventListener('mousemove',e=>{if(!isDragging)return;isl.style.left=(initialX+(e.clientX-startX))+'px';isl.style.top=(initialY+(e.clientY-startY))+'px';isl.style.right='auto';});
-document.addEventListener('mouseup',()=>{if(isDragging){isDragging=false;isl.classList.remove('dragging')}});
+ish.onpointerdown=e=>{
+  if(e.target.closest('button'))return;
+  isDragging=true;dragPointerId=e.pointerId;isl.classList.add('dragging');
+  startX=e.clientX;startY=e.clientY;initialX=isl.offsetLeft;initialY=isl.offsetTop;
+  try{ish.setPointerCapture(e.pointerId)}catch{}
+  e.preventDefault();
+};
+document.addEventListener('pointermove',e=>{
+  if(!isDragging||e.pointerId!==dragPointerId)return;
+  isl.style.left=(initialX+(e.clientX-startX))+'px';isl.style.top=(initialY+(e.clientY-startY))+'px';isl.style.right='auto';
+});
+const stopIslandDrag=e=>{if(isDragging&&(e.pointerId===undefined||e.pointerId===dragPointerId)){isDragging=false;dragPointerId=null;isl.classList.remove('dragging')}};
+document.addEventListener('pointerup',stopIslandDrag);document.addEventListener('pointercancel',stopIslandDrag);
 
 const X=(i,b)=>{const t=S.tasks.find(x=>x.id==i),delT=()=>{S.tasks=S.tasks.filter(x=>x!==t);save();render()};return{
  tick:()=>{t.done=b.checked;if(t.done){t.prog=100;note('Tasks','Completed: '+t.title)}save();render()},
@@ -1947,7 +1985,7 @@ const X=(i,b)=>{const t=S.tasks.find(x=>x.id==i),delT=()=>{S.tasks=S.tasks.filte
  aiundo:()=>{const sn=aiUndo[i];if(!sn){toast('Undo is no longer available for this change.');return}delete aiUndo[i];aiRestore(sn);toast('Undone ✓')},
  openlink:()=>{const arr=b.dataset.k==='home'?S.links:((S.tasks.find(x=>x.id==U.tid)||{}).links||[]);const l=arr[+i];if(l)openBrowser(l.u)},
  nologo:()=>{S.logo='';save();applyPrefs();updateAvatar();if(islandMode=='account')refreshIsland();toast('Profile picture reset')},
- ghconn:()=>startGitHubConnect(),ghdisc:()=>disconnectGitHub(),googleconn:()=>startGoogleConnect(),googleuse:()=>{S.googleActiveAccountId=i;save();render()},googledisc:()=>disconnectGoogleAccount(i),
+ ghconn:()=>startGitHubConnect(),ghdisc:()=>disconnectGitHub(),googlepopup:()=>openIsland('google'),googleconn:()=>startGoogleConnect(),googleuse:()=>{S.googleActiveAccountId=i;save();renderGoogleManager();if(location.hash.includes('/apps'))al()},googledisc:()=>disconnectGoogleAccount(i),
  tgo:()=>{if(T.run){clearInterval(iv);T.left=Math.max(0,Math.round((T.end-Date.now())/1000));T.run=false;document.title='LifeLink'}else{T.run=true;T.end=Date.now()+T.left*1000;iv=setInterval(tick,500)}render()},
  trs:()=>{clearInterval(iv);T.run=false;T.brk=false;T.left=T.len*60;document.title='LifeLink';render()},
  tset:()=>{if(!T.run){T.len=+i;T.brk=false;T.left=T.len*60;render()}},
