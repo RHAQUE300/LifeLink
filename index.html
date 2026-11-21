@@ -186,6 +186,25 @@ main.in{animation:pg .45s cubic-bezier(.22,1,.36,1)}@keyframes pg{from{opacity:0
 [data-theme=dark] #af-input{background:linear-gradient(to top,rgba(0,0,0,.45),transparent)}
 [data-theme=dark] .af-chat:hover{background:rgba(255,255,255,.08)}[data-theme=dark] .af-chat.on{background:rgba(255,255,255,.15)}
 [data-theme=dark] .af-x:hover{background:rgba(255,255,255,.14)}
+
+/* App-wide motion polish */
+:root{--motion-ease:cubic-bezier(.22,1,.36,1)}
+.ib,.bub,.btn,.dk,.ai-chip,.ai-copy-btn{transition-duration:.32s;transition-timing-function:var(--motion-ease)}
+#dock{transition-duration:.42s}
+.it{transition-duration:.5s}
+#toast{transition-duration:.34s}
+#island{transition-duration:.38s}
+#modal-backdrop{transition-duration:.36s}
+#modal-card{transition-duration:.36s}
+#browser-modal{transition-duration:.38s}
+main.in{animation-duration:.55s}
+.af-side{transition-duration:.4s,.34s}
+#island-header{touch-action:none;user-select:none;-webkit-user-select:none}
+.google-app-card{transition:transform .34s var(--motion-ease),background-color .34s var(--motion-ease),box-shadow .34s var(--motion-ease)}
+.google-app-card:hover{transform:translateY(-3px);background:rgba(255,255,255,.78);box-shadow:0 14px 34px rgba(60,80,140,.16)}
+.google-manager-account{transition:background-color .28s var(--motion-ease),transform .28s var(--motion-ease)}
+.google-manager-account:hover{background:rgba(79,124,255,.06);transform:translateX(2px)}
+[data-theme=dark] .google-app-card:hover{background:rgba(255,255,255,.1)}
 </style>
 </head><body>
 
@@ -206,7 +225,7 @@ main.in{animation:pg .45s cubic-bezier(.22,1,.36,1)}@keyframes pg{from{opacity:0
   <button class="ib" id="av" onclick="openIsland('account')" title="Account" aria-label="Account"></button>
 </header>
 <main></main>
-<nav id="dock" class="glass" aria-label="Dock" style="display:none"><button class="ib" id="dt" aria-label="Hide dock" aria-expanded="true"></button><div class="it"><span class="vd"></span><a class="dk" data-r="todo" href="#/todo">☑ <span>To Do</span></a><a class="dk" data-r="calendar" href="#/calendar">▦ <span>Calendar</span></a><a class="dk" data-r="notes" href="#/notes">✎ <span>Notes</span></a><a class="dk" data-r="apps" href="#/apps">⊞ <span>Apps</span></a><a class="dk" data-r="google" href="#/google">◎ <span>Connect Google</span></a><a class="dk go" href="#/recovery">▶ <span>Start Recovery</span></a></div></nav>
+<nav id="dock" class="glass" aria-label="Dock" style="display:none"><button class="ib" id="dt" aria-label="Hide dock" aria-expanded="true"></button><div class="it"><span class="vd"></span><a class="dk" data-r="todo" href="#/todo">☑ <span>To Do</span></a><a class="dk" data-r="calendar" href="#/calendar">▦ <span>Calendar</span></a><a class="dk" data-r="notes" href="#/notes">✎ <span>Notes</span></a><a class="dk" data-r="apps" href="#/apps">⊞ <span>Apps</span></a><a class="dk go" href="#/recovery">▶ <span>Start Recovery</span></a></div></nav>
 
 <div id="modal-backdrop" onclick="if(event.target===this)closeModal()">
   <div id="modal-card" role="dialog" aria-modal="true"></div>
@@ -522,12 +541,10 @@ const save=()=>{
 
 const U={q:'',f:'All',s:'Deadline',aq:'',ac:'All',nq:'',nid:null,nf:'All',cm:new Date(),cv:'Month',tid:null};
 let T={len:25,left:25*60,run:false,end:0,brk:false},iv;
-const CATS=['Productivity','Communication','Email & calendars','Cloud storage','Education','AI','Creative & media','Browsers & search'],
+const CATS=['Productivity','Communication','Email & calendars','Cloud storage','Education','AI','Creative & media','Browsers & search','Google'],
 A=[
+  ['Google',8,'Connect and manage Google accounts','oauth:google'],
   ['Google Classroom',4,'Available','https://classroom.google.com'],
-  ['Gmail',2,'Available','https://mail.google.com'],
-  ['Google Drive',3,'Available','https://drive.google.com'],
-  ['Google Calendar',2,'Available','https://calendar.google.com'],
   ['GitHub',0,'Available','oauth:github'],
   ['Notion',0,'Available','https://www.notion.so'],
   ['Todoist',0,'Available','https://todoist.com'],
@@ -706,8 +723,8 @@ calendar:()=>{const c=U.cm,y=c.getFullYear(),m=c.getMonth(),wk=U.cv=='Week',W=S.
  return `<h1>Calendar</h1><div class="row" style="border:0;flex-wrap:wrap"><button class="btn" data-a="cprev" aria-label="Previous">‹</button><h2 style="margin:0;min-width:170px;text-align:center">${c.toLocaleString('default',{month:'long',year:'numeric'})}</h2><button class="btn" data-a="cnext" aria-label="Next">›</button><button class="btn" data-a="ctoday">Today</button><select id="cv" style="width:auto">${['Month','Week'].map(x=>`<option${U.cv==x?' selected':''}>${x}</option>`).join('')}</select><button class="btn pri" data-a="evnew" data-i="${td}" style="margin-left:auto">New event</button></div><div class="glass card"><div class="cal">${'Sun Mon Tue Wed Thu Fri Sat Sun'.split(' ').slice(W,W+7).map(d=>`<b class="sub" style="margin:0">${d}</b>`).join('')}${cells}</div></div>`},
 notes:()=>{if(!S.notes.some(n=>n.id==U.nid))U.nid=S.notes[0]?.id;const n=S.notes.find(x=>x.id==U.nid);
  return `<h1>Notes</h1><p class="sub">Changes save automatically for ${esc(currentEmail)}.</p><div class="grid" style="grid-template-columns:300px 1fr"><div class="glass card"><input id="nq" placeholder="Search notes" value="${esc(U.nq)}"><button class="btn pri" data-a="newnote" style="margin:10px 0;width:100%">New note</button><div id="nl"></div></div><div class="glass card">${n?`<input id="nt" value="${esc(n.title)}" style="font-size:20px;font-weight:600;background:none;border:0"><textarea id="nb" rows="16" style="background:none;border:0;resize:vertical">${esc(n.body)}</textarea><div class="row" style="border:0"><span class="sub" id="sv" style="margin:0">Edited ${new Date(n.ts).toLocaleString()}</span><button class="btn" data-a="delnote" style="margin-left:auto">Delete note</button></div>`:empty('No notes yet. Create one to start writing.')}</div></div>`},
-apps:()=>`<h1>Apps &amp; Services</h1><p class="sub">Browse and open services from LifeLink. Manage Google accounts in the Connect Google tab.</p><div class="row" style="border:0"><input id="aq" placeholder="Search services" value="${esc(U.aq)}"><select id="ac" style="width:auto"><option>All</option>${CATS.map(c=>`<option${U.ac==c?' selected':''}>${c}</option>`).join('')}</select></div><div id="al" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(210px,1fr));gap:12px"></div>`,
-google:()=>googleAccountsPage(),
+apps:()=>`<h1>Apps &amp; Services</h1><p class="sub">Browse services and manage connected accounts from their app tiles.</p><div class="row" style="border:0"><input id="aq" placeholder="Search services" value="${esc(U.aq)}"><select id="ac" style="width:auto"><option>All</option>${CATS.map(c=>`<option${U.ac==c?' selected':''}>${c}</option>`).join('')}</select></div><div id="al" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(210px,1fr));gap:12px"></div>`,
+
  activity:()=>`<h1>Notifications</h1><p class="sub">${S.notifs.filter(n=>!n.read).length} unread · ${S.notifs.length} total</p><div class="row" style="border:0;flex-wrap:wrap">${['All','Tasks','Messages','Education','Files','Calendar','System'].map(f=>`<button class="btn${U.nf==f?' pri':''}" data-a="nf" data-i="${f}">${f}</button>`).join('')}<button class="btn" data-a="readall" style="margin-left:auto">Mark all as read</button></div><div class="glass card">${S.notifs.filter(n=>U.nf=='All'||n.type==U.nf).map(n=>`<div class="row" style="cursor:pointer"><span style="width:9px;height:9px;border-radius:50%;flex:none;background:${n.read?'transparent':'#4f7cff'}"></span><span class="tag">${n.type}</span><span style="flex:1;${n.read?'opacity:.6':''}" data-a="nread" data-i="${n.id}">${esc(n.text)}</span><span class="sub" style="margin:0">${ago(n.ts)}</span>${n.action==='resetpw'?`<button class="btn pri" data-a="resetpw" style="padding:2px 8px;font-size:11px;margin-left:auto">Reset now</button>`:''}${n.dismissable?`<button class="btn" data-a="dismissnotif" data-i="${n.id}" style="padding:2px 8px;font-size:11px;margin-left:auto">Dismiss</button>`:''}</div>`).join('')||empty('No notifications here')}</div>`,
 recovery:()=>{const full=T.brk?S.p.bLen*60:T.len*60,tot=(S.sessions||[]).reduce((a,s)=>a+s.min,0),td=(S.sessions||[]).filter(s=>new Date(s.ts).toDateString()==new Date().toDateString()).reduce((a,s)=>a+s.min,0);
  return `<h1>${T.brk?'Break':'Recovery'}</h1><p class="sub">${T.brk?'Rest for '+S.p.bLen+' min.':'One focused session at a time.'}</p><div class="glass card" style="text-align:center;max-width:560px;margin:0 auto 18px;padding:34px"><div id="tm" style="font-size:88px;font-weight:300;letter-spacing:2px">${fmt(T.left)}</div><div class="row" style="justify-content:center;border:0">${[25,45,60].map(m=>`<button class="btn${T.len==m?' pri':''}" data-a="tset" data-i="${m}">${m} min</button>`).join('')}<button class="btn" data-a="tcus">Custom</button></div><div class="row" style="justify-content:center;border:0"><button class="btn pri" data-a="tgo">${T.run?'Pause':T.left<full?'Resume':'Start'}</button><button class="btn" data-a="trs">Reset</button></div></div><div class="glass card" style="max-width:560px;margin:auto"><h2>Focus statistics</h2><div class="stats"><div class="stat"><b>${(S.sessions||[]).length}</b>Sessions</div><div class="stat"><b>${td}m</b>Today</div><div class="stat"><b>${tot}m</b>All time</div></div><h2 style="margin-top:16px">History</h2>${(S.sessions||[]).slice(-8).reverse().map(s=>`<div class="row">${s.min} min session<span class="sub" style="margin:0 0 0 auto">${ago(s.ts)}</span></div>`).join('')||empty('No sessions yet')}</div>`},
