@@ -204,11 +204,22 @@ main.in{animation-duration:.55s}
 .google-manager-account:hover{background:rgba(79,124,255,.06);transform:translateY(-1px)}
 .google-manager-error{padding:14px;border:1px solid rgba(220,70,70,.25);border-radius:14px;background:rgba(220,70,70,.07);display:flex;align-items:center;justify-content:space-between;gap:12px}
 .google-services-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:14px}
-.google-service-card{min-width:0}
-.google-service-card .sub{margin:2px 0 10px;font-size:12px}
+.google-service-group{margin-top:22px}
+.google-service-group h3{font-size:14px;font-weight:650;margin-bottom:10px;letter-spacing:-.01em}
+.google-service-card{min-width:0;display:flex;flex-direction:column;gap:7px;padding:14px;transition:transform .28s cubic-bezier(.22,1,.36,1),background .28s,border-color .28s}
+.google-service-card:hover{transform:translateY(-2px)}
+.google-service-card .sub{margin:0;font-size:12px;min-height:34px}
+.google-service-card .tag{align-self:flex-start}
+.google-service-card button{width:100%;margin-top:auto;font-size:12px;padding:6px 10px}
+.google-service-toolbar{display:flex;align-items:center;gap:12px;margin:12px 0 8px}
+.google-service-toolbar input{max-width:520px;min-width:0}
+.google-service-note{font-size:12px;margin:6px 0 14px}
+.google-service-group[hidden],.google-service-card[hidden]{display:none!important}
+@media(max-width:560px){.google-service-toolbar{align-items:stretch;flex-direction:column}.google-service-toolbar input{max-width:none}}
 body.google-manager-active:after{content:"";position:fixed;inset:0;z-index:49;background:rgba(28,35,52,.32);backdrop-filter:blur(3px);-webkit-backdrop-filter:blur(3px);pointer-events:none}
-#island.google-manager-open{inset:40px;width:auto;height:auto;max-width:none;max-height:none;background:rgba(255,255,255,.84);backdrop-filter:blur(30px) saturate(1.35);-webkit-backdrop-filter:blur(30px) saturate(1.35);border:1px solid rgba(255,255,255,.9);box-shadow:0 30px 90px rgba(12,20,42,.34),inset 0 1px 0 rgba(255,255,255,.8);transform:translateY(14px) scale(.985)}
-#island.google-manager-open.open{transform:translateY(0) scale(1)}
+#island.google-manager-open{inset:40px;width:auto;height:auto;max-width:none;max-height:none;background:rgba(255,255,255,.84);backdrop-filter:blur(30px) saturate(1.35);-webkit-backdrop-filter:blur(30px) saturate(1.35);border:1px solid rgba(255,255,255,.9);box-shadow:0 30px 90px rgba(12,20,42,.34),inset 0 1px 0 rgba(255,255,255,.8);transform:translate3d(0,14px,0) scale(.985);transition:opacity .38s cubic-bezier(.16,1,.3,1),transform .42s cubic-bezier(.16,1,.3,1),visibility .42s;will-change:opacity,transform}
+#island.google-manager-open.open{transform:translate3d(0,0,0) scale(1)}
+#island.google-manager-open.closing{pointer-events:none}
 #island.google-manager-open #island-header{padding:16px 22px;flex:none}
 #island.google-manager-open #island-body{padding:24px;min-height:0;overflow-y:auto}
 @media(max-width:560px){#island.google-manager-open{inset:12px}#island.google-manager-open #island-header{padding:12px 14px}#island.google-manager-open #island-body{padding:16px}.google-services-grid{grid-template-columns:1fr}}
@@ -940,26 +951,100 @@ document.addEventListener('change',e=>{
   }
 });
 
-let islandMode=null;
+let islandMode=null,islandCloseTimer=null,islandCloseSeq=0;
 const AI_GREETING='Hi! I’m <b>LifeLink AI</b>. I can manage your tasks, events and notes, and chat with a connected model. I can also learn your preferences from feedback over time. What’s on your mind?';
 let aiHistory=[{role:'bot',html:AI_GREETING}];
 
 const GOOGLE_SERVICE_CATALOG=[
-  {id:'gmail',name:'Gmail',detail:'Email and inbox',url:'https://mail.google.com'},
-  {id:'calendar',name:'Google Calendar',detail:'Events and schedules',url:'https://calendar.google.com'},
-  {id:'drive',name:'Google Drive',detail:'Cloud files and storage',url:'https://drive.google.com'},
-  {id:'contacts',name:'Google Contacts',detail:'Contacts and address book',url:'https://contacts.google.com'},
-  {id:'tasks',name:'Google Tasks',detail:'Tasks and to-do lists',url:'https://tasks.google.com'},
-  {id:'classroom',name:'Google Classroom',detail:'Classes and coursework',url:'https://classroom.google.com'},
-  {id:'search',name:'Google Search',detail:'Search the web',url:'https://www.google.com'}
+  // Google Workspace and education apps
+  {id:'gmail',name:'Gmail',group:'Work & school',detail:'Email and inbox',url:'https://mail.google.com/'},
+  {id:'calendar',name:'Google Calendar',group:'Work & school',detail:'Events, calendars and schedules',url:'https://calendar.google.com/'},
+  {id:'drive',name:'Google Drive',group:'Work & school',detail:'Cloud files and shared storage',url:'https://drive.google.com/'},
+  {id:'docs',name:'Google Docs',group:'Work & school',detail:'Documents and collaborative writing',url:'https://docs.google.com/'},
+  {id:'sheets',name:'Google Sheets',group:'Work & school',detail:'Spreadsheets and data',url:'https://sheets.google.com/'},
+  {id:'slides',name:'Google Slides',group:'Work & school',detail:'Presentations and slideshows',url:'https://slides.google.com/'},
+  {id:'forms',name:'Google Forms',group:'Work & school',detail:'Forms, surveys and quizzes',url:'https://forms.google.com/'},
+  {id:'sites',name:'Google Sites',group:'Work & school',detail:'Websites and project spaces',url:'https://sites.google.com/'},
+  {id:'keep',name:'Google Keep',group:'Work & school',detail:'Notes, checklists and reminders',url:'https://keep.google.com/'},
+  {id:'tasks',name:'Google Tasks',group:'Work & school',detail:'Task lists and to-dos',url:'https://tasks.google.com/'},
+  {id:'contacts',name:'Google Contacts',group:'Work & school',detail:'Contacts and address book',url:'https://contacts.google.com/'},
+  {id:'chat',name:'Google Chat',group:'Work & school',detail:'Direct messages and team spaces',url:'https://chat.google.com/'},
+  {id:'meet',name:'Google Meet',group:'Work & school',detail:'Video meetings and calls',url:'https://meet.google.com/'},
+  {id:'classroom',name:'Google Classroom',group:'Work & school',detail:'Classes, assignments and coursework',url:'https://classroom.google.com/'},
+  {id:'groups',name:'Google Groups',group:'Work & school',detail:'Mailing lists and discussion groups',url:'https://groups.google.com/'},
+  {id:'vids',name:'Google Vids',group:'Work & school',detail:'Workplace video creation',url:'https://vids.google.com/'},
+  {id:'studio',name:'Workspace Studio',group:'Work & school',detail:'Workspace automations and workflows',url:'https://studio.workspace.google.com/'},
+  {id:'appsscript',name:'Google Apps Script',group:'Work & school',detail:'Automation and scripting for Google apps',url:'https://script.google.com/'},
+  {id:'appsheet',name:'AppSheet',group:'Work & school',detail:'No-code business apps',url:'https://www.appsheet.com/'},
+  {id:'admin',name:'Google Admin Console',group:'Work & school',detail:'Workspace administrator tools · admin access required',url:'https://admin.google.com/'},
+  {id:'vault',name:'Google Vault',group:'Work & school',detail:'Workspace retention and eDiscovery · admin access required',url:'https://vault.google.com/'},
+
+  // Personal services and everyday tools
+  {id:'search',name:'Google Search',group:'Everyday Google',detail:'Search the web',url:'https://www.google.com/'},
+  {id:'one',name:'Google One',group:'Everyday Google',detail:'Storage, membership and benefits',url:'https://one.google.com/'},
+  {id:'maps',name:'Google Maps',group:'Everyday Google',detail:'Maps, places and navigation',url:'https://maps.google.com/'},
+  {id:'photos',name:'Google Photos',group:'Everyday Google',detail:'Photo and video library',url:'https://photos.google.com/'},
+  {id:'translate',name:'Google Translate',group:'Everyday Google',detail:'Translation tools',url:'https://translate.google.com/'},
+  {id:'messages',name:'Google Messages',group:'Everyday Google',detail:'Messages for web · pair with your phone',url:'https://messages.google.com/web/'},
+  {id:'voice',name:'Google Voice',group:'Everyday Google',detail:'Calls, voicemail and messaging · availability varies',url:'https://voice.google.com/'},
+  {id:'wallet',name:'Google Wallet',group:'Everyday Google',detail:'Payment methods and passes · features vary by region',url:'https://wallet.google.com/'},
+  {id:'home',name:'Google Home',group:'Everyday Google',detail:'Smart home controls · supported devices required',url:'https://home.google.com/'},
+  {id:'fi',name:'Google Fi Wireless',group:'Everyday Google',detail:'Mobile plan and account management · supported regions',url:'https://fi.google.com/'},
+  {id:'passwords',name:'Google Password Manager',group:'Everyday Google',detail:'Saved passwords and passkeys',url:'https://passwords.google.com/'},
+  {id:'find',name:'Google Find Hub',group:'Everyday Google',detail:'Find supported Android devices and accessories',url:'https://www.google.com/android/find/'},
+  {id:'account',name:'Google Account',group:'Everyday Google',detail:'Account settings, privacy and security',url:'https://myaccount.google.com/'},
+  {id:'alerts',name:'Google Alerts',group:'Everyday Google',detail:'Email alerts for topics you follow',url:'https://www.google.com/alerts'},
+
+  // Media, learning and discovery
+  {id:'youtube',name:'YouTube',group:'Media & discovery',detail:'Videos, channels and subscriptions',url:'https://www.youtube.com/'},
+  {id:'ytmusic',name:'YouTube Music',group:'Media & discovery',detail:'Music streaming and playlists',url:'https://music.youtube.com/'},
+  {id:'play',name:'Google Play Store',group:'Media & discovery',detail:'Android apps, games and digital content',url:'https://play.google.com/store/'},
+  {id:'playbooks',name:'Google Play Books',group:'Media & discovery',detail:'E-books and audiobooks',url:'https://play.google.com/books/'},
+  {id:'tv',name:'Google TV',group:'Media & discovery',detail:'Movies, shows and watchlists',url:'https://tv.google/'},
+  {id:'news',name:'Google News',group:'Media & discovery',detail:'News and local coverage',url:'https://news.google.com/'},
+  {id:'finance',name:'Google Finance',group:'Media & discovery',detail:'Markets and financial information',url:'https://www.google.com/finance/'},
+  {id:'books',name:'Google Books',group:'Media & discovery',detail:'Book search and previews',url:'https://books.google.com/'},
+  {id:'scholar',name:'Google Scholar',group:'Media & discovery',detail:'Academic papers and citations',url:'https://scholar.google.com/'},
+  {id:'earth',name:'Google Earth',group:'Media & discovery',detail:'Explore places and satellite imagery',url:'https://earth.google.com/web/'},
+  {id:'arts',name:'Google Arts & Culture',group:'Media & discovery',detail:'Museums, art and cultural collections',url:'https://artsandculture.google.com/'},
+  {id:'shopping',name:'Google Shopping',group:'Media & discovery',detail:'Products and shopping search',url:'https://shopping.google.com/'},
+  {id:'flights',name:'Google Flights',group:'Media & discovery',detail:'Compare flights and fares',url:'https://www.google.com/travel/flights'},
+  {id:'travel',name:'Google Travel',group:'Media & discovery',detail:'Trips, hotels and travel planning',url:'https://www.google.com/travel/'},
+  {id:'trends',name:'Google Trends',group:'Media & discovery',detail:'Explore search trends',url:'https://trends.google.com/'},
+
+  // Developer and business tools
+  {id:'business',name:'Google Business Profile',group:'Business & developer',detail:'Manage a business listing',url:'https://business.google.com/'},
+  {id:'ads',name:'Google Ads',group:'Business & developer',detail:'Advertising campaigns and reporting',url:'https://ads.google.com/'},
+  {id:'analytics',name:'Google Analytics',group:'Business & developer',detail:'Website and app analytics',url:'https://analytics.google.com/'},
+  {id:'searchconsole',name:'Google Search Console',group:'Business & developer',detail:'Search performance and site health',url:'https://search.google.com/search-console/'},
+  {id:'tagmanager',name:'Google Tag Manager',group:'Business & developer',detail:'Manage website and app tags',url:'https://tagmanager.google.com/'},
+  {id:'merchants',name:'Google Merchant Center',group:'Business & developer',detail:'Product listings and merchant tools',url:'https://merchants.google.com/'},
+  {id:'cloud',name:'Google Cloud Console',group:'Business & developer',detail:'Cloud projects, services and billing',url:'https://console.cloud.google.com/'},
+  {id:'playconsole',name:'Google Play Console',group:'Business & developer',detail:'Publish and manage Android apps',url:'https://play.google.com/console/'},
+  {id:'blogger',name:'Blogger',group:'Business & developer',detail:'Create and manage blogs',url:'https://www.blogger.com/'}
 ];
+const GOOGLE_SERVICE_GROUPS=['Work & school','Everyday Google','Media & discovery','Business & developer'];
 function setGoogleService(serviceId,add){
   const service=GOOGLE_SERVICE_CATALOG.find(item=>item.id===serviceId);
-  if(!service)return;
+  if(!service||!S?.loggedIn)return;
   const selected=Array.isArray(S.googleServices)?S.googleServices.slice():[];
-  S.googleServices=add?[...new Set([...selected,serviceId])]:selected.filter(id=>id!==serviceId);
-  save();renderGoogleManager();if(location.hash.includes('/apps'))al();
-  toast(add?service.name+' added to Apps':'Google service tile removed');
+  const next=add?[...new Set([...selected,serviceId])]:selected.filter(id=>id!==serviceId);
+  S.googleServices=next;
+  if(!save()){toast('Could not save this tile. Check your browser storage.');return}
+  renderGoogleManager();
+  if(location.hash==='#/apps')al();
+  toast(add?service.name+' added to Apps':service.name+' removed from Apps');
+}
+function filterGoogleServices(value){
+  const query=String(value||'').trim().toLowerCase();
+  document.querySelectorAll('.google-service-card').forEach(card=>{
+    card.hidden=!!query&&!card.dataset.search.includes(query);
+  });
+  document.querySelectorAll('.google-service-group').forEach(group=>{
+    group.hidden=!group.querySelector('.google-service-card:not([hidden])');
+  });
+  const emptyState=$('#google-service-empty');
+  if(emptyState)emptyState.style.display=document.querySelector('.google-service-card:not([hidden])')?'none':'block';
 }
 function googleManagerMarkup(){
   const accounts=Array.isArray(googleConnectionStatus?.accounts)?googleConnectionStatus.accounts:[];
@@ -978,15 +1063,22 @@ function googleManagerMarkup(){
     }).join('');
   }
   const selected=Array.isArray(S.googleServices)?S.googleServices:[];
-  const serviceCards=GOOGLE_SERVICE_CATALOG.map(service=>{
-    const added=selected.includes(service.id);
-    return `<div class="glass card google-service-card" style="padding:14px"><b>${service.name}</b><div class="sub">${service.detail}</div><span class="tag">${added?'Added to Apps':'Available to add'}</span><button class="btn ${added?'':'pri'}" data-a="googleservice" data-i="${service.id}" data-k="${added?'remove':'add'}" style="margin-top:6px;width:100%;font-size:12px;padding:5px">${added?'Remove from Apps':'＋ Add to Apps'}</button></div>`;
+  const serviceGroups=GOOGLE_SERVICE_GROUPS.map(group=>{
+    const services=GOOGLE_SERVICE_CATALOG.filter(service=>service.group===group);
+    const cards=services.map(service=>{
+      const added=selected.includes(service.id);
+      const search=[service.name,service.detail,service.group].join(' ').toLowerCase();
+      return `<div class="glass card google-service-card" data-search="${esc(search)}"><b>${esc(service.name)}</b><div class="sub">${esc(service.detail)}</div><span class="tag ${added?'low':''}">${added?'Added to Apps':'Available to add'}</span><button class="btn ${added?'':'pri'}" data-a="googleservice" data-i="${service.id}" data-k="${added?'remove':'add'}">${added?'Remove from Apps':'＋ Add to Apps'}</button></div>`;
+    }).join('');
+    return `<section class="google-service-group"><h3>${group}</h3><div class="google-services-grid">${cards}</div></section>`;
   }).join('');
-  return `<div class="google-manager-section" style="margin-bottom:28px"><div style="display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:14px;flex-wrap:wrap"><div><b style="font-size:18px">Google accounts</b><div class="sub" style="margin:4px 0 0;font-size:13px">${accounts.length} connected account${accounts.length===1?'':'s'}</div></div><div style="display:flex;gap:8px"><button class="btn" data-a="googlerefresh" style="white-space:nowrap">Refresh</button><button class="btn pri" data-a="googleconn" style="white-space:nowrap">＋ Add account</button></div></div>${accountContent}</div><div class="google-manager-section"><h2 style="margin-bottom:14px">Google services</h2><div class="google-services-grid">${serviceCards}</div></div>`;
+  return `<div class="google-manager-section" style="margin-bottom:28px"><div style="display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:14px;flex-wrap:wrap"><div><b style="font-size:18px">Google accounts</b><div class="sub" style="margin:4px 0 0;font-size:13px">${accounts.length} connected account${accounts.length===1?'':'s'}</div></div><div style="display:flex;gap:8px"><button class="btn" data-a="googlerefresh" style="white-space:nowrap">Refresh</button><button class="btn pri" data-a="googleconn" style="white-space:nowrap">＋ Add account</button></div></div>${accountContent}</div><div class="google-manager-section"><h2 style="margin-bottom:6px">Google services</h2><p class="sub google-service-note">Choose which Google web apps appear as tiles on your Apps page. These shortcuts open the Google service; Google data syncing inside LifeLink is configured separately.</p><div class="google-service-toolbar"><input id="google-service-search" type="search" placeholder="Find a Google service…" autocomplete="off"><span class="tag">${GOOGLE_SERVICE_CATALOG.length} services</span></div><div id="google-service-groups">${serviceGroups}</div><p id="google-service-empty" class="sub" style="display:none;margin-top:14px">No Google services match that search.</p></div>`;
 }
 function renderGoogleManager(){if(islandMode==='google')$('#island-body').innerHTML=googleManagerMarkup()}
 function openIsland(mode){
   const isl=$('#island'),tit=$('#island-title'),body=$('#island-body'),exp=$('#island-expand');
+  clearTimeout(islandCloseTimer);islandCloseSeq++;
+  if(isl.classList.contains('closing'))isl.classList.remove('closing');
   exp.style.display='inline-block';
   if(isl.classList.contains('open') && islandMode === mode){closeIsland();return;}
   islandMode=mode;
@@ -1044,7 +1136,27 @@ function openIsland(mode){
   }
 }
 function refreshIsland(){const m=islandMode;if(!m)return;islandMode=null;openIsland(m)}
-function closeIsland(){$('#island').classList.remove('open','google-manager-open');document.body.classList.remove('google-manager-active');islandMode=null;}
+function closeIsland(){
+  const isl=$('#island');
+  if(isl.classList.contains('google-manager-open')){
+    if(!isl.classList.contains('open'))return;
+    const seq=++islandCloseSeq;
+    clearTimeout(islandCloseTimer);
+    // Keep the full-screen geometry in place while opacity/transform animate.
+    isl.classList.remove('open');
+    isl.classList.add('closing');
+    islandMode=null;
+    islandCloseTimer=setTimeout(()=>{
+      if(seq!==islandCloseSeq||isl.classList.contains('open'))return;
+      isl.classList.remove('google-manager-open','closing');
+      document.body.classList.remove('google-manager-active');
+    },460);
+    return;
+  }
+  isl.classList.remove('open','closing');
+  document.body.classList.remove('google-manager-active');
+  islandMode=null;
+}
 
 function dismissNotif(id){
   clearResetFlag(S.notifs.find(n=>n.id===id));
@@ -2080,7 +2192,7 @@ document.addEventListener('click',e=>{
   const f=X(b.dataset.i,b)[b.dataset.a];if(f)f();
 });
 document.addEventListener('input',e=>{if(!S.loggedIn)return;const el=e.target,id=el.id,v=el.value,t=S.tasks.find(x=>x.id==U.tid),n=S.notes.find(x=>x.id==U.nid);
- if(id=='q'){U.q=v;tl()}else if(id=='f'){U.f=v;tl()}else if(id=='s'){U.s=v;tl()}else if(id=='aq'){U.aq=v;al()}else if(id=='ac'){U.ac=v;al()}else if(id=='nq'){U.nq=v;nl()}else if(id=='cv'){U.cv=v;render()}
+ if(id==='google-service-search'){filterGoogleServices(v)}else if(id=='q'){U.q=v;tl()}else if(id=='f'){U.f=v;tl()}else if(id=='s'){U.s=v;tl()}else if(id=='aq'){U.aq=v;al()}else if(id=='ac'){U.ac=v;al()}else if(id=='nq'){U.nq=v;nl()}else if(id=='cv'){U.cv=v;render()}
  else if((id=='nt'||id=='nb')&&n){n[id=='nt'?'title':'body']=v;n.ts=Date.now();save();$('#sv').textContent='Saved '+new Date().toLocaleTimeString();nl()}
  else if(id=='wn'&&t){t.notes=v;save()}else if(id=='wp'&&t){t.prog=+v;$('#wpv').textContent=v+'%';save()}else if(id=='pn'){S.name=v.trim()||'User';save();updateAvatar()}else if(id==='ai-learn-enabled'){S.aiLearning.enabled=el.checked;save();toast(el.checked?'Adaptive learning enabled':'Adaptive learning paused')}});
 
