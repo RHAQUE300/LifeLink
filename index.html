@@ -92,6 +92,13 @@ input,select,textarea{border:1px solid rgba(0,0,0,.1);background:rgba(255,255,25
 .ai-msg.bot{background:rgba(255,255,255,.78);border:1px solid var(--gb);margin-right:20px;border-bottom-left-radius:4px}
 .ai-chip{display:inline-block;font-size:11.5px;padding:4px 10px;border-radius:99px;background:rgba(79,124,255,.12);border:1px solid rgba(79,124,255,.25);cursor:pointer;margin:0 4px 6px 0;transition:background .15s}
 .ai-chip:hover{background:rgba(79,124,255,.22)}
+.ai-copy-row{display:flex;align-items:center;gap:6px;margin-top:9px;flex-wrap:wrap}
+.ai-copy-btn{border:1px solid rgba(120,130,150,.22);background:rgba(120,130,150,.09);border-radius:8px;padding:4px 9px;font-size:11px;line-height:1.4;cursor:pointer;color:inherit;transition:background .15s,border-color .15s}
+.ai-copy-btn:hover{background:rgba(79,124,255,.14);border-color:rgba(79,124,255,.35)}
+.ai-msg pre{position:relative;padding-top:34px!important}
+.ai-copy-code{position:absolute;top:5px;right:6px;z-index:1;background:rgba(120,130,150,.16);backdrop-filter:blur(8px)}
+[data-theme=dark] .ai-copy-btn{background:rgba(255,255,255,.08);border-color:rgba(255,255,255,.16)}
+[data-theme=dark] .ai-copy-btn:hover{background:rgba(255,255,255,.16);border-color:rgba(255,255,255,.28)}
 
 @media(max-width:900px){.grid{grid-template-columns:1fr!important}body{padding:84px 12px 130px}.dk span{display:none}.cd{min-height:64px}#island{width:calc(100vw - 24px);right:12px}}
 main.in{animation:pg .45s cubic-bezier(.22,1,.36,1)}@keyframes pg{from{opacity:0;transform:translateY(10px)}}.dk{transition:background .25s}
@@ -993,11 +1000,45 @@ function clearAllChats(){
 function renderAI(){
   [['#ao','#ao'],['#af-col','#af-msgs']].forEach(([s,sc])=>{
     const o=$(s);if(!o)return;
-    o.innerHTML=aiHistory.map((m,idx)=>`<div class="ai-msg ${m.role}">${m.html}${m.role==='bot'&&m.text&&!m.err&&!m.id&&!m.feedbackGiven?`<div style="display:flex;gap:6px;margin-top:6px;opacity:.75"><button class="btn" data-a="aifeedback" data-i="${idx}" data-k="up" style="padding:2px 7px;font-size:11px" title="Helpful">👍</button><button class="btn" data-a="aifeedback" data-i="${idx}" data-k="down" style="padding:2px 7px;font-size:11px" title="Needs improvement">👎</button></div>`:''}</div>`).join('');
+    o.innerHTML=aiHistory.map((m,idx)=>`<div class="ai-msg ${m.role}">${m.html}${m.role==='bot'&&!m.id?`<div class="ai-copy-row"><button class="ai-copy-btn" type="button" data-copy-message="${idx}" title="Copy the entire response">▢ Copy response</button>${m.text&&!m.err&&!m.feedbackGiven?`<button class="btn" data-a="aifeedback" data-i="${idx}" data-k="up" style="padding:2px 7px;font-size:11px" title="Helpful">👍</button><button class="btn" data-a="aifeedback" data-i="${idx}" data-k="down" style="padding:2px 7px;font-size:11px" title="Needs improvement">👎</button>`:''}</div>`:''}</div>`).join('');
+    o.querySelectorAll('.ai-msg.bot pre').forEach(pre=>{
+      if(pre.querySelector('.ai-copy-code'))return;
+      const b=document.createElement('button');
+      b.type='button';b.className='ai-copy-btn ai-copy-code';b.textContent='▢ Copy code';
+      b.title='Copy this code block';b.setAttribute('data-copy-code','true');
+      pre.appendChild(b);
+    });
     const c=$(sc);if(c)c.scrollTop=c.scrollHeight;
   });
   const ch=$('#af-chips');if(ch)ch.style.display=aiHistory.filter(m=>!m.id).length<=1?'flex':'none';
 }
+async function copyAIText(value){
+  const text=String(value||'');
+  if(!text.trim()){toast('There is nothing to copy.');return}
+  try{
+    if(navigator.clipboard&&window.isSecureContext){await navigator.clipboard.writeText(text)}
+    else{
+      const area=document.createElement('textarea');area.value=text;
+      area.setAttribute('readonly','');area.style.position='fixed';area.style.opacity='0';
+      document.body.appendChild(area);area.select();
+      const ok=document.execCommand('copy');area.remove();
+      if(!ok)throw new Error('Clipboard access is unavailable');
+    }
+    toast('Copied to clipboard ✓');
+  }catch(err){toast('Could not copy. Check your browser clipboard permissions.')}
+}
+document.addEventListener('click',e=>{
+  const b=e.target.closest('[data-copy-message],[data-copy-code]');if(!b)return;
+  e.preventDefault();e.stopPropagation();
+  if(b.hasAttribute('data-copy-code')){
+    const pre=b.closest('pre'),code=pre&&pre.querySelector('code');
+    copyAIText((code||pre||{}).textContent||'');
+  }else{
+    const idx=Number(b.getAttribute('data-copy-message')),m=aiHistory[idx];
+    const node=b.closest('.ai-msg');
+    copyAIText(m&&m.text?m.text:(node?htmlToText(node.innerHTML):''));
+  }
+});
 function renderAIChatList(){
   const l=$('#af-list');if(!l)return;
   const chats=(S&&S.chats)||[];
