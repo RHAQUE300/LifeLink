@@ -1722,7 +1722,7 @@ async function builtInGeneralAI(raw){
   return `I couldn’t answer “<b>${esc(q.length>80?q.slice(0,80)+'…':q)}</b>” in built-in mode. I can manage tasks, events and notes, do maths and unit conversions, and look up topics on Wikipedia.<br><br>Say <i>help</i> for examples, or tap <b>⚙ Connect AI</b> to link a model for open-ended questions.`;
 }
 
-async async function getAIResponse(raw){
+async function getAIResponse(raw){
   const external=aiExternal();
   const ac=appCommand(raw);if(ac)return{html:ac};
   const wc=workspaceCommand(raw,external);if(wc)return{html:wc};
