@@ -446,10 +446,33 @@ const save=()=>{
 
 const U={q:'',f:'All',s:'Deadline',aq:'',ac:'All',nq:'',nid:null,nf:'All',cm:new Date(),cv:'Month',tid:null};
 let T={len:25,left:25*60,run:false,end:0,brk:false},iv;
-const CATS=['Connected apps'],
+const CATS=['Productivity','Communication','Email & calendars','Cloud storage','Education','AI','Creative & media','Browsers & search'],
 A=[
-  // Only services with a real authorization flow belong in this list.
-  ['GitHub',0,'OAuth','oauth:github']
+  ['Google Classroom',4,'Available','https://classroom.google.com'],
+  ['Gmail',2,'Available','https://mail.google.com'],
+  ['Google Drive',3,'Available','https://drive.google.com'],
+  ['Google Calendar',2,'Available','https://calendar.google.com'],
+  ['GitHub',0,'Available','oauth:github'],
+  ['Notion',0,'Available','https://www.notion.so'],
+  ['Todoist',0,'Available','https://todoist.com'],
+  ['Trello',0,'Available','https://trello.com'],
+  ['Asana',0,'Coming soon'],
+  ['ClickUp',0,'Coming soon'],
+  ['Slack',1,'Available','https://slack.com'],
+  ['Discord',1,'Available','https://discord.com'],
+  ['Zoom',1,'Available','https://zoom.us'],
+  ['Dropbox',3,'Available','https://www.dropbox.com'],
+  ['Canvas',4,'Available','https://canvas.instructure.com'],
+  ['Moodle',4,'Available','https://moodle.org'],
+  ['ChatGPT',5,'Available','https://chatgpt.com'],
+  ['Claude',5,'Available','https://claude.ai'],
+  ['Gemini',5,'Available','https://gemini.google.com'],
+  ['Perplexity',5,'Available','https://www.perplexity.ai'],
+  ['Canva',6,'Available','https://www.canva.com'],
+  ['Adobe',6,'Available','https://www.adobe.com'],
+  ['YouTube',6,'Available','https://www.youtube.com'],
+  ['Spotify',6,'Available','https://open.spotify.com'],
+  ['Google Search',7,'Available','https://www.google.com']
 ];
 function badge(){const u=(S.notifs||[]).filter(n=>!n.read).length,b=$('#bell b');if(b){b.textContent=u;b.style.display=u?'block':'none'}}
 const NP={Tasks:'nTasks',Messages:'nMsgs',Education:'nEdu',Files:'nFiles',Calendar:'nCal',System:'nSys'};
@@ -607,7 +630,7 @@ calendar:()=>{const c=U.cm,y=c.getFullYear(),m=c.getMonth(),wk=U.cv=='Week',W=S.
  return `<h1>Calendar</h1><div class="row" style="border:0;flex-wrap:wrap"><button class="btn" data-a="cprev" aria-label="Previous">‹</button><h2 style="margin:0;min-width:170px;text-align:center">${c.toLocaleString('default',{month:'long',year:'numeric'})}</h2><button class="btn" data-a="cnext" aria-label="Next">›</button><button class="btn" data-a="ctoday">Today</button><select id="cv" style="width:auto">${['Month','Week'].map(x=>`<option${U.cv==x?' selected':''}>${x}</option>`).join('')}</select><button class="btn pri" data-a="evnew" data-i="${td}" style="margin-left:auto">New event</button></div><div class="glass card"><div class="cal">${'Sun Mon Tue Wed Thu Fri Sat Sun'.split(' ').slice(W,W+7).map(d=>`<b class="sub" style="margin:0">${d}</b>`).join('')}${cells}</div></div>`},
 notes:()=>{if(!S.notes.some(n=>n.id==U.nid))U.nid=S.notes[0]?.id;const n=S.notes.find(x=>x.id==U.nid);
  return `<h1>Notes</h1><p class="sub">Changes save automatically for ${esc(currentEmail)}.</p><div class="grid" style="grid-template-columns:300px 1fr"><div class="glass card"><input id="nq" placeholder="Search notes" value="${esc(U.nq)}"><button class="btn pri" data-a="newnote" style="margin:10px 0;width:100%">New note</button><div id="nl"></div></div><div class="glass card">${n?`<input id="nt" value="${esc(n.title)}" style="font-size:20px;font-weight:600;background:none;border:0"><textarea id="nb" rows="16" style="background:none;border:0;resize:vertical">${esc(n.body)}</textarea><div class="row" style="border:0"><span class="sub" id="sv" style="margin:0">Edited ${new Date(n.ts).toLocaleString()}</span><button class="btn" data-a="delnote" style="margin-left:auto">Delete note</button></div>`:empty('No notes yet. Create one to start writing.')}</div></div>`},
-apps:()=>`<h1>Connected apps</h1><p class="sub">Only apps with a real sign-in and authorization flow appear here. Connect first; LifeLink will then add an integrated workspace for supported services. You can disconnect and remove an app at any time.</p><div class="row" style="border:0"><input id="aq" placeholder="Search connected apps" value="${esc(U.aq)}"></div><div id="al" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:12px"></div>`,
+apps:()=>`<h1>Apps &amp; Services</h1><p class="sub">Browse your services and open them from LifeLink. Google integration is our first connection setup.</p><div class="row" style="border:0"><input id="aq" placeholder="Search services" value="${esc(U.aq)}"><select id="ac" style="width:auto"><option>All</option>${CATS.map(c=>`<option${U.ac==c?' selected':''}>${c}</option>`).join('')}</select></div><div id="al" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(210px,1fr));gap:12px"></div>`,
 activity:()=>`<h1>Notifications</h1><p class="sub">${S.notifs.filter(n=>!n.read).length} unread · ${S.notifs.length} total</p><div class="row" style="border:0;flex-wrap:wrap">${['All','Tasks','Messages','Education','Files','Calendar','System'].map(f=>`<button class="btn${U.nf==f?' pri':''}" data-a="nf" data-i="${f}">${f}</button>`).join('')}<button class="btn" data-a="readall" style="margin-left:auto">Mark all as read</button></div><div class="glass card">${S.notifs.filter(n=>U.nf=='All'||n.type==U.nf).map(n=>`<div class="row" style="cursor:pointer"><span style="width:9px;height:9px;border-radius:50%;flex:none;background:${n.read?'transparent':'#4f7cff'}"></span><span class="tag">${n.type}</span><span style="flex:1;${n.read?'opacity:.6':''}" data-a="nread" data-i="${n.id}">${esc(n.text)}</span><span class="sub" style="margin:0">${ago(n.ts)}</span>${n.action==='resetpw'?`<button class="btn pri" data-a="resetpw" style="padding:2px 8px;font-size:11px;margin-left:auto">Reset now</button>`:''}${n.dismissable?`<button class="btn" data-a="dismissnotif" data-i="${n.id}" style="padding:2px 8px;font-size:11px;margin-left:auto">Dismiss</button>`:''}</div>`).join('')||empty('No notifications here')}</div>`,
 recovery:()=>{const full=T.brk?S.p.bLen*60:T.len*60,tot=(S.sessions||[]).reduce((a,s)=>a+s.min,0),td=(S.sessions||[]).filter(s=>new Date(s.ts).toDateString()==new Date().toDateString()).reduce((a,s)=>a+s.min,0);
  return `<h1>${T.brk?'Break':'Recovery'}</h1><p class="sub">${T.brk?'Rest for '+S.p.bLen+' min.':'One focused session at a time.'}</p><div class="glass card" style="text-align:center;max-width:560px;margin:0 auto 18px;padding:34px"><div id="tm" style="font-size:88px;font-weight:300;letter-spacing:2px">${fmt(T.left)}</div><div class="row" style="justify-content:center;border:0">${[25,45,60].map(m=>`<button class="btn${T.len==m?' pri':''}" data-a="tset" data-i="${m}">${m} min</button>`).join('')}<button class="btn" data-a="tcus">Custom</button></div><div class="row" style="justify-content:center;border:0"><button class="btn pri" data-a="tgo">${T.run?'Pause':T.left<full?'Resume':'Start'}</button><button class="btn" data-a="trs">Reset</button></div></div><div class="glass card" style="max-width:560px;margin:auto"><h2>Focus statistics</h2><div class="stats"><div class="stat"><b>${(S.sessions||[]).length}</b>Sessions</div><div class="stat"><b>${td}m</b>Today</div><div class="stat"><b>${tot}m</b>All time</div></div><h2 style="margin-top:16px">History</h2>${(S.sessions||[]).slice(-8).reverse().map(s=>`<div class="row">${s.min} min session<span class="sub" style="margin:0 0 0 auto">${ago(s.ts)}</span></div>`).join('')||empty('No sessions yet')}</div>`},
@@ -631,12 +654,13 @@ function tl(){const R={High:0,Medium:1,Low:2},q=U.q.toLowerCase();
 function nl(){const q=U.nq.toLowerCase();$('#nl').innerHTML=S.notes.filter(n=>(n.title+n.body).toLowerCase().includes(q)).sort((a,b)=>b.ts-a.ts).map(n=>`<div class="row" data-a="pick" data-i="${n.id}" style="cursor:pointer;${n.id==U.nid?'font-weight:600':''}"><div style="min-width:0"><div>${esc(n.title||'Untitled')}</div><div class="sub" style="margin:0;font-size:12px">${ago(n.ts)}</div></div></div>`).join('')||empty('No matches')}
 function al(){
   const q=U.aq.toLowerCase();
-  const configured=!!(LL_CONFIG.githubClientId&&LL_CONFIG.githubTokenProxy);
-  $('#al').innerHTML=A.filter(a=>a[0].toLowerCase().includes(q)).map(([n,c])=>{
-    const conn=S.oauth&&S.oauth.connected&&S.oauth.connected.github;
-    const status=conn?'Connected as @'+esc(conn):configured?'Ready to connect':'Setup required';
-    return `<div class="glass card" style="padding:16px"><div style="display:flex;align-items:center;justify-content:space-between;gap:8px"><b>${n}</b><span class="tag ${conn?'low':''}">${status}</span></div><p class="sub" style="font-size:12px;margin:10px 0">${conn?'Your GitHub account is linked to LifeLink.':configured?'Authorize GitHub to link your account.':'GitHub OAuth has not been configured for this LifeLink deployment yet.'}</p>${conn?`<button class="btn" data-a="ghdisc" style="width:100%">Disconnect and remove</button>`: `<button class="btn pri" data-a="ghconn" ${configured?'':'disabled title="OAuth setup is required first"'} style="width:100%">Connect GitHub</button>`}</div>`;
-  }).join('')||empty('No connected-app integrations match your search');
+  $('#al').innerHTML=A.filter(a=>(U.ac==='All'||CATS[a[1]]===U.ac)&&a[0].toLowerCase().includes(q)).map(([n,c,status,url])=>{
+    if(url==='oauth:github'){
+      const conn=S.oauth&&S.oauth.connected&&S.oauth.connected.github;
+      return `<div class="glass card" style="padding:14px"><b>${n}</b><div class="sub" style="margin:2px 0 10px;font-size:12px">${CATS[c]}</div><span class="tag ${conn?'low':''}">${conn?'Connected: @'+esc(conn):'Not connected'}</span> <button class="btn pri" data-a="${conn?'ghdisc':'ghconn'}" style="margin-top:6px;width:100%;font-size:12px;padding:5px">${conn?'Disconnect GitHub':'Connect GitHub'}</button></div>`;
+    }
+    return `<div class="glass card" style="padding:14px"><b>${n}</b><div class="sub" style="margin:2px 0 10px;font-size:12px">${CATS[c]}</div><span class="tag">${status}</span> ${url?`<button class="btn pri" onclick="openBrowser('${url}')" style="margin-top:6px;width:100%;font-size:12px;padding:5px">Open ↗</button>`:''}</div>`;
+  }).join('')||empty('No services match');
 }
 
 function render(){
