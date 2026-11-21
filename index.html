@@ -932,6 +932,7 @@ function googleManagerMarkup(){
 function renderGoogleManager(){if(islandMode==='google')$('#island-body').innerHTML=googleManagerMarkup()}
 function openIsland(mode){
   const isl=$('#island'),tit=$('#island-title'),body=$('#island-body'),exp=$('#island-expand');
+  exp.style.display='inline-block';
   if(isl.classList.contains('open') && islandMode === mode){closeIsland();return;}
   islandMode=mode;isl.classList.add('open');exp.style.display='inline-block';
   if(mode==='google'){
