@@ -3,7 +3,7 @@ const ALLOWED_ORIGIN = "https://rhaque300.github.io";
 const corsHeaders = {
   "Access-Control-Allow-Origin": ALLOWED_ORIGIN,
   "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
-  "Access-Control-Allow-Headers": "Content-Type, Authorization",
+  "Access-Control-Allow-Headers": "Content-Type, Authorization, X-Requested-With",
   "Vary": "Origin"
 };
 
@@ -227,6 +227,110 @@ export default {
     }
 
     const url = new URL(request.url);
+
+    // Google OAuth connection routes. Refresh tokens remain in Workers KV and are
+    // keyed by the verified Supabase user ID, never by a browser-supplied account ID.
+    const googleRoute = ["/api/google/connect", "/api/google/status", "/api/google/disconnect"].includes(url.pathname);
+    if (googleRoute) {
+      if (origin !== ALLOWED_ORIGIN) return json({ error: "Origin not allowed" }, 403);
+      const expectedMethod = url.pathname === "/api/google/status" ? "GET" : "POST";
+      if (request.method !== expectedMethod) return json({ error: "Method not allowed" }, 405);
+      if (!env.GOOGLE_TOKENS) return json({ error: "Google token storage is not configured" }, 500);
+
+      const user = await verifyUser(request, env);
+      if (!user) return json({ error: "Authentication required" }, 401);
+      const key = "google:" + user.id;
+
+      if (url.pathname === "/api/google/status") {
+        const saved = await env.GOOGLE_TOKENS.get(key, "json");
+        return json({
+          connected: !!(saved && saved.refresh_token),
+          email: saved?.email || null,
+          scopes: saved?.scope || ""
+        });
+      }
+
+      if (request.headers.get("X-Requested-With") !== "XMLHttpRequest") {
+        return json({ error: "Invalid request" }, 400);
+      }
+
+      if (url.pathname === "/api/google/disconnect") {
+        const saved = await env.GOOGLE_TOKENS.get(key, "json");
+        if (saved?.refresh_token) {
+          try {
+            await fetch("https://oauth2.googleapis.com/revoke", {
+              method: "POST",
+              headers: { "Content-Type": "application/x-www-form-urlencoded" },
+              body: new URLSearchParams({ token: saved.refresh_token }),
+              signal: AbortSignal.timeout(10000)
+            });
+          } catch (error) {
+            console.error("Google token revocation request failed:", error.message);
+          }
+        }
+        await env.GOOGLE_TOKENS.delete(key);
+        return json({ connected: false });
+      }
+
+      if (!env.GOOGLE_CLIENT_ID || !env.GOOGLE_CLIENT_SECRET) {
+        return json({ error: "Google OAuth is not configured on the server" }, 500);
+      }
+      const contentLength = Number(request.headers.get("Content-Length") || 0);
+      if (contentLength > 12000) return json({ error: "Request too large" }, 413);
+      let body;
+      try { body = await request.json(); }
+      catch { return json({ error: "Invalid JSON" }, 400); }
+      if (typeof body.code !== "string" || !body.code || body.code.length > 4096) {
+        return json({ error: "Invalid authorization code" }, 400);
+      }
+
+      const tokenResponse = await fetch("https://oauth2.googleapis.com/token", {
+        method: "POST",
+        headers: { "Content-Type": "application/x-www-form-urlencoded" },
+        body: new URLSearchParams({
+          code: body.code,
+          client_id: env.GOOGLE_CLIENT_ID,
+          client_secret: env.GOOGLE_CLIENT_SECRET,
+          redirect_uri: ALLOWED_ORIGIN,
+          grant_type: "authorization_code"
+        }),
+        signal: AbortSignal.timeout(15000)
+      });
+      let tokens = {};
+      try { tokens = await tokenResponse.json(); } catch {}
+      if (!tokenResponse.ok || !tokens.access_token) {
+        console.error("Google authorization-code exchange failed:", tokenResponse.status, tokens.error || "unknown error");
+        return json({ error: "Google authorization failed. Please try connecting again." }, 400);
+      }
+
+      const existing = await env.GOOGLE_TOKENS.get(key, "json");
+      const refreshToken = tokens.refresh_token || existing?.refresh_token;
+      if (!refreshToken) {
+        return json({ error: "Google did not provide a refresh token. Disconnect LifeLink from your Google Account permissions, then try again." }, 400);
+      }
+
+      let googleEmail = existing?.email || null;
+      try {
+        const profileResponse = await fetch("https://openidconnect.googleapis.com/v1/userinfo", {
+          headers: { Authorization: "Bearer " + tokens.access_token },
+          signal: AbortSignal.timeout(10000)
+        });
+        if (profileResponse.ok) {
+          const profile = await profileResponse.json();
+          if (typeof profile.email === "string") googleEmail = profile.email;
+        }
+      } catch (error) {
+        console.error("Google profile lookup failed:", error.message);
+      }
+
+      await env.GOOGLE_TOKENS.put(key, JSON.stringify({
+        refresh_token: refreshToken,
+        email: googleEmail,
+        scope: tokens.scope || existing?.scope || "",
+        connected_at: new Date().toISOString()
+      }));
+      return json({ connected: true, email: googleEmail });
+    }
 
     if (request.method === "GET" && url.pathname === "/") {
       return json({ service: "LifeLink API", status: "online" });
