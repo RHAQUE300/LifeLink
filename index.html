@@ -635,7 +635,7 @@ settings:()=>`<h1>Settings</h1><p class="sub">Account: <b>${esc(currentEmail)}</
 +SET.map(([h,f])=>`<div class="glass card"><h2>${h}</h2>${f.map(([k,l,t,o])=>`<div class="row"><label for="s_${k}" style="flex:1">${l}</label>${ctl(k,t,o)}</div>`).join('')}${h=='Appearance'?'<div class="row"><span style="flex:1">Profile icon / Custom picture (supports large MB images)</span><label class="btn">Upload<input id="logo" type="file" accept="image/*" hidden></label><button class="btn" data-a="nologo">Reset</button></div>':''}</div>`).join('')
 +`<div class="glass card">
   <h2>AI model</h2>
-  <p class="sub" style="font-size:13px;margin-bottom:10px">Choose an available model in the chat header. Auto tries Groq first, Gemini next, then uses LifeLink's built-in fallback if neither service is working.</p>
+  <p class="sub" style="font-size:13px;margin-bottom:10px">Choose an available model in the chat header. Auto tries every connected model, starting with Groq and Gemini, then uses LifeLink's built-in fallback if none are working.</p>
   <div class="row" style="border:0;padding:0;flex-wrap:wrap"><button class="btn pri" onclick="openAIFull()">Open chat &amp; choose model</button><button class="btn" data-a="clearchats">Clear chat history</button></div>
 </div>
 </div>
