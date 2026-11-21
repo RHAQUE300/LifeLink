@@ -200,17 +200,17 @@ main.in{animation:pg .45s cubic-bezier(.22,1,.36,1)}@keyframes pg{from{opacity:0
 main.in{animation-duration:.55s}
 #af-side{transition-duration:.4s,.34s}
 #island-header{touch-action:none;user-select:none;-webkit-user-select:none}
-.google-app-card{display:flex;align-items:center;justify-content:space-between;gap:14px;min-height:76px;transition:transform .34s var(--motion-ease),background-color .34s var(--motion-ease),box-shadow .34s var(--motion-ease)}
-.google-app-card:hover{transform:translateY(-2px);background:rgba(255,255,255,.78);box-shadow:0 14px 34px rgba(60,80,140,.16)}
 .google-manage-btn{background:#111!important;color:#fff!important;border:1px solid #111!important;border-radius:10px;padding:9px 18px;font-weight:650;min-width:104px}
 .google-manage-btn:hover{background:#303030!important;transform:translateY(-1px)}
 .google-manager-account{padding:14px 12px;border:1px solid var(--gb);border-radius:14px;margin-top:10px;transition:background-color .28s var(--motion-ease),transform .28s var(--motion-ease)}
 .google-manager-account:hover{background:rgba(79,124,255,.06);transform:translateY(-1px)}
-#island.google-manager-open{top:50%;left:50%;right:auto;width:min(640px,calc(100vw - 32px));max-height:min(82vh,760px);transform:translate(-50%,-50%) scale(.96)}
+body.google-manager-active:after{content:"";position:fixed;inset:0;z-index:49;background:rgba(28,35,52,.32);backdrop-filter:blur(3px);-webkit-backdrop-filter:blur(3px);pointer-events:none}
+#island.google-manager-open{top:50%;left:50%;right:auto;width:min(780px,calc(100vw - 32px));max-height:min(88vh,900px);background:rgba(255,255,255,.84);backdrop-filter:blur(30px) saturate(1.35);-webkit-backdrop-filter:blur(30px) saturate(1.35);border:1px solid rgba(255,255,255,.9);box-shadow:0 30px 90px rgba(12,20,42,.34),inset 0 1px 0 rgba(255,255,255,.8);transform:translate(-50%,-50%) scale(.96)}
 #island.google-manager-open.open{transform:translate(-50%,-50%) scale(1)}
-#island.google-manager-open #island-body{padding:24px}
-@media(max-width:560px){#island.google-manager-open{width:calc(100vw - 20px);max-height:86vh}#island.google-manager-open #island-body{padding:16px}}
-[data-theme=dark] .google-app-card:hover{background:rgba(255,255,255,.1)}
+#island.google-manager-open #island-body{padding:28px}
+@media(max-width:560px){#island.google-manager-open{width:calc(100vw - 20px);max-height:88vh}#island.google-manager-open #island-body{padding:16px}}
+[data-theme=dark] #island.google-manager-open{background:rgba(24,25,29,.9);border-color:rgba(255,255,255,.2);box-shadow:0 30px 90px rgba(0,0,0,.72),inset 0 1px 0 rgba(255,255,255,.12)}
+[data-theme=dark] body.google-manager-active:after{background:rgba(0,0,0,.48)}
 [data-theme=dark] .google-manage-btn{background:#050505!important;border-color:#050505!important}
 [data-theme=dark] .google-manager-account:hover{background:rgba(255,255,255,.06)}
 </style>
@@ -761,7 +761,7 @@ function al(){
   const q=U.aq.toLowerCase();
   $('#al').innerHTML=A.filter(a=>(U.ac==='All'||CATS[a[1]]===U.ac)&&a[0].toLowerCase().includes(q)).map(([n,c,status,url])=>{
     if(url==='oauth:google'){
-      return `<div class="glass card google-app-card" style="padding:14px"><b style="font-size:16px">Google</b><button class="google-manage-btn" data-a="googlepopup" aria-label="Manage Google accounts">Manage</button></div>`;
+      return `<div class="glass card" style="padding:14px"><b>${n}</b><div class="sub" style="margin:2px 0 10px;font-size:12px">${CATS[c]}</div><span class="tag">Account management</span><button class="google-manage-btn" data-a="googlepopup" aria-label="Manage Google accounts" style="display:block;width:100%;margin-top:10px">Manage</button></div>`;
     }
     if(url==='oauth:github'){
       const conn=S.oauth&&S.oauth.connected&&S.oauth.connected.github;
@@ -934,7 +934,7 @@ function openIsland(mode){
   if(isl.classList.contains('open') && islandMode === mode){closeIsland();return;}
   islandMode=mode;
   if(mode==='google'){isl.style.left='';isl.style.top='';isl.style.right='';}
-  isl.classList.toggle('google-manager-open',mode==='google');isl.classList.add('open');exp.style.display='inline-block';
+  isl.classList.toggle('google-manager-open',mode==='google');document.body.classList.toggle('google-manager-active',mode==='google');isl.classList.add('open');exp.style.display='inline-block';
   if(mode==='google'){
     tit.textContent='Google accounts';exp.style.display='none';body.innerHTML=googleManagerMarkup();
     if(googleConnectionStatus===null)refreshGoogleConnectionStatus();
@@ -987,7 +987,7 @@ function openIsland(mode){
   }
 }
 function refreshIsland(){const m=islandMode;if(!m)return;islandMode=null;openIsland(m)}
-function closeIsland(){$('#island').classList.remove('open','google-manager-open');islandMode=null;}
+function closeIsland(){$('#island').classList.remove('open','google-manager-open');document.body.classList.remove('google-manager-active');islandMode=null;}
 
 function dismissNotif(id){
   clearResetFlag(S.notifs.find(n=>n.id===id));
