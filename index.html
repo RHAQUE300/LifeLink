@@ -206,7 +206,7 @@ main.in{animation:pg .45s cubic-bezier(.22,1,.36,1)}@keyframes pg{from{opacity:0
   <button class="ib" id="av" onclick="openIsland('account')" title="Account" aria-label="Account"></button>
 </header>
 <main></main>
-<nav id="dock" class="glass" aria-label="Dock" style="display:none"><button class="ib" id="dt" aria-label="Hide dock" aria-expanded="true"></button><div class="it"><span class="vd"></span><a class="dk" data-r="todo" href="#/todo">☑ <span>To Do</span></a><a class="dk" data-r="calendar" href="#/calendar">▦ <span>Calendar</span></a><a class="dk" data-r="notes" href="#/notes">✎ <span>Notes</span></a><a class="dk" data-r="apps" href="#/apps">⊞ <span>Apps</span></a><a class="dk go" href="#/recovery">▶ <span>Start Recovery</span></a></div></nav>
+<nav id="dock" class="glass" aria-label="Dock" style="display:none"><button class="ib" id="dt" aria-label="Hide dock" aria-expanded="true"></button><div class="it"><span class="vd"></span><a class="dk" data-r="todo" href="#/todo">☑ <span>To Do</span></a><a class="dk" data-r="calendar" href="#/calendar">▦ <span>Calendar</span></a><a class="dk" data-r="notes" href="#/notes">✎ <span>Notes</span></a><a class="dk" data-r="apps" href="#/apps">⊞ <span>Apps</span></a><a class="dk" data-r="google" href="#/google">◎ <span>Connect Google</span></a><a class="dk go" href="#/recovery">▶ <span>Start Recovery</span></a></div></nav>
 
 <div id="modal-backdrop" onclick="if(event.target===this)closeModal()">
   <div id="modal-card" role="dialog" aria-modal="true"></div>
@@ -317,13 +317,16 @@ async function googleApi(path,method='GET',body){
 }
 async function refreshGoogleConnectionStatus(){
   if(!S?.loggedIn)return;
-  try{
-    googleConnectionStatus=await googleApi('/api/google/status');
-    if(S.oauth){S.oauth.connected=S.oauth.connected||{};S.oauth.connected.google=googleConnectionStatus.connected?googleConnectionStatus.email||true:false;save()}
-    if(location.hash.includes('/apps'))al();
-  }catch(error){console.warn('Google connection status unavailable:',error.message)}
+  try{googleConnectionStatus=await googleApi('/api/google/status');googleConnectionStatus.accounts=Array.isArray(googleConnectionStatus.accounts)?googleConnectionStatus.accounts:[];if(S.oauth){S.oauth.connected=S.oauth.connected||{};S.oauth.connected.google=googleConnectionStatus.accounts.length>0;save()}if(location.hash.includes('/google'))render()}
+  catch(error){console.warn('Google connection status unavailable:',error.message)}
+}
+function googleAccountsPage(){
+  if(S?.loggedIn&&googleConnectionStatus===null)refreshGoogleConnectionStatus();
+  const accounts=googleConnectionStatus?.accounts||[];
+  return `<h1>Connect Google</h1><p class="sub">Connect and manage multiple Google accounts. Each account stays separate.</p><div class="glass card" style="max-width:760px"><div class="row" style="border:0;justify-content:space-between;flex-wrap:wrap"><div><h2 style="margin:0">Your Google accounts</h2><p class="sub" style="margin:4px 0 0;font-size:13px">Manage Gmail, Drive, Calendar and other Google services here.</p></div><button class="btn pri" data-a="googleconn">＋ Connect another account</button></div>`+(accounts.length?accounts.map(a=>`<div class="row" style="gap:12px"><span class="num" style="width:40px;height:40px">G</span><div style="flex:1;min-width:0"><b>${esc(a.email||'Google account')}</b><div class="sub" style="margin:2px 0 0;font-size:12px">Connected to LifeLink</div></div><span class="tag low">Connected</span><button class="btn" data-a="googledisc" data-i="${esc(a.id)}">Disconnect</button></div>`).join(''):`<div style="padding:26px 8px;text-align:center"><div style="font-size:34px;margin-bottom:8px">◎</div><b>No Google accounts connected</b><p class="sub" style="margin:5px 0 14px">Connect a Google account to start linking its services.</p><button class="btn pri" data-a="googleconn">Connect Google account</button></div>`)+`</div>`;
 }
 async function startGoogleConnect(){
+  const accountId=crypto.randomUUID();
   if(googleConnectionBusy)return;
   if(!S?.loggedIn){toast('Sign in to LifeLink first.');return}
   if(!LL_CONFIG.googleClientId){toast('Google connection is not configured.');return}
@@ -340,7 +343,7 @@ async function startGoogleConnect(){
       callback:async response=>{
         if(response.error){toast('Google connection cancelled: '+(response.error_description||response.error));googleConnectionBusy=false;return}
         try{
-          await googleApi('/api/google/connect','POST',{code:response.code});
+          await googleApi('/api/google/connect','POST',{code:response.code,accountId});
           await refreshGoogleConnectionStatus();
           toast('Google account connected to LifeLink.');
         }catch(error){toast('Google connection failed: '+error.message)}
@@ -354,14 +357,10 @@ async function startGoogleConnect(){
     client.requestCode();
   }catch(error){googleConnectionBusy=false;toast(error.message)}
 }
-async function disconnectGoogle(){
-  askConfirm('Disconnect Google','Disconnect Gmail, Drive and Calendar from LifeLink?',async()=>{
-    try{
-      await googleApi('/api/google/disconnect','POST',{});
-      googleConnectionStatus={connected:false};
-      if(S.oauth?.connected)delete S.oauth.connected.google;
-      save();al();toast('Google account disconnected from LifeLink.');
-    }catch(error){toast('Could not disconnect Google: '+error.message)}
+async function disconnectGoogleAccount(accountId){
+  askConfirm('Disconnect Google account','Disconnect this Google account from LifeLink? Other connected accounts will remain connected.',async()=>{
+    try{await googleApi('/api/google/disconnect','POST',{accountId});googleConnectionStatus=null;await refreshGoogleConnectionStatus();toast('Google account disconnected.');render()}
+    catch(error){toast('Could not disconnect Google: '+error.message)}
   });
 }
 function loadSupabaseLibrary(){
@@ -707,8 +706,9 @@ calendar:()=>{const c=U.cm,y=c.getFullYear(),m=c.getMonth(),wk=U.cv=='Week',W=S.
  return `<h1>Calendar</h1><div class="row" style="border:0;flex-wrap:wrap"><button class="btn" data-a="cprev" aria-label="Previous">‹</button><h2 style="margin:0;min-width:170px;text-align:center">${c.toLocaleString('default',{month:'long',year:'numeric'})}</h2><button class="btn" data-a="cnext" aria-label="Next">›</button><button class="btn" data-a="ctoday">Today</button><select id="cv" style="width:auto">${['Month','Week'].map(x=>`<option${U.cv==x?' selected':''}>${x}</option>`).join('')}</select><button class="btn pri" data-a="evnew" data-i="${td}" style="margin-left:auto">New event</button></div><div class="glass card"><div class="cal">${'Sun Mon Tue Wed Thu Fri Sat Sun'.split(' ').slice(W,W+7).map(d=>`<b class="sub" style="margin:0">${d}</b>`).join('')}${cells}</div></div>`},
 notes:()=>{if(!S.notes.some(n=>n.id==U.nid))U.nid=S.notes[0]?.id;const n=S.notes.find(x=>x.id==U.nid);
  return `<h1>Notes</h1><p class="sub">Changes save automatically for ${esc(currentEmail)}.</p><div class="grid" style="grid-template-columns:300px 1fr"><div class="glass card"><input id="nq" placeholder="Search notes" value="${esc(U.nq)}"><button class="btn pri" data-a="newnote" style="margin:10px 0;width:100%">New note</button><div id="nl"></div></div><div class="glass card">${n?`<input id="nt" value="${esc(n.title)}" style="font-size:20px;font-weight:600;background:none;border:0"><textarea id="nb" rows="16" style="background:none;border:0;resize:vertical">${esc(n.body)}</textarea><div class="row" style="border:0"><span class="sub" id="sv" style="margin:0">Edited ${new Date(n.ts).toLocaleString()}</span><button class="btn" data-a="delnote" style="margin-left:auto">Delete note</button></div>`:empty('No notes yet. Create one to start writing.')}</div></div>`},
-apps:()=>`<h1>Apps &amp; Services</h1><p class="sub">Browse your services and open them from LifeLink. Google integration is our first connection setup.</p><div class="row" style="border:0"><input id="aq" placeholder="Search services" value="${esc(U.aq)}"><select id="ac" style="width:auto"><option>All</option>${CATS.map(c=>`<option${U.ac==c?' selected':''}>${c}</option>`).join('')}</select></div><div id="al" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(210px,1fr));gap:12px"></div>`,
-activity:()=>`<h1>Notifications</h1><p class="sub">${S.notifs.filter(n=>!n.read).length} unread · ${S.notifs.length} total</p><div class="row" style="border:0;flex-wrap:wrap">${['All','Tasks','Messages','Education','Files','Calendar','System'].map(f=>`<button class="btn${U.nf==f?' pri':''}" data-a="nf" data-i="${f}">${f}</button>`).join('')}<button class="btn" data-a="readall" style="margin-left:auto">Mark all as read</button></div><div class="glass card">${S.notifs.filter(n=>U.nf=='All'||n.type==U.nf).map(n=>`<div class="row" style="cursor:pointer"><span style="width:9px;height:9px;border-radius:50%;flex:none;background:${n.read?'transparent':'#4f7cff'}"></span><span class="tag">${n.type}</span><span style="flex:1;${n.read?'opacity:.6':''}" data-a="nread" data-i="${n.id}">${esc(n.text)}</span><span class="sub" style="margin:0">${ago(n.ts)}</span>${n.action==='resetpw'?`<button class="btn pri" data-a="resetpw" style="padding:2px 8px;font-size:11px;margin-left:auto">Reset now</button>`:''}${n.dismissable?`<button class="btn" data-a="dismissnotif" data-i="${n.id}" style="padding:2px 8px;font-size:11px;margin-left:auto">Dismiss</button>`:''}</div>`).join('')||empty('No notifications here')}</div>`,
+apps:()=>`<h1>Apps &amp; Services</h1><p class="sub">Browse and open services from LifeLink. Manage Google accounts in the Connect Google tab.</p><div class="row" style="border:0"><input id="aq" placeholder="Search services" value="${esc(U.aq)}"><select id="ac" style="width:auto"><option>All</option>${CATS.map(c=>`<option${U.ac==c?' selected':''}>${c}</option>`).join('')}</select></div><div id="al" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(210px,1fr));gap:12px"></div>`,
+google:()=>googleAccountsPage(),
+ activity:()=>`<h1>Notifications</h1><p class="sub">${S.notifs.filter(n=>!n.read).length} unread · ${S.notifs.length} total</p><div class="row" style="border:0;flex-wrap:wrap">${['All','Tasks','Messages','Education','Files','Calendar','System'].map(f=>`<button class="btn${U.nf==f?' pri':''}" data-a="nf" data-i="${f}">${f}</button>`).join('')}<button class="btn" data-a="readall" style="margin-left:auto">Mark all as read</button></div><div class="glass card">${S.notifs.filter(n=>U.nf=='All'||n.type==U.nf).map(n=>`<div class="row" style="cursor:pointer"><span style="width:9px;height:9px;border-radius:50%;flex:none;background:${n.read?'transparent':'#4f7cff'}"></span><span class="tag">${n.type}</span><span style="flex:1;${n.read?'opacity:.6':''}" data-a="nread" data-i="${n.id}">${esc(n.text)}</span><span class="sub" style="margin:0">${ago(n.ts)}</span>${n.action==='resetpw'?`<button class="btn pri" data-a="resetpw" style="padding:2px 8px;font-size:11px;margin-left:auto">Reset now</button>`:''}${n.dismissable?`<button class="btn" data-a="dismissnotif" data-i="${n.id}" style="padding:2px 8px;font-size:11px;margin-left:auto">Dismiss</button>`:''}</div>`).join('')||empty('No notifications here')}</div>`,
 recovery:()=>{const full=T.brk?S.p.bLen*60:T.len*60,tot=(S.sessions||[]).reduce((a,s)=>a+s.min,0),td=(S.sessions||[]).filter(s=>new Date(s.ts).toDateString()==new Date().toDateString()).reduce((a,s)=>a+s.min,0);
  return `<h1>${T.brk?'Break':'Recovery'}</h1><p class="sub">${T.brk?'Rest for '+S.p.bLen+' min.':'One focused session at a time.'}</p><div class="glass card" style="text-align:center;max-width:560px;margin:0 auto 18px;padding:34px"><div id="tm" style="font-size:88px;font-weight:300;letter-spacing:2px">${fmt(T.left)}</div><div class="row" style="justify-content:center;border:0">${[25,45,60].map(m=>`<button class="btn${T.len==m?' pri':''}" data-a="tset" data-i="${m}">${m} min</button>`).join('')}<button class="btn" data-a="tcus">Custom</button></div><div class="row" style="justify-content:center;border:0"><button class="btn pri" data-a="tgo">${T.run?'Pause':T.left<full?'Resume':'Start'}</button><button class="btn" data-a="trs">Reset</button></div></div><div class="glass card" style="max-width:560px;margin:auto"><h2>Focus statistics</h2><div class="stats"><div class="stat"><b>${(S.sessions||[]).length}</b>Sessions</div><div class="stat"><b>${td}m</b>Today</div><div class="stat"><b>${tot}m</b>All time</div></div><h2 style="margin-top:16px">History</h2>${(S.sessions||[]).slice(-8).reverse().map(s=>`<div class="row">${s.min} min session<span class="sub" style="margin:0 0 0 auto">${ago(s.ts)}</span></div>`).join('')||empty('No sessions yet')}</div>`},
 settings:()=>`<h1>Settings</h1><p class="sub">Account: <b>${esc(currentEmail)}</b></p><div class="col"><div class="glass card"><h2>Profile</h2><input id="pn" value="${esc(S.name)}" aria-label="Display name"><p class="sub" style="margin:10px 0 0">Data synced exclusively to account: <code>${esc(currentEmail)}</code></p><button class="btn" data-a="logout" style="margin-top:12px;color:#d6335c">Sign Out</button></div><div class="glass card"><h2>Security</h2><p class="sub" style="font-size:13px;margin-bottom:10px">Want a new password? We’ll email your current one to <b>${esc(currentEmail)}</b>. Enter it to continue, then you can choose a new one.</p><button class="btn" data-a="pwreset">Reset password</button></div>`
@@ -737,10 +737,7 @@ function al(){
       const conn=S.oauth&&S.oauth.connected&&S.oauth.connected.github;
       return `<div class="glass card" style="padding:14px"><b>${n}</b><div class="sub" style="margin:2px 0 10px;font-size:12px">${CATS[c]}</div><span class="tag ${conn?'low':''}">${conn?'Connected: @'+esc(conn):'Not connected'}</span> <button class="btn pri" data-a="${conn?'ghdisc':'ghconn'}" style="margin-top:6px;width:100%;font-size:12px;padding:5px">${conn?'Disconnect GitHub':'Connect GitHub'}</button></div>`;
     }
-    if(['Gmail','Google Drive','Google Calendar'].includes(n)){
-      const conn=googleConnectionStatus?.connected;
-      return `<div class="glass card" style="padding:14px"><b>${n}</b><div class="sub" style="margin:2px 0 10px;font-size:12px">${CATS[c]}</div><span class="tag ${conn?'low':''}">${conn?'Connected'+(googleConnectionStatus.email?': '+esc(googleConnectionStatus.email):''):'Google account not connected'}</span><button class="btn pri" data-a="${conn?'googledisc':'googleconn'}" style="margin-top:6px;width:100%;font-size:12px;padding:5px">${conn?'Disconnect Google':'Connect Google account'}</button></div>`;
-    }
+    if(['Gmail','Google Drive','Google Calendar'].includes(n))return '';
     return `<div class="glass card" style="padding:14px"><b>${n}</b><div class="sub" style="margin:2px 0 10px;font-size:12px">${CATS[c]}</div><span class="tag">${status}</span> ${url?`<button class="btn pri" onclick="openBrowser('${url}')" style="margin-top:6px;width:100%;font-size:12px;padding:5px">Open ↗</button>`:''}</div>`;
   }).join('')||empty('No services match');
 }
@@ -1933,7 +1930,7 @@ const X=(i,b)=>{const t=S.tasks.find(x=>x.id==i),delT=()=>{S.tasks=S.tasks.filte
  aiundo:()=>{const sn=aiUndo[i];if(!sn){toast('Undo is no longer available for this change.');return}delete aiUndo[i];aiRestore(sn);toast('Undone ✓')},
  openlink:()=>{const arr=b.dataset.k==='home'?S.links:((S.tasks.find(x=>x.id==U.tid)||{}).links||[]);const l=arr[+i];if(l)openBrowser(l.u)},
  nologo:()=>{S.logo='';save();applyPrefs();updateAvatar();if(islandMode=='account')refreshIsland();toast('Profile picture reset')},
- ghconn:()=>startGitHubConnect(),ghdisc:()=>disconnectGitHub(),googleconn:()=>startGoogleConnect(),googledisc:()=>disconnectGoogle(),
+ ghconn:()=>startGitHubConnect(),ghdisc:()=>disconnectGitHub(),googleconn:()=>startGoogleConnect(),googledisc:()=>disconnectGoogleAccount(i),
  tgo:()=>{if(T.run){clearInterval(iv);T.left=Math.max(0,Math.round((T.end-Date.now())/1000));T.run=false;document.title='LifeLink'}else{T.run=true;T.end=Date.now()+T.left*1000;iv=setInterval(tick,500)}render()},
  trs:()=>{clearInterval(iv);T.run=false;T.brk=false;T.left=T.len*60;document.title='LifeLink';render()},
  tset:()=>{if(!T.run){T.len=+i;T.brk=false;T.left=T.len*60;render()}},
