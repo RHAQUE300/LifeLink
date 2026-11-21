@@ -1568,19 +1568,33 @@ function workspaceCommand(raw,strict){
     if(t){t.done=true;t.prog=100;note('Tasks','Completed: '+t.title);save();render();return `🎉 Marked <b>#${t.n} ${esc(t.title)}</b> as complete!`}
     if(m[1])return `I couldn’t find an open task matching “<b>${esc(m[2].trim())}</b>”.`;
   }
-  // delete (explicit only)
+  // Destructive commands always require explicit confirmation.
   m=q.match(/^(?:please\s+)?(?:delete|remove)\s+(?:task\s+(.+)|#(\d+))\s*$/i);
   if(m){
     const match=resolveTask(m[1]||m[2],false),t=match.task;
     if(match.ambiguous)return taskChoiceMessage(match.matches);
-    if(t){const snap=aiSnap();S.tasks=S.tasks.filter(x=>x.id!==t.id);save();render();return `🗑️ Deleted task <b>#${t.n} ${esc(t.title)}</b>.`+stashUndo(snap)}
-    return `I couldn’t find a task matching “<b>${esc((m[1]||m[2]).trim())}</b>”.`;
+    if(t){
+      const snap=aiSnap();
+      askConfirm('Delete task',\`Delete task #\${t.n} “\${t.title}” permanently?\`,()=>{
+        S.tasks=S.tasks.filter(x=>x.id!==t.id);save();stashUndo(snap);render();toast('Task deleted.');
+      });
+      return '⏳ Waiting for your confirmation before deleting task #'+t.n+'.';
+    }
+    return \`I couldn’t find a task matching “<b>\${esc((m[1]||m[2]).trim())}</b>”.\`;
   }
   m=q.match(/^(?:please\s+)?(?:delete|remove)\s+(?:the\s+|my\s+)?(note|event)\s+(.+)$/i);
   if(m){
-    const snap=aiSnap(),r=runAIAction({op:m[1].toLowerCase()==='note'?'delete_note':'delete_event',match:m[2].trim()});
-    if(r){render();return '🗑️ '+esc(r)+'.'+stashUndo(snap)}
-    return `I couldn’t find a ${m[1].toLowerCase()} matching “<b>${esc(m[2].trim())}</b>”.`;
+    const kind=m[1].toLowerCase(),target=m[2].trim();
+    const found=kind==='note'
+      ? S.notes.find(x=>x.id===target||String(x.title||'').toLowerCase()===target.toLowerCase())
+      : S.events.find(x=>x.id===target||String(x.title||'').toLowerCase()===target.toLowerCase());
+    if(!found)return \`I couldn’t find a \${kind} matching “<b>\${esc(target)}</b>”.\`;
+    const snap=aiSnap(),label=kind==='note'?(found.title||'Untitled'):found.title;
+    askConfirm('Delete '+kind,'Delete “'+label+'” permanently?',()=>{
+      if(kind==='note')S.notes=S.notes.filter(x=>x!==found);else S.events=S.events.filter(x=>x!==found);
+      save();stashUndo(snap);render();toast(kind[0].toUpperCase()+kind.slice(1)+' deleted.');
+    });
+    return '⏳ Waiting for your confirmation before deleting '+kind+'.';
   }
   m=q.match(/^(?:please\s+)?reopen\s+(?:task\s+)?(.+)$/i);
   if(m){const match=resolveTask(m[1].trim(),false);if(match.ambiguous)return taskChoiceMessage(match.matches);const r=match.task&&runAIAction({op:'reopen_task',n:match.task.n});if(r){render();return '↩️ '+esc(r)+'.'}}
