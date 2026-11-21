@@ -283,10 +283,86 @@ const LL_CONFIG={
   // and deploy github-oauth-worker.js (it holds the client secret). Paste the worker's URL below.
   githubClientId:'',
   githubTokenProxy:'',
+  googleClientId:'583120202944-mk4kt3i12rgdhlcd843a2ub25b3j6mg5.apps.googleusercontent.com',
   // Password-reset emails via EmailJS (emailjs.com). The template needs {{to_email}}, {{to_name}} and {{password}}.
   emailjs:{serviceId:'',templateId:'',publicKey:''}
 };
 let supabaseClient=null, supabaseSession=null, supabaseLoadPromise=null;
+
+let googleGISPromise=null, googleConnectionStatus=null, googleConnectionBusy=false;
+function loadGoogleGIS(){
+  if(window.google?.accounts?.oauth2)return Promise.resolve(true);
+  if(googleGISPromise)return googleGISPromise;
+  googleGISPromise=new Promise(resolve=>{
+    const script=document.createElement('script');
+    script.src='https://accounts.google.com/gsi/client';
+    script.async=true;script.defer=true;
+    script.onload=()=>resolve(!!window.google?.accounts?.oauth2);
+    script.onerror=()=>resolve(false);
+    document.head.appendChild(script);
+  });
+  return googleGISPromise;
+}
+async function googleApi(path,method='GET',body){
+  if(!await ensureSupabaseClient())throw new Error('LifeLink sign-in is unavailable');
+  const {data,error}=await supabaseClient.auth.getSession();
+  if(error||!data.session?.access_token)throw new Error('Please sign in to LifeLink again');
+  supabaseSession=data.session;
+  const headers={Authorization:'Bearer '+data.session.access_token,'X-Requested-With':'XMLHttpRequest'};
+  if(body)headers['Content-Type']='application/json';
+  const response=await fetch(LL_CONFIG.apiUrl+path,{method,headers,body:body?JSON.stringify(body):undefined});
+  let result={};try{result=await response.json()}catch{}
+  if(!response.ok)throw new Error(result.error||'Google connection request failed');
+  return result;
+}
+async function refreshGoogleConnectionStatus(){
+  if(!S?.loggedIn)return;
+  try{
+    googleConnectionStatus=await googleApi('/api/google/status');
+    if(S.oauth){S.oauth.connected=S.oauth.connected||{};S.oauth.connected.google=googleConnectionStatus.connected?googleConnectionStatus.email||true:false;save()}
+    if(location.hash.includes('/apps'))al();
+  }catch(error){console.warn('Google connection status unavailable:',error.message)}
+}
+async function startGoogleConnect(){
+  if(googleConnectionBusy)return;
+  if(!S?.loggedIn){toast('Sign in to LifeLink first.');return}
+  if(!LL_CONFIG.googleClientId){toast('Google connection is not configured.');return}
+  googleConnectionBusy=true;
+  try{
+    if(!await loadGoogleGIS())throw new Error('Google authorization could not be loaded. Check your connection and try again.');
+    const client=google.accounts.oauth2.initCodeClient({
+      client_id:LL_CONFIG.googleClientId,
+      scope:'openid email profile https://www.googleapis.com/auth/gmail.readonly https://www.googleapis.com/auth/drive.metadata.readonly https://www.googleapis.com/auth/calendar.readonly',
+      ux_mode:'popup',
+      select_account:true,
+      include_granted_scopes:true,
+      callback:async response=>{
+        if(response.error){toast('Google connection cancelled: '+(response.error_description||response.error));googleConnectionBusy=false;return}
+        try{
+          await googleApi('/api/google/connect','POST',{code:response.code});
+          await refreshGoogleConnectionStatus();
+          toast('Google account connected to LifeLink.');
+        }catch(error){toast('Google connection failed: '+error.message)}
+        finally{googleConnectionBusy=false;al()}
+      },
+      error_callback:error=>{
+        googleConnectionBusy=false;
+        if(error?.type!=='popup_closed')toast('Google sign-in popup could not be opened. Allow popups and try again.');
+      }
+    });
+    client.requestCode();
+  }catch(error){googleConnectionBusy=false;toast(error.message)}
+}
+async function disconnectGoogle(){
+  askConfirm('Disconnect Google','Disconnect Gmail, Drive and Calendar from LifeLink?',async()=>{
+    try{
+      await googleApi('/api/google/disconnect','POST',{});
+      googleConnectionStatus={connected:false};
+      if(S.oauth?.connected)delete S.oauth.connected.google;
+      save();al();toast('Google account disconnected from LifeLink.');
+    }catch(error){toast('Could not disconnect Google: '+error.message)}
+  });
+}
 function loadSupabaseLibrary(){
   if(window.supabase?.createClient)return Promise.resolve(true);
   if(supabaseLoadPromise)return supabaseLoadPromise;
@@ -653,11 +729,16 @@ function tl(){const R={High:0,Medium:1,Low:2},q=U.q.toLowerCase();
  $('#tl').innerHTML=a.map(t=>`<div class="row"><input type="checkbox" style="width:auto" data-a="tick" data-i="${t.id}" ${t.done?'checked':''} aria-label="Complete ${esc(t.title)}"><span class="num" style="width:26px;height:26px;font-size:12px">${t.n}</span><a href="#/task/${t.id}" style="flex:1;${t.done?'text-decoration:line-through;opacity:.5':''}">${esc(t.title)}<div class="sub" style="margin:0;font-size:12px">${esc(t.src)} · ${t.due||'no deadline'}</div></a><span class="tag ${PC[t.pri]}">${t.pri}</span><button class="btn" data-a="edit" data-i="${t.id}">Edit</button><button class="btn" data-a="del" data-i="${t.id}" aria-label="Delete task">✕</button></div>`).join('')||empty('No tasks match.')}
 function nl(){const q=U.nq.toLowerCase();$('#nl').innerHTML=S.notes.filter(n=>(n.title+n.body).toLowerCase().includes(q)).sort((a,b)=>b.ts-a.ts).map(n=>`<div class="row" data-a="pick" data-i="${n.id}" style="cursor:pointer;${n.id==U.nid?'font-weight:600':''}"><div style="min-width:0"><div>${esc(n.title||'Untitled')}</div><div class="sub" style="margin:0;font-size:12px">${ago(n.ts)}</div></div></div>`).join('')||empty('No matches')}
 function al(){
+  if(S?.loggedIn&&googleConnectionStatus===null)refreshGoogleConnectionStatus();
   const q=U.aq.toLowerCase();
   $('#al').innerHTML=A.filter(a=>(U.ac==='All'||CATS[a[1]]===U.ac)&&a[0].toLowerCase().includes(q)).map(([n,c,status,url])=>{
     if(url==='oauth:github'){
       const conn=S.oauth&&S.oauth.connected&&S.oauth.connected.github;
       return `<div class="glass card" style="padding:14px"><b>${n}</b><div class="sub" style="margin:2px 0 10px;font-size:12px">${CATS[c]}</div><span class="tag ${conn?'low':''}">${conn?'Connected: @'+esc(conn):'Not connected'}</span> <button class="btn pri" data-a="${conn?'ghdisc':'ghconn'}" style="margin-top:6px;width:100%;font-size:12px;padding:5px">${conn?'Disconnect GitHub':'Connect GitHub'}</button></div>`;
+    }
+    if(['Gmail','Google Drive','Google Calendar'].includes(n)){
+      const conn=googleConnectionStatus?.connected;
+      return `<div class="glass card" style="padding:14px"><b>${n}</b><div class="sub" style="margin:2px 0 10px;font-size:12px">${CATS[c]}</div><span class="tag ${conn?'low':''}">${conn?'Connected'+(googleConnectionStatus.email?': '+esc(googleConnectionStatus.email):''):'Google account not connected'}</span><button class="btn pri" data-a="${conn?'googledisc':'googleconn'}" style="margin-top:6px;width:100%;font-size:12px;padding:5px">${conn?'Disconnect Google':'Connect Google account'}</button></div>`;
     }
     return `<div class="glass card" style="padding:14px"><b>${n}</b><div class="sub" style="margin:2px 0 10px;font-size:12px">${CATS[c]}</div><span class="tag">${status}</span> ${url?`<button class="btn pri" onclick="openBrowser('${url}')" style="margin-top:6px;width:100%;font-size:12px;padding:5px">Open ↗</button>`:''}</div>`;
   }).join('')||empty('No services match');
@@ -1851,7 +1932,7 @@ const X=(i,b)=>{const t=S.tasks.find(x=>x.id==i),delT=()=>{S.tasks=S.tasks.filte
  aiundo:()=>{const sn=aiUndo[i];if(!sn){toast('Undo is no longer available for this change.');return}delete aiUndo[i];aiRestore(sn);toast('Undone ✓')},
  openlink:()=>{const arr=b.dataset.k==='home'?S.links:((S.tasks.find(x=>x.id==U.tid)||{}).links||[]);const l=arr[+i];if(l)openBrowser(l.u)},
  nologo:()=>{S.logo='';save();applyPrefs();updateAvatar();if(islandMode=='account')refreshIsland();toast('Profile picture reset')},
- ghconn:()=>startGitHubConnect(),ghdisc:()=>disconnectGitHub(),
+ ghconn:()=>startGitHubConnect(),ghdisc:()=>disconnectGitHub(),googleconn:()=>startGoogleConnect(),googledisc:()=>disconnectGoogle(),
  tgo:()=>{if(T.run){clearInterval(iv);T.left=Math.max(0,Math.round((T.end-Date.now())/1000));T.run=false;document.title='LifeLink'}else{T.run=true;T.end=Date.now()+T.left*1000;iv=setInterval(tick,500)}render()},
  trs:()=>{clearInterval(iv);T.run=false;T.brk=false;T.left=T.len*60;document.title='LifeLink';render()},
  tset:()=>{if(!T.run){T.len=+i;T.brk=false;T.left=T.len*60;render()}},
