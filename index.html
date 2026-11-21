@@ -241,7 +241,14 @@ main.in{animation:pg .45s cubic-bezier(.22,1,.36,1)}@keyframes pg{from{opacity:0
   <section id="af-main">
     <div id="af-head">
       <button class="ib" id="af-toggle" onclick="toggleAISide()" aria-label="Show or hide chat history" aria-expanded="true">☰</button>
-      <b style="font-size:17px">✦ LifeLink AI</b><span class="tag" id="af-prov"></span>
+      <b style="font-size:17px">✦ LifeLink AI</b><span class="tag" id="af-prov">Auto</span>
+      <select id="af-model" aria-label="Choose AI model" onchange="selectAIModel(this.value)" style="max-width:220px;padding:7px 9px;border-radius:10px;background:var(--glass);color:var(--text);border:1px solid var(--line)">
+        <option value="auto">Auto · Groq → Gemini → fallback</option>
+        <option value="groq" data-label="GPT-OSS 120B">GPT-OSS 120B · checking</option>
+        <option value="gemini" data-label="Gemini 3.8 Flash">Gemini 3.8 Flash · checking</option>
+        <option value="openai" data-label="GPT-4o mini">GPT-4o mini · checking</option>
+        <option value="anthropic" data-label="Claude Sonnet">Claude Sonnet · checking</option>
+      </select>
       <span class="sp"></span>
       <button class="btn" id="af-new" onclick="clearAI()" aria-label="New chat">＋<span class="lbl"> New chat</span></button>
       
@@ -1020,6 +1027,7 @@ function openAIFull(originRect){
   closeIsland();closeModal();
   if(innerWidth<760&&S.p.aiSidebar!==false)S.p.aiSidebar=false;
   refreshAIFull();
+  refreshAIModelStatus();
   document.body.style.overflow='hidden';
   if(originRect && originRect.width>0 && !(S.p && S.p.motion==='reduced')){
     const vw=innerWidth||1,vh=innerHeight||1;
@@ -1696,7 +1704,7 @@ async function fetchWikipediaSummary(topic){
 function capabilitiesHtml(){
   return `I’m LifeLink AI. Right now I’m in <b>built-in mode</b>, so I’m a fast assistant for your workspace plus quick lookups, not a full chatbot.<br><br>`
    +`<b>Try:</b><br>• <i>Add task Finish lab report due Friday high priority</i><br>• <i>Schedule meeting with Sam tomorrow at 3pm</i><br>• <i>Add note: ideas for the science fair</i><br>• <i>Complete task 2</i> · <i>What’s due today?</i> · <i>Summarize my day</i><br>• <i>Open my calendar</i> · <i>Dark mode</i> · <i>Start a 25 minute timer</i> · <i>Delete note groceries</i><br>• <i>15% of 240</i> · <i>72 f to c</i> · <i>What is photosynthesis?</i> (Wikipedia)<br><br>`
-   +`For real conversations, writing help and reasoning, tap <b>⚙ Connect AI</b> and add a key for OpenAI, Gemini, Claude, Groq or OpenRouter.`;
+   +`For real conversations, writing help and reasoning, choose an available model from the chat selector. If a model needs connecting, LifeLink will explain how to add its key securely to the server.`;
 }
 
 async function builtInGeneralAI(raw){
@@ -1732,7 +1740,7 @@ async function builtInGeneralAI(raw){
         +`<b>${esc(w.title)}</b><br>${esc(w.extract)}`+(w.url?`<br><small><a href="${esc(w.url)}" target="_blank" rel="noopener noreferrer" style="color:var(--ac)">Source: Wikipedia ↗</a></small>`:'');
     }
   }
-  return `I couldn’t answer “<b>${esc(q.length>80?q.slice(0,80)+'…':q)}</b>” in built-in mode. I can manage tasks, events and notes, do maths and unit conversions, and look up topics on Wikipedia.<br><br>Say <i>help</i> for examples, or tap <b>⚙ Connect AI</b> to link a model for open-ended questions.`;
+  return `I couldn’t answer “<b>${esc(q.length>80?q.slice(0,80)+'…':q)}</b>” in built-in mode. I can manage tasks, events and notes, do maths and unit conversions, and look up topics on Wikipedia.<br><br>Say <i>help</i> for examples, or choose an available model from the selector for open-ended questions.`;
 }
 
 async function getAIResponse(raw){
