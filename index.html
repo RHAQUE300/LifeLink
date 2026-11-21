@@ -271,14 +271,14 @@ body.google-manager-active:after{content:"";position:fixed;inset:0;z-index:49;ba
     <div class="glass card" style="max-width:440px;padding:28px">
       <div style="font-size:36px;margin-bottom:10px">↗</div>
       <h2 id="bf-title" style="font-size:20px;margin-bottom:6px">External Web App</h2>
-      <p class="sub" style="font-size:13.5px;margin-bottom:18px">This service blocks inline framing for your account security (CSP <code>frame-ancestors</code>). Launch it directly in a dedicated window or browser tab.</p>
+      <p class="sub" style="font-size:13.5px;margin-bottom:18px">Some websites block being embedded by other apps. LifeLink will always attempt the inline view, but it cannot override a site’s own security policy. Try opening it in a new tab if the embedded view stays blank.</p>
       <div style="display:flex;gap:10px;justify-content:center;flex-wrap:wrap">
         <button class="btn pri" onclick="openBrowserPopup()">Open App Window</button>
         <button class="btn" onclick="openBrowserExternal()">Open in New Tab ↗</button>
       </div>
     </div>
   </div>
-  <iframe id="browser-frame" sandbox="allow-scripts allow-forms allow-popups" referrerpolicy="no-referrer"></iframe>
+  <iframe id="browser-frame" sandbox="allow-downloads allow-forms allow-modals allow-popups allow-popups-to-escape-sandbox allow-same-origin allow-scripts allow-top-navigation-by-user-activation" allow="clipboard-read; clipboard-write; fullscreen; autoplay; picture-in-picture" referrerpolicy="strict-origin-when-cross-origin" loading="eager"></iframe>
 </div>
 
 <div id="ai-full" role="dialog" aria-modal="true" aria-label="LifeLink AI">
@@ -624,42 +624,24 @@ function toast(m){
   const t=$('#toast');t.textContent=m;t.classList.add('open');
   clearTimeout(toast.t);toast.t=setTimeout(()=>t.classList.remove('open'),3200);
 }
-const FRAME_BLOCKED_HOSTS = [
-  'notion.so','notion.com','google.com','mail.google.com','drive.google.com','classroom.google.com',
-  'github.com','chatgpt.com','openai.com','claude.ai','anthropic.com','gemini.google.com',
-  'copilot.microsoft.com','perplexity.ai','canva.com','adobe.com','youtube.com','spotify.com',
-  'discord.com','slack.com','teams.microsoft.com','zoom.us','outlook.live.com','onedrive.live.com',
-  'dropbox.com','todoist.com','trello.com','canvas.instructure.com'
-];
-function isFrameBlocked(u){
-  try{
-    const host = new URL(u).hostname.toLowerCase();
-    return FRAME_BLOCKED_HOSTS.some(d => host === d || host.endsWith('.' + d));
-  }catch(e){ return false; }
-}
 function openBrowser(u){
-  if(!/^https?:\/\//i.test(String(u||''))){toast('Only http(s) links can be opened');return}
-  $('#browser-url').value=u;
-  const iframe=$('#browser-frame'), fb=$('#browser-fallback'), eb=$('#browser-embed-btn');
-  if(isFrameBlocked(u)){
-    iframe.style.display='none';
-    iframe.removeAttribute('src');
-    fb.style.display='grid';
-    eb.style.display='inline-block';
-    try{ $('#bf-title').textContent = new URL(u).hostname.replace(/^www\./,''); }catch(e){}
-  }else{
-    fb.style.display='none';
-    eb.style.display='none';
-    iframe.style.display='block';
-    try{iframe.src=u;}catch(e){iframe.removeAttribute('src');}
-  }
+  let target=String(u||'').trim();
+  if(!/^https?:\/\//i.test(target))target='https://'+target;
+  try{
+    const parsed=new URL(target);
+    if(!['http:','https:'].includes(parsed.protocol))throw new Error('Invalid protocol');
+    target=parsed.href;
+  }catch(e){toast('Enter a valid website URL');return}
+  $('#browser-url').value=target;
+  const iframe=$('#browser-frame'),fb=$('#browser-fallback'),eb=$('#browser-embed-btn');
+  fb.style.display='none';eb.style.display='inline-block';iframe.style.display='block';
+  iframe.removeAttribute('src');iframe.src=target;
+  const title=$('#bf-title');if(title)title.textContent=new URL(target).hostname.replace(/^www\./,'');
   $('#browser-modal').classList.add('open');
 }
 function forceEmbedBrowser(){
-  const u=$('#browser-url').value, iframe=$('#browser-frame'), fb=$('#browser-fallback');
-  fb.style.display='none';
-  iframe.style.display='block';
-  iframe.src=u;
+  const u=$('#browser-url').value,iframe=$('#browser-frame'),fb=$('#browser-fallback');
+  fb.style.display='none';iframe.style.display='block';iframe.removeAttribute('src');iframe.src=u;
 }
 function openBrowserPopup(){
   const url=$('#browser-url').value;
@@ -795,19 +777,70 @@ function tl(){const R={High:0,Medium:1,Low:2},q=U.q.toLowerCase();
  const d=S.tasks.filter(t=>t.done).length,p=S.tasks.length?Math.round(d/S.tasks.length*100):0;$('#pb').style.width=p+'%';$('#pg').textContent=`${d} of ${S.tasks.length} complete (${p}%)`;
  $('#tl').innerHTML=a.map(t=>`<div class="row"><input type="checkbox" style="width:auto" data-a="tick" data-i="${t.id}" ${t.done?'checked':''} aria-label="Complete ${esc(t.title)}"><span class="num" style="width:26px;height:26px;font-size:12px">${t.n}</span><a href="#/task/${t.id}" style="flex:1;${t.done?'text-decoration:line-through;opacity:.5':''}">${esc(t.title)}<div class="sub" style="margin:0;font-size:12px">${esc(t.src)} · ${t.due||'no deadline'}</div></a><span class="tag ${PC[t.pri]}">${t.pri}</span><button class="btn" data-a="edit" data-i="${t.id}">Edit</button><button class="btn" data-a="del" data-i="${t.id}" aria-label="Delete task">✕</button></div>`).join('')||empty('No tasks match.')}
 function nl(){const q=U.nq.toLowerCase();$('#nl').innerHTML=S.notes.filter(n=>(n.title+n.body).toLowerCase().includes(q)).sort((a,b)=>b.ts-a.ts).map(n=>`<div class="row" data-a="pick" data-i="${n.id}" style="cursor:pointer;${n.id==U.nid?'font-weight:600':''}"><div style="min-width:0"><div>${esc(n.title||'Untitled')}</div><div class="sub" style="margin:0;font-size:12px">${ago(n.ts)}</div></div></div>`).join('')||empty('No matches')}
+function appCardNode(app, mode, stateText, actionLabel, actionName, actionId, secondAction) {
+  const card=document.createElement('div');
+  card.className='glass card app-library-card';
+  card.style.padding='14px';
+  const title=document.createElement('b');title.textContent=app.name;card.appendChild(title);
+  const detail=document.createElement('div');detail.className='sub';detail.style.margin='4px 0 10px';detail.style.fontSize='12px';
+  detail.textContent=[app.category||'Website',app.detail||app.url||''].filter(Boolean).join(' · ');card.appendChild(detail);
+  const tag=document.createElement('span');tag.className='tag'+(mode==='mine'?' low':'');tag.textContent=stateText;card.appendChild(tag);
+  const button=document.createElement('button');button.className='btn pri';button.textContent=actionLabel;button.dataset.a=actionName;if(actionId)button.dataset.i=actionId;button.style.marginTop='8px';button.style.width='100%';card.appendChild(button);
+  if(secondAction){const remove=document.createElement('button');remove.className='btn';remove.textContent=secondAction.label;remove.dataset.a=secondAction.name;remove.dataset.i=secondAction.id;remove.style.marginTop='6px';remove.style.width='100%';card.appendChild(remove)}
+  return card;
+}
 function al(){
   if(S?.loggedIn&&googleConnectionStatus===null)refreshGoogleConnectionStatus();
-  const q=U.aq.toLowerCase(),selected=Array.isArray(S.googleServices)?S.googleServices:[];
-  const googleTiles=GOOGLE_SERVICE_CATALOG.filter(service=>selected.includes(service.id)).map(service=>[service.name,8,'Available',service.url,service.id]);
-  $('#al').innerHTML=[...A,...googleTiles].filter(a=>(U.ac==='All'||CATS[a[1]]===U.ac)&&a[0].toLowerCase().includes(q)).map(([n,c,status,url,serviceId])=>{
-    if(url==='oauth:google')return `<div class="glass card" style="padding:14px"><b>${n}</b><div class="sub" style="margin:2px 0 10px;font-size:12px">${CATS[c]}</div><span class="tag">${status}</span> <button class="btn pri" data-a="googlepopup" aria-label="Manage Google accounts" style="margin-top:6px;width:100%;font-size:12px;padding:5px">Manage</button></div>`;
-    if(url==='oauth:github'){
-      const conn=S.oauth&&S.oauth.connected&&S.oauth.connected.github;
-      return `<div class="glass card" style="padding:14px"><b>${n}</b><div class="sub" style="margin:2px 0 10px;font-size:12px">${CATS[c]}</div><span class="tag ${conn?'low':''}">${conn?'Connected: @'+esc(conn):'Not connected'}</span> <button class="btn pri" data-a="${conn?'ghdisc':'ghconn'}" style="margin-top:6px;width:100%;font-size:12px;padding:5px">${conn?'Disconnect GitHub':'Connect GitHub'}</button></div>`;
+  const grid=$('#al'),tabs=$('#app-tabs'),tools=$('#app-tools');if(!grid||!tabs||!tools)return;
+  tabs.innerHTML='<div class="row" style="border:0;gap:8px;flex-wrap:wrap"><button class="btn" data-a="apptab" data-i="mine" id="app-tab-mine">My Apps</button><button class="btn" data-a="apptab" data-i="discover" id="app-tab-discover">Discover</button><span class="sp"></span><span class="tag" id="app-count"></span></div>';
+  const mine=$('#app-tab-mine'),discover=$('#app-tab-discover'),count=$('#app-count');
+  if(mine)mine.classList.toggle('pri',U.appTab!=='discover');
+  if(discover)discover.classList.toggle('pri',U.appTab==='discover');
+  if(count)count.textContent=appShelfRecords().length+' added';
+  grid.replaceChildren();
+  if(U.appTab==='discover'){
+    tools.innerHTML='<div class="row" style="border:0;gap:8px;flex-wrap:wrap"><input id="aq" type="search" placeholder="Search apps, services or websites…" autocomplete="off" style="flex:1;min-width:220px"><button class="btn" data-a="appcustom">＋ Add website</button></div><p class="sub" style="margin-top:0">Search the catalogue or add any website by its URL. LifeLink will always try to open it inside the inline app window.</p>';
+    const search=$('#aq');if(search)search.value=U.aq||'';
+    const q=String(U.aq||'').trim().toLowerCase();
+    const results=APP_DISCOVERY_CATALOG.filter(app=>!q||(app.name+' '+app.detail+' '+app.category+' '+app.url).toLowerCase().includes(q));
+    results.forEach(app=>{
+      const added=(S.apps||[]).includes(app.id);
+      grid.appendChild(appCardNode(app,'discover',added?'Already in My Apps':'Available to add',added?'Added ✓':'＋ Add to My Apps','appadd',app.id));
+      if(added){const button=grid.lastElementChild.querySelector('button');if(button)button.disabled=true}
+    });
+    const raw=String(U.aq||'').trim();
+    const isUrl=/^(?:https?:\/\/)?(?:[a-z0-9-]+\.)+[a-z]{2,}(?:[/:?#].*)?$/i.test(raw);
+    if(isUrl){
+      const custom=document.createElement('div');custom.className='glass card app-library-card';custom.style.padding='14px';
+      const b=document.createElement('b');b.textContent='Add this website';custom.appendChild(b);
+      const d=document.createElement('div');d.className='sub';d.textContent=raw;custom.appendChild(d);
+      const button=document.createElement('button');button.className='btn pri';button.textContent='＋ Add custom website';button.dataset.a='appcustom';button.style.marginTop='8px';button.style.width='100%';custom.appendChild(button);grid.appendChild(custom);
     }
-    if(serviceId)return `<div class="glass card" style="padding:14px"><b>${n}</b><div class="sub" style="margin:2px 0 10px;font-size:12px">Google service</div><span class="tag">Added to Apps</span><button class="btn pri" onclick="openBrowser('${url}')" style="margin-top:6px;width:100%;font-size:12px;padding:5px">Open ↗</button><button class="btn" data-a="googleserviceremove" data-i="${serviceId}" style="margin-top:6px;width:100%;font-size:12px;padding:5px">Remove tile</button></div>`;
-    return `<div class="glass card" style="padding:14px"><b>${n}</b><div class="sub" style="margin:2px 0 10px;font-size:12px">${CATS[c]}</div><span class="tag">${status}</span> ${url?`<button class="btn pri" onclick="openBrowser('${url}')" style="margin-top:6px;width:100%;font-size:12px;padding:5px">Open ↗</button>`:''}</div>`;
-  }).join('')||empty('No services match');
+    if(!results.length&&!isUrl){const emptyNode=document.createElement('p');emptyNode.className='sub';emptyNode.textContent='No catalogue match. You can still add any website by name and URL.';grid.appendChild(emptyNode)}
+    return;
+  }
+  tools.innerHTML='<p class="sub" style="margin-top:0">Only apps you have added and accounts you have connected appear here.</p>';
+  const github=S.oauth&&S.oauth.connected&&S.oauth.connected.github;
+  if(github){
+    const card=appCardNode({name:'GitHub',category:'Connected account',detail:'Connected as @'+github,url:'https://github.com/'},'mine','Connected','Open ↗','appopen','connected:github',{name:'ghdisc',id:'',label:'Disconnect'});
+    const open=card.querySelector('[data-a="appopen"]');if(open){open.dataset.i='connected:github'}
+    grid.appendChild(card);
+  }
+  if(S.oauth&&S.oauth.connected&&S.oauth.connected.google){
+    const card=appCardNode({name:'Google account',category:'Connected account',detail:'Google services connected to LifeLink'},'mine','Connected','Manage account','googlepopup','',{});
+    grid.appendChild(card);
+  }
+  const entries=appShelfRecords();
+  entries.forEach(app=>{
+    const card=appCardNode(app,'mine','Added to My Apps','Open inline ↗','appopen',app.id,{name:'appremove',id:app.id,label:'Remove'});
+    grid.appendChild(card);
+  });
+  if(!github&&!(S.oauth&&S.oauth.connected&&S.oauth.connected.google)&&!entries.length){
+    const emptyNode=document.createElement('div');emptyNode.className='glass card';emptyNode.style.padding='20px';
+    const title=document.createElement('b');title.textContent='Your app shelf is empty';emptyNode.appendChild(title);
+    const detail=document.createElement('p');detail.className='sub';detail.textContent='Open Discover to search the catalogue and add apps to LifeLink.';emptyNode.appendChild(detail);
+    const button=document.createElement('button');button.className='btn pri';button.textContent='Explore apps';button.dataset.a='apptab';button.dataset.i='discover';emptyNode.appendChild(button);grid.appendChild(emptyNode);
+  }
 }
 function render(){
   if(!S || !S.loggedIn){
@@ -1961,27 +1994,34 @@ function aiMessages(){
   while(out.length&&out[0].role!=='user')out.shift();
   return out;
 }
+function shouldUseWebSearch(text){
+  return /\b(?:latest|most recent|recent|current|currently|today|tonight|this week|this month|right now|as of|breaking|news|price|cost|weather|forecast|stock|exchange rate|release date|version|availability|schedule|opening hours|updated|documentation|docs|research|sources?|citations?|search the web|look up|find out|compare|reviews?|best|recommendations?|what happened|who won|who is the current|has .{2,50} (?:released|announced|changed)|is .{2,50} (?:available|open|still supported)|(?:what|who|where|when|why|how|explain|define|describe)\b)/i.test(String(text||''));
+}
 async function callLLM(msgs,opts={}){
   if(!supabaseClient)throw new Error('Supabase is not configured');
   const {data:{session},error:se}=await supabaseClient.auth.getSession();
   if(se||!session?.access_token)throw new Error('Please sign in again to use LifeLink AI.');
   const fullMsgs=[{role:'system',text:opts.sys!=null?opts.sys:aiSystemPrompt()},...msgs].slice(-20);
+  const latestUser=[...fullMsgs].reverse().find(m=>m.role==='user');
+  const webSearch=opts.webSearch===true||shouldUseWebSearch(latestUser&&latestUser.text);
+  const status=$('#af-prov');if(webSearch&&status)status.textContent='Searching the web…';
   const res=await fetch(LL_CONFIG.apiUrl+'/api/chat',{
     method:'POST',
     headers:{'Content-Type':'application/json','Authorization':'Bearer '+session.access_token},
-    body:JSON.stringify({
-      messages:fullMsgs.map(m=>({role:m.role,content:m.text})),
-      model:S.aiModel||'auto'
-    }),
+    body:JSON.stringify({messages:fullMsgs.map(m=>({role:m.role,content:m.text})),model:S.aiModel||'auto',webSearch}),
     signal:AbortSignal.timeout(opts.timeout||60000)
   });
   let data={};try{data=await res.json()}catch{}
   if(!res.ok)throw new Error(data.error||('AI backend HTTP '+res.status));
-  const out=data.reply||data.response||data.text||data.output||data.message;
+  let out=data.reply||data.response||data.text||data.output||data.message;
   if(typeof out!=='string'||!out.trim())throw new Error('The LifeLink backend returned an empty response.');
+  if(Array.isArray(data.sources)&&data.sources.length){
+    const refs=data.sources.slice(0,8).map((source,index)=>'- ['+(source.title||'Source '+(index+1))+']('+source.url+')').join('\n');
+    out+='\n\n**Web sources**\n'+refs;
+  }
   S.aiLastProvider=data.provider||'';
   const providerNames={groq:'GPT-OSS 120B',gemini:'Gemini 3.8 Flash',openai:'GPT-4o mini',anthropic:'Claude Sonnet'};
-  const status=$('#af-prov');if(status)status.textContent='Using '+(providerNames[S.aiLastProvider]||'Auto');
+  if(status)status.textContent='Using '+(providerNames[S.aiLastProvider]||'Auto')+(data.webSearch?' · Web':'');
   return out;
 }
 const aiHint=s=>s===401?'Your session may have expired. Sign in again.':s===403?'Your account is not authorised for this request.':s===409?'That model is not connected yet. Choose Auto or connect the model securely.':s===429?'Rate limit reached. Wait a moment and try again.':s>=500?'All connected models may be temporarily unavailable. LifeLink will use its fallback assistant.':'';
@@ -2273,6 +2313,24 @@ const X=(i,b)=>{const t=S.tasks.find(x=>x.id==i),delT=()=>{S.tasks=S.tasks.filte
  openlink:()=>{const arr=b.dataset.k==='home'?S.links:((S.tasks.find(x=>x.id==U.tid)||{}).links||[]);const l=arr[+i];if(l)openBrowser(l.u)},
  nologo:()=>{S.logo='';save();applyPrefs();updateAvatar();if(islandMode=='account')refreshIsland();toast('Profile picture reset')},
  ghconn:()=>startGitHubConnect(),ghdisc:()=>disconnectGitHub(),googlepopup:()=>openIsland('google'),googleconn:()=>startGoogleConnect(),googleservice:()=>setGoogleService(i,b.dataset.k==='add'),googleserviceremove:()=>setGoogleService(i,false),googlerefresh:()=>{googleConnectionStatus=null;googleConnectionError='';refreshGoogleConnectionStatus()},googleuse:()=>{S.googleActiveAccountId=i;save();renderGoogleManager();if(location.hash.includes('/apps'))al()},googledisc:()=>disconnectGoogleAccount(i),
+ apptab:()=>{U.appTab=i==='discover'?'discover':'mine';if(U.appTab==='mine')U.aq='';al()},
+ appadd:()=>addAppToShelf(i),
+ appremove:()=>removeAppFromShelf(i),
+ appopen:()=>{if(i==='connected:github'){openBrowser('https://github.com/');return}const app=appShelfRecords().find(item=>item.id===i);if(app)openBrowser(app.url)},
+ appcustom:()=>ask('Add a website to My Apps',[['name','App name*','text'],['url','Website URL*','url']],{name:U.aq.trim(),url:/^https?:\/\//i.test(U.aq.trim())?U.aq.trim():''},data=>{
+   const name=String(data.name||'').trim(),raw=String(data.url||'').trim();
+   if(!name||!raw){toast('Enter an app name and website URL');return}
+   const url=/^https?:\/\//i.test(raw)?raw:'https://'+raw;
+   try{
+     const parsed=new URL(url);if(!['http:','https:'].includes(parsed.protocol))throw new Error('bad protocol');
+     if(!Array.isArray(S.customApps))S.customApps=[];
+     const existing=S.customApps.find(app=>app.url===parsed.href);
+     if(existing){if(!S.apps.includes(existing.id))S.apps.push(existing.id);U.appTab='mine';save();render();toast('Website added to My Apps');return}
+     const app={id:'custom:'+uid(),name:name.slice(0,80),category:'Custom website',detail:parsed.hostname,url:parsed.href};
+     S.customApps.push(app);S.apps.push(app.id);U.appTab='mine';save();render();toast(name+' added to My Apps');
+   }catch(e){toast('Enter a valid http or https website URL')}
+ }),
+
  tgo:()=>{if(T.run){clearInterval(iv);T.left=Math.max(0,Math.round((T.end-Date.now())/1000));T.run=false;document.title='LifeLink'}else{T.run=true;T.end=Date.now()+T.left*1000;iv=setInterval(tick,500)}render()},
  trs:()=>{clearInterval(iv);T.run=false;T.brk=false;T.left=T.len*60;document.title='LifeLink';render()},
  tset:()=>{if(!T.run){T.len=+i;T.brk=false;T.left=T.len*60;render()}},
@@ -2309,7 +2367,7 @@ document.addEventListener('click',e=>{
   const f=X(b.dataset.i,b)[b.dataset.a];if(f)f();
 });
 document.addEventListener('input',e=>{if(!S.loggedIn)return;const el=e.target,id=el.id,v=el.value,t=S.tasks.find(x=>x.id==U.tid),n=S.notes.find(x=>x.id==U.nid);
- if(id==='google-service-search'){filterGoogleServices(v)}else if(id=='q'){U.q=v;tl()}else if(id=='f'){U.f=v;tl()}else if(id=='s'){U.s=v;tl()}else if(id=='aq'){U.aq=v;al()}else if(id=='ac'){U.ac=v;al()}else if(id=='nq'){U.nq=v;nl()}else if(id=='cv'){U.cv=v;render()}
+ if(id==='google-service-search'){filterGoogleServices(v)}else if(id=='q'){U.q=v;tl()}else if(id=='f'){U.f=v;tl()}else if(id=='s'){U.s=v;tl()}else if(id=='aq'){U.aq=v;al()}else if(id=='nq'){U.nq=v;nl()}else if(id=='cv'){U.cv=v;render()}
  else if((id=='nt'||id=='nb')&&n){n[id=='nt'?'title':'body']=v;n.ts=Date.now();save();$('#sv').textContent='Saved '+new Date().toLocaleTimeString();nl()}
  else if(id=='wn'&&t){t.notes=v;save()}else if(id=='wp'&&t){t.prog=+v;$('#wpv').textContent=v+'%';save()}else if(id=='pn'){S.name=v.trim()||'User';save();updateAvatar()}else if(id==='ai-learn-enabled'){S.aiLearning.enabled=el.checked;save();toast(el.checked?'Adaptive learning enabled':'Adaptive learning paused')}});
 
