@@ -1150,7 +1150,7 @@ const EXTRA_APP_CATALOG=[
 {id:'amazon',name:'Amazon',category:'Productivity',detail:'Shopping and orders',url:'https://www.amazon.com/'}
 ];
 const APP_DISCOVERY_CATALOG=(()=>{
- const base=A.filter(app=>app[3]&&/^https?:\\/\\//i.test(app[3])).map(([name,category,status,url])=>({id:'app:'+name.toLowerCase().replace(/[^a-z0-9]+/g,'-').replace(/^-|-$/g,''),name,category:CATS[category]||'Other',detail:'Open '+name+' in LifeLink',url}));
+ const base=A.filter(app=>app[3]&&/^https?:\/\//i.test(app[3])).map(([name,category,status,url])=>({id:'app:'+name.toLowerCase().replace(/[^a-z0-9]+/g,'-').replace(/^-|-$/g,''),name,category:CATS[category]||'Other',detail:'Open '+name+' in LifeLink',url}));
  const google=GOOGLE_SERVICE_CATALOG.map(service=>({id:'google:'+service.id,name:service.name,category:'Google',detail:service.detail,url:service.url}));
  const all=[...base,...google,...EXTRA_APP_CATALOG.map(app=>({...app,id:'extra:'+app.id}))];
  const unique=new Map();all.forEach(app=>{if(!unique.has(app.id))unique.set(app.id,app)});
