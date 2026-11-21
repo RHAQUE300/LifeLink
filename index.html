@@ -1296,20 +1296,64 @@ function runAIAction(a){
   }
   return null;
 }
+function aiActionNeedsConfirmation(a){
+  return ['delete_task','delete_event','delete_note','delete_link','clear_notifications'].includes(String(a&&a.op||''));
+}
+function aiActionPreview(a){
+  const op=String(a&&a.op||'');
+  const ref=a&&(a.n!=null?'#'+a.n:(a.id||a.match||a.title||'selected item'));
+  if(op==='delete_task')return 'Delete task '+ref;
+  if(op==='delete_event')return 'Delete calendar event '+ref;
+  if(op==='delete_note')return 'Delete note '+ref;
+  if(op==='delete_link')return 'Remove quick link '+(a.title||a.match||'selected link');
+  if(op==='clear_notifications')return 'Clear all notifications';
+  return 'Destructive action';
+}
 function applyAIActions(text){
-  const re=new RegExp(FENCE+'lifelink\\s*([\\s\\S]*?)'+FENCE,'ig');
-  const done=[],snap=aiSnap();
+  const re=new RegExp(FENCE+'lifelink\\\\s*([\\\\s\\\\S]*?)'+FENCE,'ig');
+  const done=[],pending=[],snap=aiSnap();
   const clean=text.replace(re,(all,json)=>{
-    try{let acts=JSON.parse(json.trim());if(!Array.isArray(acts))acts=[acts];
-      acts.slice(0,25).forEach(a=>{try{const r=runAIAction(a);if(r)done.push(r)}catch(e){}})}catch(e){}
+    try{
+      let acts=JSON.parse(json.trim());
+      if(!Array.isArray(acts))acts=[acts];
+      acts.slice(0,25).forEach(a=>{
+        if(aiActionNeedsConfirmation(a)){pending.push(a);return;}
+        try{const result=runAIAction(a);if(result)done.push(result);}
+        catch(e){console.error('LifeLink AI action failed:',e);}
+      });
+    }catch(e){console.error('Invalid LifeLink AI action block:',e);}
     return '';
-  }).replace(new RegExp(FENCE+'lifelink[\\s\\S]*$','i'),'').trim();
+  }).replace(new RegExp(FENCE+'lifelink[\\\\s\\\\S]*$','i'),'').trim();
+
+  if(pending.length){
+    const preview=pending.map(aiActionPreview).join('\n');
+    askConfirm(
+      'Confirm AI changes',
+      'LifeLink AI wants to perform these destructive changes:\n'+preview+'\n\nContinue?',
+      ()=>{
+        const confirmed=[];
+        pending.forEach(a=>{
+          try{const result=runAIAction(a);if(result)confirmed.push(result);}
+          catch(e){console.error('Confirmed LifeLink AI action failed:',e);}
+        });
+        if(confirmed.length){
+          stashUndo(snap);
+          render();
+          toast(confirmed.join(' · '));
+        }else{
+          toast('No changes were made.');
+        }
+      }
+    );
+  }
+
   const changed=done.length&&aiSnap()!==snap;
   if(done.length)render();
   let html=clean?formatMarkdownBasic(clean):'';
   if(done.length)html+=(html?'<div style="margin-top:8px;padding-top:6px;border-top:1px dashed rgba(120,120,120,.35)">':'<div>')+done.map(d=>'✅ '+esc(d)).join('<br>')+(changed?stashUndo(snap):'')+'</div>';
-  if(!html)html='Done.';
-  return{html,text:(clean+(done.length?'\n[Actions performed: '+done.join('; ')+']':'')).trim()};
+  if(pending.length)html+=(html?'<div style="margin-top:8px">':'<div>')+'⏳ Waiting for your confirmation before: '+pending.map(aiActionPreview).map(esc).join('; ')+'.</div>';
+  if(!html)html=pending.length?'Please review the confirmation dialog.':'Done.';
+  return{html,text:(clean+(done.length?'\n[Actions performed: '+done.join('; ')+']':'')+(pending.length?'\n[Awaiting confirmation for: '+pending.map(aiActionPreview).join('; ')+']':'')).trim()};
 }
 
 /* ---------- external LLM ---------- */
@@ -1378,7 +1422,7 @@ Operations (fields marked ? are optional):
 - Quick links: add_link{title?,url} · delete_link{title}
 - App: navigate{page: home|todo|calendar|notes|apps|timer|notifications|settings, or page:"task" with n} · timer{action: start|pause|reset, minutes?} · set_setting{key,value} · mark_notifications_read{} · clear_notifications{} · set_name{name} · open_url{url}
 - Setting keys: theme(light|dark), bg(pastel|sunset|mint|slate), density(cozy|compact), motion(on|reduced), dPri(High|Medium|Low), wk(Sun|Mon), blur(0-40), op(20-90), fs(13-19), fLen(1-180), bLen(1-180), autoB, hideDone, confirmDel, aiHistory (true/false), and notification switches nTasks, nMsgs, nEdu, nFiles, nCal, nSys.
-Rules: tasks are referenced by their number n, events and notes by the [id] shown above. priority is High, Medium or Low. Dates are YYYY-MM-DD and times are 24-hour HH:MM; convert relative dates ("Friday", "next week") using today's date. You may include up to 25 operations. Use the block only when the user actually asks for a change, and only perform deletions when they explicitly ask to delete or remove something. Every change gets an Undo button, so act confidently on clear requests. Also write a normal reply that says in plain words what you did or found. Never mention the block or its format. You cannot see or change passwords, API keys, the account email, or sign-in and sign-out; if asked, explain that those are handled in Settings.`;
+Rules: tasks are referenced by their number n, events and notes by the [id] shown above. priority is High, Medium or Low. Dates are YYYY-MM-DD and times are 24-hour HH:MM; convert relative dates ("Friday", "next week") using today's date. You may include up to 25 operations. Use the block only when the user actually asks for a change, and only perform deletions when they explicitly ask to delete or remove something. Non-destructive changes can be applied when clearly requested. Destructive operations (deleting tasks, events, notes, links, or clearing notifications) always trigger a separate in-app confirmation before execution. Never describe a pending operation as completed. Successful changes provide an Undo option where supported. Also write a normal reply that says in plain words what you did or found. Never mention the block or its format. You cannot see or change passwords, API keys, the account email, or sign-in and sign-out; if asked, explain that those are handled in Settings.`;
 }
 function aiLearningPromptText(){
   const L=S&&S.aiLearning||{},mem=(L.memories||[]).slice(-20).map(m=>'- '+m.text).join('\n');
