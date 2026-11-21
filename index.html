@@ -200,19 +200,22 @@ main.in{animation:pg .45s cubic-bezier(.22,1,.36,1)}@keyframes pg{from{opacity:0
 main.in{animation-duration:.55s}
 #af-side{transition-duration:.4s,.34s}
 #island-header{touch-action:none;user-select:none;-webkit-user-select:none}
-.google-manage-btn{background:#111!important;color:#fff!important;border:1px solid #111!important;border-radius:10px;padding:9px 18px;font-weight:650;min-width:104px}
-.google-manage-btn:hover{background:#303030!important;transform:translateY(-1px)}
 .google-manager-account{padding:14px 12px;border:1px solid var(--gb);border-radius:14px;margin-top:10px;transition:background-color .28s var(--motion-ease),transform .28s var(--motion-ease)}
 .google-manager-account:hover{background:rgba(79,124,255,.06);transform:translateY(-1px)}
+.google-manager-error{padding:14px;border:1px solid rgba(220,70,70,.25);border-radius:14px;background:rgba(220,70,70,.07);display:flex;align-items:center;justify-content:space-between;gap:12px}
+.google-services-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:14px}
+.google-service-card{min-width:0}
+.google-service-card .sub{margin:2px 0 10px;font-size:12px}
 body.google-manager-active:after{content:"";position:fixed;inset:0;z-index:49;background:rgba(28,35,52,.32);backdrop-filter:blur(3px);-webkit-backdrop-filter:blur(3px);pointer-events:none}
-#island.google-manager-open{top:50%;left:50%;right:auto;width:min(780px,calc(100vw - 32px));max-height:min(88vh,900px);background:rgba(255,255,255,.84);backdrop-filter:blur(30px) saturate(1.35);-webkit-backdrop-filter:blur(30px) saturate(1.35);border:1px solid rgba(255,255,255,.9);box-shadow:0 30px 90px rgba(12,20,42,.34),inset 0 1px 0 rgba(255,255,255,.8);transform:translate(-50%,-50%) scale(.96)}
-#island.google-manager-open.open{transform:translate(-50%,-50%) scale(1)}
-#island.google-manager-open #island-body{padding:28px}
-@media(max-width:560px){#island.google-manager-open{width:calc(100vw - 20px);max-height:88vh}#island.google-manager-open #island-body{padding:16px}}
-[data-theme=dark] #island.google-manager-open{background:rgba(24,25,29,.9);border-color:rgba(255,255,255,.2);box-shadow:0 30px 90px rgba(0,0,0,.72),inset 0 1px 0 rgba(255,255,255,.12)}
+#island.google-manager-open{inset:40px;width:auto;height:auto;max-width:none;max-height:none;background:rgba(255,255,255,.84);backdrop-filter:blur(30px) saturate(1.35);-webkit-backdrop-filter:blur(30px) saturate(1.35);border:1px solid rgba(255,255,255,.9);box-shadow:0 30px 90px rgba(12,20,42,.34),inset 0 1px 0 rgba(255,255,255,.8);transform:translateY(14px) scale(.985)}
+#island.google-manager-open.open{transform:translateY(0) scale(1)}
+#island.google-manager-open #island-header{padding:16px 22px;flex:none}
+#island.google-manager-open #island-body{padding:24px;min-height:0;overflow-y:auto}
+@media(max-width:560px){#island.google-manager-open{inset:12px}#island.google-manager-open #island-header{padding:12px 14px}#island.google-manager-open #island-body{padding:16px}.google-services-grid{grid-template-columns:1fr}}
+[data-theme=dark] #island.google-manager-open{background:rgba(24,25,29,.92);border-color:rgba(255,255,255,.2);box-shadow:0 30px 90px rgba(0,0,0,.72),inset 0 1px 0 rgba(255,255,255,.12)}
 [data-theme=dark] body.google-manager-active:after{background:rgba(0,0,0,.48)}
-[data-theme=dark] .google-manage-btn{background:#050505!important;border-color:#050505!important}
 [data-theme=dark] .google-manager-account:hover{background:rgba(255,255,255,.06)}
+[data-theme=dark] .google-manager-error{background:rgba(240,90,90,.1);border-color:rgba(255,120,120,.22)}
 </style>
 </head><body>
 
@@ -316,7 +319,7 @@ const LL_CONFIG={
 };
 let supabaseClient=null, supabaseSession=null, supabaseLoadPromise=null;
 
-let googleGISPromise=null, googleConnectionStatus=null, googleConnectionBusy=false;
+let googleGISPromise=null, googleConnectionStatus=null, googleConnectionBusy=false, googleStatusPromise=null, googleConnectionError='';
 function loadGoogleGIS(){
   if(window.google?.accounts?.oauth2)return Promise.resolve(true);
   if(googleGISPromise)return googleGISPromise;
@@ -337,22 +340,38 @@ async function googleApi(path,method='GET',body){
   supabaseSession=data.session;
   const headers={Authorization:'Bearer '+data.session.access_token,'X-Requested-With':'XMLHttpRequest'};
   if(body)headers['Content-Type']='application/json';
-  const response=await fetch(LL_CONFIG.apiUrl+path,{method,headers,body:body?JSON.stringify(body):undefined});
+  const response=await fetch(LL_CONFIG.apiUrl+path,{method,headers,body:body?JSON.stringify(body):undefined,cache:'no-store'});
   let result={};try{result=await response.json()}catch{}
   if(!response.ok)throw new Error(result.error||'Google connection request failed');
   return result;
 }
 async function refreshGoogleConnectionStatus(){
   if(!S?.loggedIn)return;
-  try{
-    googleConnectionStatus=await googleApi('/api/google/status');
-    googleConnectionStatus.accounts=Array.isArray(googleConnectionStatus.accounts)?googleConnectionStatus.accounts:[];
-    const ids=googleConnectionStatus.accounts.map(a=>a.id);
-    if(S.googleActiveAccountId&&!ids.includes(S.googleActiveAccountId)){S.googleActiveAccountId=ids[0]||null;save()}
-    if(S.oauth){S.oauth.connected=S.oauth.connected||{};S.oauth.connected.google=ids.length>0;save()}
+  if(googleStatusPromise)return googleStatusPromise;
+  const request=(async()=>{
+    googleConnectionError='';
+    if(islandMode==='google')renderGoogleManager();
+    try{
+      const result=await googleApi('/api/google/status');
+      let accounts=Array.isArray(result.accounts)?result.accounts:[];
+      // Older deployed Workers returned only {connected:true}. Keep that legacy connection visible.
+      if(!accounts.length&&result.connected===true){
+        accounts=[{id:result.accountId||'legacy',email:result.email||'Connected Google account',scopes:result.scope||'',legacy:true}];
+      }
+      googleConnectionStatus={...result,accounts};
+      const ids=accounts.map(a=>a.id);
+      if(S.googleActiveAccountId&&!ids.includes(S.googleActiveAccountId)){S.googleActiveAccountId=ids[0]||null;save()}
+      if(S.oauth){S.oauth.connected=S.oauth.connected||{};S.oauth.connected.google=ids.length>0;save()}
+    }catch(error){
+      googleConnectionError=String(error?.message||error||'Could not load Google accounts');
+      googleConnectionStatus={accounts:[]};
+      console.warn('Google connection status unavailable:',googleConnectionError);
+    }
     if(location.hash.includes('/apps'))al();
     if(islandMode==='google')renderGoogleManager();
-  }catch(error){console.warn('Google connection status unavailable:',error.message)}
+  })();
+  googleStatusPromise=request;
+  try{await request}finally{if(googleStatusPromise===request)googleStatusPromise=null}
 }
 async function startGoogleConnect(){
   const accountId=crypto.randomUUID();
@@ -372,8 +391,16 @@ async function startGoogleConnect(){
       callback:async response=>{
         if(response.error){toast('Google connection cancelled: '+(response.error_description||response.error));googleConnectionBusy=false;return}
         try{
-          await googleApi('/api/google/connect','POST',{code:response.code,accountId});
+          const connected=await googleApi('/api/google/connect','POST',{code:response.code,accountId});
           await refreshGoogleConnectionStatus();
+          if(connected?.email&&googleConnectionStatus){
+            const list=googleConnectionStatus.accounts||[];
+            const found=list.find(a=>a.id===accountId)||list.find(a=>a.id==='legacy');
+            if(found)found.email=connected.email;
+            else list.unshift({id:connected.accountId||accountId,email:connected.email});
+            googleConnectionStatus.accounts=list;
+            if(islandMode==='google')renderGoogleManager();
+          }
           toast('Google account connected to LifeLink.');
         }catch(error){toast('Google connection failed: '+error.message)}
         finally{googleConnectionBusy=false;if(location.hash.includes('/apps'))al();if(islandMode==='google')renderGoogleManager()}
@@ -554,7 +581,6 @@ let T={len:25,left:25*60,run:false,end:0,brk:false},iv;
 const CATS=['Productivity','Communication','Email & calendars','Cloud storage','Education','AI','Creative & media','Browsers & search','Google'],
 A=[
   ['Google',8,'Connect and manage Google accounts','oauth:google'],
-  ['Google Classroom',4,'Available','https://classroom.google.com'],
   ['GitHub',0,'Available','oauth:github'],
   ['Notion',0,'Available','https://www.notion.so'],
   ['Todoist',0,'Available','https://todoist.com'],
@@ -569,13 +595,11 @@ A=[
   ['Moodle',4,'Available','https://moodle.org'],
   ['ChatGPT',5,'Available','https://chatgpt.com'],
   ['Claude',5,'Available','https://claude.ai'],
-  ['Gemini',5,'Available','https://gemini.google.com'],
   ['Perplexity',5,'Available','https://www.perplexity.ai'],
   ['Canva',6,'Available','https://www.canva.com'],
   ['Adobe',6,'Available','https://www.adobe.com'],
   ['YouTube',6,'Available','https://www.youtube.com'],
-  ['Spotify',6,'Available','https://open.spotify.com'],
-  ['Google Search',7,'Available','https://www.google.com']
+  ['Spotify',6,'Available','https://open.spotify.com']
 ];
 function badge(){const u=(S.notifs||[]).filter(n=>!n.read).length,b=$('#bell b');if(b){b.textContent=u;b.style.display=u?'block':'none'}}
 const NP={Tasks:'nTasks',Messages:'nMsgs',Education:'nEdu',Files:'nFiles',Calendar:'nCal',System:'nSys'};
@@ -761,7 +785,7 @@ function al(){
   const q=U.aq.toLowerCase();
   $('#al').innerHTML=A.filter(a=>(U.ac==='All'||CATS[a[1]]===U.ac)&&a[0].toLowerCase().includes(q)).map(([n,c,status,url])=>{
     if(url==='oauth:google'){
-      return `<div class="glass card" style="padding:14px"><b>${n}</b><div class="sub" style="margin:2px 0 10px;font-size:12px">${CATS[c]}</div><span class="tag">Account management</span><button class="google-manage-btn" data-a="googlepopup" aria-label="Manage Google accounts" style="display:block;width:100%;margin-top:10px">Manage</button></div>`;
+      return `<div class="glass card" style="padding:14px"><b>${n}</b><div class="sub" style="margin:2px 0 10px;font-size:12px">${CATS[c]}</div><span class="tag">${status}</span> <button class="btn pri" data-a="googlepopup" aria-label="Manage Google accounts" style="margin-top:6px;width:100%;font-size:12px;padding:5px">Manage</button></div>`;
     }
     if(url==='oauth:github'){
       const conn=S.oauth&&S.oauth.connected&&S.oauth.connected.github;
@@ -920,12 +944,28 @@ const AI_GREETING='Hi! I’m <b>LifeLink AI</b>. I can manage your tasks, events
 let aiHistory=[{role:'bot',html:AI_GREETING}];
 
 function googleManagerMarkup(){
-  if(googleConnectionStatus===null)return '<div class="sub" style="margin:0">Loading connected Google accounts…</div>';
-  const accounts=googleConnectionStatus.accounts||[];
-  if(!accounts.length)return `<div style="padding:20px 8px;text-align:center"><div class="num" style="width:48px;height:48px;margin:0 auto 12px;font-size:20px">G</div><b>No Google accounts connected</b><p class="sub" style="margin:6px 0 16px;font-size:13px">Connect a Google account to manage its Google services in LifeLink.</p><button class="btn pri" data-a="googleconn">＋ Connect Google account</button></div>`;
-  const activeId=accounts.some(a=>a.id===S.googleActiveAccountId)?S.googleActiveAccountId:accounts[0].id;
-  return `<div style="display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:16px"><div><b style="font-size:17px">Your Google accounts</b><div class="sub" style="margin:4px 0 0;font-size:13px">${accounts.length} connected account${accounts.length===1?'':'s'}</div></div><button class="btn pri" data-a="googleconn" style="padding:9px 15px;white-space:nowrap">＋ Add account</button></div>`+
-    accounts.map(a=>{const active=a.id===activeId;return `<div class="row google-manager-account" style="gap:14px;align-items:center"><span class="num" style="width:46px;height:46px;font-size:18px">G</span><div style="flex:1;min-width:0"><b style="display:block;overflow-wrap:anywhere;font-size:14px">${esc(a.email||'Google account')}</b><div class="sub" style="margin:4px 0 0;font-size:12px">${active?'Default account':'Connected Google account'}</div></div>${active?'<span class="tag low">Default</span>':`<button class="btn" data-a="googleuse" data-i="${esc(a.id)}" style="padding:7px 12px;font-size:12px">Make default</button>`}<button class="btn" data-a="googledisc" data-i="${esc(a.id)}" style="padding:7px 12px;font-size:12px">Disconnect</button></div>`}).join('');
+  const accounts=Array.isArray(googleConnectionStatus?.accounts)?googleConnectionStatus.accounts:[];
+  const activeId=accounts.some(a=>a.id===S.googleActiveAccountId)?S.googleActiveAccountId:(accounts[0]?.id||null);
+  let accountContent='';
+  if(googleConnectionStatus===null){
+    accountContent='<div class="sub" style="margin:0">Loading connected Google accounts…</div>';
+  }else if(googleConnectionError){
+    accountContent=`<div class="google-manager-error"><div><b>Could not load Google accounts</b><div class="sub" style="margin:4px 0 0;font-size:12px">${esc(googleConnectionError)}</div></div><button class="btn" data-a="googlerefresh">Retry</button></div>`;
+  }else if(!accounts.length){
+    accountContent='<div style="padding:16px 4px"><b>No Google accounts connected</b><p class="sub" style="margin:5px 0 0;font-size:13px">Add a Google account to manage it here. You can connect more than one account.</p></div>';
+  }else{
+    accountContent=accounts.map(a=>{
+      const active=a.id===activeId;
+      return `<div class="row google-manager-account" style="gap:14px;align-items:center"><span class="num" style="width:46px;height:46px;font-size:18px">G</span><div style="flex:1;min-width:0"><b style="display:block;overflow-wrap:anywhere;font-size:14px">${esc(a.email||'Google account')}</b><div class="sub" style="margin:4px 0 0;font-size:12px">${active?'Default account':'Connected Google account'}${a.legacy?' · older connection':''}</div></div>${active?'<span class="tag low">Default</span>':`<button class="btn" data-a="googleuse" data-i="${esc(a.id)}" style="padding:7px 12px;font-size:12px">Make default</button>`}<button class="btn" data-a="googledisc" data-i="${esc(a.id)}" style="padding:7px 12px;font-size:12px">Disconnect</button></div>`;
+    }).join('');
+  }
+  const services=[
+    {name:'Gemini',detail:'Google AI assistant',url:'https://gemini.google.com'},
+    {name:'Google Search',detail:'Search the web',url:'https://www.google.com'},
+    {name:'Google Classroom',detail:'Classes and coursework',url:'https://classroom.google.com'}
+  ];
+  const serviceCards=services.map(service=>`<div class="glass card google-service-card" style="padding:14px"><b>${service.name}</b><div class="sub">${service.detail}</div><span class="tag">Available</span><button class="btn pri" onclick="openBrowser('${service.url}')" style="margin-top:6px;width:100%;font-size:12px;padding:5px">Open ↗</button></div>`).join('');
+  return `<div class="google-manager-section" style="margin-bottom:28px"><div style="display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:14px;flex-wrap:wrap"><div><b style="font-size:18px">Google accounts</b><div class="sub" style="margin:4px 0 0;font-size:13px">${accounts.length} connected account${accounts.length===1?'':'s'}</div></div><div style="display:flex;gap:8px"><button class="btn" data-a="googlerefresh" style="white-space:nowrap">Refresh</button><button class="btn pri" data-a="googleconn" style="white-space:nowrap">＋ Add account</button></div></div>${accountContent}</div><div class="google-manager-section"><h2 style="margin-bottom:14px">Google services</h2><div class="google-services-grid">${serviceCards}</div></div>`;
 }
 function renderGoogleManager(){if(islandMode==='google')$('#island-body').innerHTML=googleManagerMarkup()}
 function openIsland(mode){
@@ -933,11 +973,11 @@ function openIsland(mode){
   exp.style.display='inline-block';
   if(isl.classList.contains('open') && islandMode === mode){closeIsland();return;}
   islandMode=mode;
-  if(mode==='google'){isl.style.left='';isl.style.top='';isl.style.right='';}
+  if(mode==='google'){isl.style.left='';isl.style.top='';isl.style.right='';isl.style.bottom='';}
   isl.classList.toggle('google-manager-open',mode==='google');document.body.classList.toggle('google-manager-active',mode==='google');isl.classList.add('open');exp.style.display='inline-block';
   if(mode==='google'){
     tit.textContent='Google accounts';exp.style.display='none';body.innerHTML=googleManagerMarkup();
-    if(googleConnectionStatus===null)refreshGoogleConnectionStatus();
+    refreshGoogleConnectionStatus();
   }
   else if(mode=='ai'){
     exp.style.display='inline-block';
@@ -1986,7 +2026,7 @@ const X=(i,b)=>{const t=S.tasks.find(x=>x.id==i),delT=()=>{S.tasks=S.tasks.filte
  aiundo:()=>{const sn=aiUndo[i];if(!sn){toast('Undo is no longer available for this change.');return}delete aiUndo[i];aiRestore(sn);toast('Undone ✓')},
  openlink:()=>{const arr=b.dataset.k==='home'?S.links:((S.tasks.find(x=>x.id==U.tid)||{}).links||[]);const l=arr[+i];if(l)openBrowser(l.u)},
  nologo:()=>{S.logo='';save();applyPrefs();updateAvatar();if(islandMode=='account')refreshIsland();toast('Profile picture reset')},
- ghconn:()=>startGitHubConnect(),ghdisc:()=>disconnectGitHub(),googlepopup:()=>openIsland('google'),googleconn:()=>startGoogleConnect(),googleuse:()=>{S.googleActiveAccountId=i;save();renderGoogleManager();if(location.hash.includes('/apps'))al()},googledisc:()=>disconnectGoogleAccount(i),
+ ghconn:()=>startGitHubConnect(),ghdisc:()=>disconnectGitHub(),googlepopup:()=>openIsland('google'),googleconn:()=>startGoogleConnect(),googlerefresh:()=>{googleConnectionStatus=null;googleConnectionError='';refreshGoogleConnectionStatus()},googleuse:()=>{S.googleActiveAccountId=i;save();renderGoogleManager();if(location.hash.includes('/apps'))al()},googledisc:()=>disconnectGoogleAccount(i),
  tgo:()=>{if(T.run){clearInterval(iv);T.left=Math.max(0,Math.round((T.end-Date.now())/1000));T.run=false;document.title='LifeLink'}else{T.run=true;T.end=Date.now()+T.left*1000;iv=setInterval(tick,500)}render()},
  trs:()=>{clearInterval(iv);T.run=false;T.brk=false;T.left=T.len*60;document.title='LifeLink';render()},
  tset:()=>{if(!T.run){T.len=+i;T.brk=false;T.left=T.len*60;render()}},
