@@ -1,0 +1,43 @@
+name: Check LifeLink JavaScript
+
+on:
+  push:
+    paths:
+      - 'index.html'
+      - '.github/workflows/check-lifelink-js.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  syntax:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Parse inline JavaScript in index.html
+        run: |
+          node <<'NODE'
+          const fs = require('node:fs');
+          const vm = require('node:vm');
+          const html = fs.readFileSync('index.html', 'utf8');
+          const scripts = [...html.matchAll(/<script\b[^>]*>([\s\S]*?)<\/script\s*>/gi)];
+          let checked = 0;
+          for (let i = 0; i < scripts.length; i++) {
+            const source = scripts[i][1];
+            if (!source.trim()) continue;
+            try {
+              new vm.Script(source, { filename: `index.html inline script ${i + 1}` });
+              checked++;
+            } catch (error) {
+              console.error(error.stack || error);
+              process.exitCode = 1;
+            }
+          }
+          if (!process.exitCode) console.log(`Syntax OK: ${checked} inline script(s) checked.`);
+          NODE
