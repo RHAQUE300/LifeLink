@@ -2,7 +2,8 @@
 <title>LifeLink v20</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="preload" as="style" href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap" onload="this.onload=null;this.rel='stylesheet'">
+<noscript><link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap" rel="stylesheet"></noscript>
 <link rel="manifest" href="data:application/manifest+json;base64,eyJuYW1lIjogIkxpZmVMaW5rIiwgInNob3J0X25hbWUiOiAiTGlmZUxpbmsiLCAic3RhcnRfdXJsIjogIi4iLCAiZGlzcGxheSI6ICJzdGFuZGFsb25lIiwgImJhY2tncm91bmRfY29sb3IiOiAiI2VlZjNmYiIsICJ0aGVtZV9jb2xvciI6ICIjNGY3Y2ZmIn0=">
 <style>
 :root{--ink:#1d2433;--mut:#6b7488;--g:rgba(255,255,255,.55);--gb:rgba(255,255,255,.85);--ac:#4f7cff}
@@ -258,7 +259,6 @@ main.in{animation:pg .45s cubic-bezier(.22,1,.36,1)}@keyframes pg{from{opacity:0
   </section>
 </div>
 
-<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
 <script>
 /* Fill these in once the site is live. Nothing else in the file needs to change. */
 const LL_CONFIG={
@@ -272,12 +272,49 @@ const LL_CONFIG={
   // Password-reset emails via EmailJS (emailjs.com). The template needs {{to_email}}, {{to_name}} and {{password}}.
   emailjs:{serviceId:'',templateId:'',publicKey:''}
 };
-let supabaseClient=null, supabaseSession=null;
-try{
-  if(window.supabase?.createClient && LL_CONFIG.supabasePublishableKey && !LL_CONFIG.supabasePublishableKey.includes('PASTE_')){
+let supabaseClient=null, supabaseSession=null, supabaseLoadPromise=null;
+function loadSupabaseLibrary(){
+  if(window.supabase?.createClient)return Promise.resolve(true);
+  if(supabaseLoadPromise)return supabaseLoadPromise;
+  supabaseLoadPromise=(async()=>{
+    const sources=[
+      'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2',
+      'https://unpkg.com/@supabase/supabase-js@2'
+    ];
+    for(const src of sources){
+      const loaded=await new Promise(resolve=>{
+        const script=document.createElement('script');
+        script.src=src;script.async=true;
+        let settled=false;
+        const finish=ok=>{
+          if(settled)return;
+          settled=true;clearTimeout(timer);
+          if(!ok)script.remove();
+          resolve(ok);
+        };
+        const timer=setTimeout(()=>finish(false),7000);
+        script.onload=()=>finish(!!window.supabase?.createClient);
+        script.onerror=()=>finish(false);
+        document.head.appendChild(script);
+      });
+      if(loaded||window.supabase?.createClient)return true;
+    }
+    return !!window.supabase?.createClient;
+  })();
+  return supabaseLoadPromise;
+}
+async function ensureSupabaseClient(){
+  if(supabaseClient)return true;
+  if(!LL_CONFIG.supabasePublishableKey||LL_CONFIG.supabasePublishableKey.includes('PASTE_'))return false;
+  if(!await loadSupabaseLibrary())return false;
+  try{
     supabaseClient=window.supabase.createClient(LL_CONFIG.supabaseUrl,LL_CONFIG.supabasePublishableKey);
+    return true;
+  }catch(e){
+    console.warn('Supabase initialization failed',e);
+    return false;
   }
-}catch(e){console.warn('Supabase initialization failed',e)}
+}
 async function finishSupabaseLogin(user){
   if(!user?.email)throw new Error('Authenticated user has no email address');
   currentEmail=user.email.toLowerCase();
@@ -288,7 +325,7 @@ async function finishSupabaseLogin(user){
   enterApp('Welcome to LifeLink');
 }
 async function signInWithGoogle(){
-  if(!supabaseClient){toast('Supabase is not configured yet.');return}
+  if(!await ensureSupabaseClient()){toast('The sign-in service could not be loaded. Please try again or use Demo Account.');return}
   const {error}=await supabaseClient.auth.signInWithOAuth({provider:'google',options:{redirectTo:location.origin+location.pathname}});
   if(error)toast('Google sign-in failed: '+error.message);
 }
@@ -624,7 +661,7 @@ function render(){
       e.preventDefault();
       const email=$('#l-email').value.trim().toLowerCase();
       const pass=$('#l-pass').value;
-      if(!supabaseClient){toast('Supabase is not configured yet.');return}
+      if(!await ensureSupabaseClient()){toast('The sign-in service could not be loaded. Please try again or use Demo Account.');return}
       try{
         const {data,error}=await supabaseClient.auth.signInWithPassword({email,password:pass});
         if(error){
@@ -1920,6 +1957,10 @@ function disconnectGitHub(){
 
 applyPrefs();
 (async function bootAuth(){
+  // Show the interface immediately; authentication services load separately.
+  S={loggedIn:false};
+  render();
+  await ensureSupabaseClient();
   if(supabaseClient){
     try{
       const {data,error}=await supabaseClient.auth.getSession();
