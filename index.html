@@ -323,7 +323,7 @@ async function refreshGoogleConnectionStatus(){
 function googleAccountsPage(){
   if(S?.loggedIn&&googleConnectionStatus===null)refreshGoogleConnectionStatus();
   const accounts=googleConnectionStatus?.accounts||[];
-  return `<h1>Connect Google</h1><p class="sub">Connect and manage multiple Google accounts. Each account stays separate.</p><div class="glass card" style="max-width:760px"><div class="row" style="border:0;justify-content:space-between;flex-wrap:wrap"><div><h2 style="margin:0">Your Google accounts</h2><p class="sub" style="margin:4px 0 0;font-size:13px">Manage Gmail, Drive, Calendar and other Google services here.</p></div><button class="btn pri" data-a="googleconn">＋ Connect another account</button></div>`+(accounts.length?accounts.map(a=>`<div class="row" style="gap:12px"><span class="num" style="width:40px;height:40px">G</span><div style="flex:1;min-width:0"><b>${esc(a.email||'Google account')}</b><div class="sub" style="margin:2px 0 0;font-size:12px">Connected to LifeLink</div></div><span class="tag low">Connected</span><button class="btn" data-a="googledisc" data-i="${esc(a.id)}">Disconnect</button></div>`).join(''):`<div style="padding:26px 8px;text-align:center"><div style="font-size:34px;margin-bottom:8px">◎</div><b>No Google accounts connected</b><p class="sub" style="margin:5px 0 14px">Connect a Google account to start linking its services.</p><button class="btn pri" data-a="googleconn">Connect Google account</button></div>`)+`</div>`;
+  return `<h1>Connect Google</h1><p class="sub">Connect and manage multiple Google accounts. Each account stays separate.</p><div class="glass card" style="max-width:760px"><div class="row" style="border:0;justify-content:space-between;flex-wrap:wrap"><div><h2 style="margin:0">Your Google accounts</h2><p class="sub" style="margin:4px 0 0;font-size:13px">Manage Gmail, Drive, Calendar and other Google services here.</p></div><button class="btn pri" data-a="googleconn">＋ Connect another account</button></div>`+(accounts.length?accounts.map(a=>{const active=(S.googleActiveAccountId||accounts[0].id)===a.id;return `<div class="row" style="gap:12px"><span class="num" style="width:40px;height:40px">G</span><div style="flex:1;min-width:0"><b>${esc(a.email||'Google account')}</b><div class="sub" style="margin:2px 0 0;font-size:12px">${active?'Selected for Google services':'Connected to LifeLink'}</div></div>${active?'<span class="tag low">Selected</span>':`<button class="btn" data-a="googleuse" data-i="${esc(a.id)}">Use account</button>`}<button class="btn" data-a="googledisc" data-i="${esc(a.id)}">Disconnect</button></div>`}).join(''):`<div style="padding:26px 8px;text-align:center"><div style="font-size:34px;margin-bottom:8px">◎</div><b>No Google accounts connected</b><p class="sub" style="margin:5px 0 14px">Connect a Google account to start linking its services.</p><button class="btn pri" data-a="googleconn">Connect Google account</button></div>`)+`</div>`;
 }
 async function startGoogleConnect(){
   const accountId=crypto.randomUUID();
@@ -347,7 +347,7 @@ async function startGoogleConnect(){
           await refreshGoogleConnectionStatus();
           toast('Google account connected to LifeLink.');
         }catch(error){toast('Google connection failed: '+error.message)}
-        finally{googleConnectionBusy=false;al()}
+        finally{googleConnectionBusy=false;if(location.hash.includes('/apps'))al();if(location.hash.includes('/google'))render()}
       },
       error_callback:error=>{
         googleConnectionBusy=false;
@@ -732,7 +732,7 @@ function nl(){const q=U.nq.toLowerCase();$('#nl').innerHTML=S.notes.filter(n=>(n
 function al(){
   if(S?.loggedIn&&googleConnectionStatus===null)refreshGoogleConnectionStatus();
   const q=U.aq.toLowerCase();
-  $('#al').innerHTML=A.filter(a=>(U.ac==='All'||CATS[a[1]]===U.ac)&&a[0].toLowerCase().includes(q)).map(([n,c,status,url])=>{
+  $('#al').innerHTML=A.filter(a=>!['Gmail','Google Drive','Google Calendar'].includes(a[0])&&(U.ac==='All'||CATS[a[1]]===U.ac)&&a[0].toLowerCase().includes(q)).map(([n,c,status,url])=>{
     if(url==='oauth:github'){
       const conn=S.oauth&&S.oauth.connected&&S.oauth.connected.github;
       return `<div class="glass card" style="padding:14px"><b>${n}</b><div class="sub" style="margin:2px 0 10px;font-size:12px">${CATS[c]}</div><span class="tag ${conn?'low':''}">${conn?'Connected: @'+esc(conn):'Not connected'}</span> <button class="btn pri" data-a="${conn?'ghdisc':'ghconn'}" style="margin-top:6px;width:100%;font-size:12px;padding:5px">${conn?'Disconnect GitHub':'Connect GitHub'}</button></div>`;
@@ -1930,7 +1930,7 @@ const X=(i,b)=>{const t=S.tasks.find(x=>x.id==i),delT=()=>{S.tasks=S.tasks.filte
  aiundo:()=>{const sn=aiUndo[i];if(!sn){toast('Undo is no longer available for this change.');return}delete aiUndo[i];aiRestore(sn);toast('Undone ✓')},
  openlink:()=>{const arr=b.dataset.k==='home'?S.links:((S.tasks.find(x=>x.id==U.tid)||{}).links||[]);const l=arr[+i];if(l)openBrowser(l.u)},
  nologo:()=>{S.logo='';save();applyPrefs();updateAvatar();if(islandMode=='account')refreshIsland();toast('Profile picture reset')},
- ghconn:()=>startGitHubConnect(),ghdisc:()=>disconnectGitHub(),googleconn:()=>startGoogleConnect(),googledisc:()=>disconnectGoogleAccount(i),
+ ghconn:()=>startGitHubConnect(),ghdisc:()=>disconnectGitHub(),googleconn:()=>startGoogleConnect(),googleuse:()=>{S.googleActiveAccountId=i;save();render()},googledisc:()=>disconnectGoogleAccount(i),
  tgo:()=>{if(T.run){clearInterval(iv);T.left=Math.max(0,Math.round((T.end-Date.now())/1000));T.run=false;document.title='LifeLink'}else{T.run=true;T.end=Date.now()+T.left*1000;iv=setInterval(tick,500)}render()},
  trs:()=>{clearInterval(iv);T.run=false;T.brk=false;T.left=T.len*60;document.title='LifeLink';render()},
  tset:()=>{if(!T.run){T.len=+i;T.brk=false;T.left=T.len*60;render()}},
