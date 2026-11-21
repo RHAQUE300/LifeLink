@@ -528,6 +528,8 @@ function freshUserData(name){
     sessions:[],
     oauth:{githubClientId:'',googleClientId:'',connected:{}},
     googleServices:[],
+    apps:[],
+    customApps:[],
     links:[{t:'Google Classroom',u:'https://classroom.google.com'},{t:'Gmail',u:'https://mail.google.com'},{t:'Google Drive',u:'https://drive.google.com'},{t:'Notion',u:'https://www.notion.so'}],
     p:{theme:'light',cursor:'chroma',bg:'pastel',blur:18,op:55,fs:15,motion:'on',density:'cozy',nTasks:true,nMsgs:true,nEdu:true,nFiles:true,nCal:true,nSys:true,nBrowser:false,dPri:'Medium',hideDone:false,confirmDel:true,wk:'Sun',fLen:25,bLen:5,autoB:false,aiHistory:true,aiSidebar:true,logoSize:28,logoIcon:'default'}
   };
@@ -567,6 +569,9 @@ function loadUserSession(){
   if(!S.oauth || typeof S.oauth!=='object') S.oauth = base.oauth;
   if(!S.oauth.connected || typeof S.oauth.connected!=='object') S.oauth.connected = {};
   if(!Array.isArray(S.googleServices))S.googleServices=[];
+  if(!Array.isArray(S.apps))S.apps=[];
+  if(!Array.isArray(S.customApps))S.customApps=[];
+  S.googleServices.forEach(id=>{const key='google:'+id;if(!S.apps.includes(key))S.apps.push(key)});
   S.aiCfg = {provider:'LifeLink Built-in AI',apiKey:'',model:'',customUrl:''};
    if(!S.aiModel)S.aiModel='auto';
   if(!S.aiLearning||typeof S.aiLearning!=='object')S.aiLearning={enabled:true,memories:[],feedback:[]};
@@ -589,7 +594,7 @@ const save=()=>{
   }
 };
 
-const U={q:'',f:'All',s:'Deadline',aq:'',ac:'All',nq:'',nid:null,nf:'All',cm:new Date(),cv:'Month',tid:null};
+const U={q:'',f:'All',s:'Deadline',aq:'',ac:'All',appTab:'mine',nq:'',nid:null,nf:'All',cm:new Date(),cv:'Month',tid:null};
 let T={len:25,left:25*60,run:false,end:0,brk:false},iv;
 const CATS=['Productivity','Communication','Email & calendars','Cloud storage','Education','AI','Creative & media','Browsers & search','Google'],
 A=[
@@ -767,7 +772,7 @@ calendar:()=>{const c=U.cm,y=c.getFullYear(),m=c.getMonth(),wk=U.cv=='Week',W=S.
  return `<h1>Calendar</h1><div class="row" style="border:0;flex-wrap:wrap"><button class="btn" data-a="cprev" aria-label="Previous">‹</button><h2 style="margin:0;min-width:170px;text-align:center">${c.toLocaleString('default',{month:'long',year:'numeric'})}</h2><button class="btn" data-a="cnext" aria-label="Next">›</button><button class="btn" data-a="ctoday">Today</button><select id="cv" style="width:auto">${['Month','Week'].map(x=>`<option${U.cv==x?' selected':''}>${x}</option>`).join('')}</select><button class="btn pri" data-a="evnew" data-i="${td}" style="margin-left:auto">New event</button></div><div class="glass card"><div class="cal">${'Sun Mon Tue Wed Thu Fri Sat Sun'.split(' ').slice(W,W+7).map(d=>`<b class="sub" style="margin:0">${d}</b>`).join('')}${cells}</div></div>`},
 notes:()=>{if(!S.notes.some(n=>n.id==U.nid))U.nid=S.notes[0]?.id;const n=S.notes.find(x=>x.id==U.nid);
  return `<h1>Notes</h1><p class="sub">Changes save automatically for ${esc(currentEmail)}.</p><div class="grid" style="grid-template-columns:300px 1fr"><div class="glass card"><input id="nq" placeholder="Search notes" value="${esc(U.nq)}"><button class="btn pri" data-a="newnote" style="margin:10px 0;width:100%">New note</button><div id="nl"></div></div><div class="glass card">${n?`<input id="nt" value="${esc(n.title)}" style="font-size:20px;font-weight:600;background:none;border:0"><textarea id="nb" rows="16" style="background:none;border:0;resize:vertical">${esc(n.body)}</textarea><div class="row" style="border:0"><span class="sub" id="sv" style="margin:0">Edited ${new Date(n.ts).toLocaleString()}</span><button class="btn" data-a="delnote" style="margin-left:auto">Delete note</button></div>`:empty('No notes yet. Create one to start writing.')}</div></div>`},
-apps:()=>`<h1>Apps &amp; Services</h1><p class="sub">Browse services and manage connected accounts from their app tiles.</p><div class="row" style="border:0"><input id="aq" placeholder="Search services" value="${esc(U.aq)}"><select id="ac" style="width:auto"><option>All</option>${CATS.map(c=>`<option${U.ac==c?' selected':''}>${c}</option>`).join('')}</select></div><div id="al" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(210px,1fr));gap:12px"></div>`,
+apps:()=>`<h1>Apps</h1><p class="sub">Your app shelf contains only apps you have added and accounts you have connected.</p><div id="app-tabs"></div><div id="app-tools"></div><div id="al" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(210px,1fr));gap:12px"></div>`,
 
  activity:()=>`<h1>Notifications</h1><p class="sub">${S.notifs.filter(n=>!n.read).length} unread · ${S.notifs.length} total</p><div class="row" style="border:0;flex-wrap:wrap">${['All','Tasks','Messages','Education','Files','Calendar','System'].map(f=>`<button class="btn${U.nf==f?' pri':''}" data-a="nf" data-i="${f}">${f}</button>`).join('')}<button class="btn" data-a="readall" style="margin-left:auto">Mark all as read</button></div><div class="glass card">${S.notifs.filter(n=>U.nf=='All'||n.type==U.nf).map(n=>`<div class="row" style="cursor:pointer"><span style="width:9px;height:9px;border-radius:50%;flex:none;background:${n.read?'transparent':'#4f7cff'}"></span><span class="tag">${n.type}</span><span style="flex:1;${n.read?'opacity:.6':''}" data-a="nread" data-i="${n.id}">${esc(n.text)}</span><span class="sub" style="margin:0">${ago(n.ts)}</span>${n.action==='resetpw'?`<button class="btn pri" data-a="resetpw" style="padding:2px 8px;font-size:11px;margin-left:auto">Reset now</button>`:''}${n.dismissable?`<button class="btn" data-a="dismissnotif" data-i="${n.id}" style="padding:2px 8px;font-size:11px;margin-left:auto">Dismiss</button>`:''}</div>`).join('')||empty('No notifications here')}</div>`,
 recovery:()=>{const full=T.brk?S.p.bLen*60:T.len*60,tot=(S.sessions||[]).reduce((a,s)=>a+s.min,0),td=(S.sessions||[]).filter(s=>new Date(s.ts).toDateString()==new Date().toDateString()).reduce((a,s)=>a+s.min,0);
@@ -1021,16 +1026,131 @@ const GOOGLE_SERVICE_CATALOG=[
   {id:'blogger',name:'Blogger',group:'Business & developer',detail:'Create and manage blogs',url:'https://www.blogger.com/'}
 ];
 const GOOGLE_SERVICE_GROUPS=['Work & school','Everyday Google','Media & discovery','Business & developer'];
+
+const EXTRA_APP_CATALOG=[
+{id:'outlook',name:'Outlook',category:'Email & calendars',detail:'Email, calendar and contacts',url:'https://outlook.office.com/'},
+{id:'onedrive',name:'OneDrive',category:'Cloud storage',detail:'Microsoft cloud files',url:'https://onedrive.live.com/'},
+{id:'word-web',name:'Word for the web',category:'Productivity',detail:'Documents in your browser',url:'https://www.office.com/launch/word'},
+{id:'excel-web',name:'Excel for the web',category:'Productivity',detail:'Spreadsheets in your browser',url:'https://www.office.com/launch/excel'},
+{id:'powerpoint-web',name:'PowerPoint for the web',category:'Productivity',detail:'Presentations in your browser',url:'https://www.office.com/launch/powerpoint'},
+{id:'teams',name:'Microsoft Teams',category:'Communication',detail:'Meetings, chat and collaboration',url:'https://teams.microsoft.com/'},
+{id:'loop',name:'Microsoft Loop',category:'Productivity',detail:'Collaborative workspaces',url:'https://loop.cloud.microsoft/'},
+{id:'microsoft-todo',name:'Microsoft To Do',category:'Productivity',detail:'Tasks and reminders',url:'https://to-do.office.com/'},
+{id:'forms-ms',name:'Microsoft Forms',category:'Education',detail:'Forms, surveys and quizzes',url:'https://forms.office.com/'},
+{id:'sharepoint',name:'SharePoint',category:'Cloud storage',detail:'Team sites and document libraries',url:'https://www.office.com/launch/sharepoint'},
+{id:'planner',name:'Microsoft Planner',category:'Productivity',detail:'Projects and team plans',url:'https://planner.cloud.microsoft/'},
+{id:'powerbi',name:'Power BI',category:'Productivity',detail:'Business intelligence dashboards',url:'https://app.powerbi.com/'},
+{id:'copilot',name:'Microsoft Copilot',category:'AI',detail:'AI assistant',url:'https://copilot.microsoft.com/'},
+{id:'azure',name:'Microsoft Azure Portal',category:'Business & developer',detail:'Cloud resources and services',url:'https://portal.azure.com/'},
+{id:'icloud',name:'iCloud',category:'Cloud storage',detail:'Apple files, photos and web apps',url:'https://www.icloud.com/'},
+{id:'linear',name:'Linear',category:'Productivity',detail:'Issue tracking and product planning',url:'https://linear.app/'},
+{id:'jira',name:'Jira',category:'Productivity',detail:'Project and issue tracking',url:'https://www.atlassian.com/software/jira'},
+{id:'confluence',name:'Confluence',category:'Productivity',detail:'Team knowledge and documentation',url:'https://www.atlassian.com/software/confluence'},
+{id:'bitbucket',name:'Bitbucket',category:'Business & developer',detail:'Git repositories and code review',url:'https://bitbucket.org/'},
+{id:'gitlab',name:'GitLab',category:'Business & developer',detail:'Code hosting and DevSecOps',url:'https://gitlab.com/'},
+{id:'replit',name:'Replit',category:'Business & developer',detail:'Online IDE and app development',url:'https://replit.com/'},
+{id:'codesandbox',name:'CodeSandbox',category:'Business & developer',detail:'Browser-based development environments',url:'https://codesandbox.io/'},
+{id:'stackblitz',name:'StackBlitz',category:'Business & developer',detail:'Instant full-stack web IDE',url:'https://stackblitz.com/'},
+{id:'codepen',name:'CodePen',category:'Business & developer',detail:'Frontend code playground',url:'https://codepen.io/'},
+{id:'vscode-web',name:'VS Code for the Web',category:'Business & developer',detail:'Edit code in your browser',url:'https://vscode.dev/'},
+{id:'vercel',name:'Vercel',category:'Business & developer',detail:'Deploy and manage web projects',url:'https://vercel.com/dashboard'},
+{id:'netlify',name:'Netlify',category:'Business & developer',detail:'Web hosting and deployment',url:'https://app.netlify.com/'},
+{id:'cloudflare',name:'Cloudflare Dashboard',category:'Business & developer',detail:'Domains, workers and infrastructure',url:'https://dash.cloudflare.com/'},
+{id:'supabase',name:'Supabase Dashboard',category:'Business & developer',detail:'Database, authentication and APIs',url:'https://supabase.com/dashboard'},
+{id:'firebase',name:'Firebase Console',category:'Business & developer',detail:'App backend and hosting tools',url:'https://console.firebase.google.com/'},
+{id:'aws',name:'AWS Console',category:'Business & developer',detail:'Amazon cloud services',url:'https://console.aws.amazon.com/'},
+{id:'figma',name:'Figma',category:'Creative & media',detail:'Interface design and collaboration',url:'https://www.figma.com/'},
+{id:'figjam',name:'FigJam',category:'Creative & media',detail:'Online whiteboard',url:'https://www.figma.com/figjam/'},
+{id:'miro',name:'Miro',category:'Productivity',detail:'Collaborative online whiteboard',url:'https://miro.com/'},
+{id:'mural',name:'Mural',category:'Productivity',detail:'Visual collaboration workspace',url:'https://app.mural.co/'},
+{id:'airtable',name:'Airtable',category:'Productivity',detail:'Connected apps and databases',url:'https://airtable.com/'},
+{id:'monday',name:'monday.com',category:'Productivity',detail:'Work management platform',url:'https://monday.com/'},
+{id:'wrike',name:'Wrike',category:'Productivity',detail:'Project management and workflows',url:'https://www.wrike.com/'},
+{id:'smartsheet',name:'Smartsheet',category:'Productivity',detail:'Work management and spreadsheets',url:'https://app.smartsheet.com/'},
+{id:'evernote',name:'Evernote',category:'Productivity',detail:'Notes and knowledge management',url:'https://www.evernote.com/'},
+{id:'1password',name:'1Password',category:'Productivity',detail:'Password manager',url:'https://my.1password.com/'},
+{id:'proton-mail',name:'Proton Mail',category:'Email & calendars',detail:'Private email',url:'https://mail.proton.me/'},
+{id:'proton-drive',name:'Proton Drive',category:'Cloud storage',detail:'Encrypted cloud files',url:'https://drive.proton.me/'},
+{id:'box',name:'Box',category:'Cloud storage',detail:'Cloud content management',url:'https://app.box.com/'},
+{id:'mega',name:'MEGA',category:'Cloud storage',detail:'Encrypted cloud storage',url:'https://mega.nz/'},
+{id:'grok',name:'Grok',category:'AI',detail:'AI assistant',url:'https://grok.com/'},
+{id:'deepseek',name:'DeepSeek',category:'AI',detail:'AI chat and reasoning',url:'https://chat.deepseek.com/'},
+{id:'poe',name:'Poe',category:'AI',detail:'Explore AI assistants',url:'https://poe.com/'},
+{id:'huggingchat',name:'HuggingChat',category:'AI',detail:'Open AI assistants',url:'https://huggingface.co/chat/'},
+{id:'notebooklm',name:'NotebookLM',category:'AI',detail:'Research with your sources',url:'https://notebooklm.google.com/'},
+{id:'characterai',name:'Character.AI',category:'AI',detail:'Conversational characters',url:'https://character.ai/'},
+{id:'adobe-express',name:'Adobe Express',category:'Creative & media',detail:'Online design and video tools',url:'https://www.adobe.com/express/'},
+{id:'photoshop-web',name:'Photoshop on the web',category:'Creative & media',detail:'Browser-based image editing',url:'https://photoshop.adobe.com/'},
+{id:'photopea',name:'Photopea',category:'Creative & media',detail:'Online image editor',url:'https://www.photopea.com/'},
+{id:'pixlr',name:'Pixlr',category:'Creative & media',detail:'Online photo editor',url:'https://pixlr.com/'},
+{id:'capcut',name:'CapCut',category:'Creative & media',detail:'Online video editor',url:'https://www.capcut.com/'},
+{id:'descript',name:'Descript',category:'Creative & media',detail:'Audio and video editing',url:'https://www.descript.com/'},
+{id:'veed',name:'VEED',category:'Creative & media',detail:'Online video creation',url:'https://www.veed.io/'},
+{id:'soundcloud',name:'SoundCloud',category:'Creative & media',detail:'Music and audio sharing',url:'https://soundcloud.com/'},
+{id:'bandcamp',name:'Bandcamp',category:'Creative & media',detail:'Independent music',url:'https://bandcamp.com/'},
+{id:'twitch',name:'Twitch',category:'Creative & media',detail:'Live streaming',url:'https://www.twitch.tv/'},
+{id:'vimeo',name:'Vimeo',category:'Creative & media',detail:'Video hosting and streaming',url:'https://vimeo.com/'},
+{id:'netflix',name:'Netflix',category:'Creative & media',detail:'Movies and series',url:'https://www.netflix.com/'},
+{id:'prime-video',name:'Prime Video',category:'Creative & media',detail:'Movies and TV',url:'https://www.primevideo.com/'},
+{id:'disney-plus',name:'Disney+',category:'Creative & media',detail:'Movies and series',url:'https://www.disneyplus.com/'},
+{id:'crunchyroll',name:'Crunchyroll',category:'Creative & media',detail:'Anime streaming',url:'https://www.crunchyroll.com/'},
+{id:'coursera',name:'Coursera',category:'Education',detail:'Online courses and certificates',url:'https://www.coursera.org/'},
+{id:'edx',name:'edX',category:'Education',detail:'Online courses from universities',url:'https://www.edx.org/'},
+{id:'khan-academy',name:'Khan Academy',category:'Education',detail:'Free lessons and practice',url:'https://www.khanacademy.org/'},
+{id:'quizlet',name:'Quizlet',category:'Education',detail:'Flashcards and study sets',url:'https://quizlet.com/'},
+{id:'duolingo',name:'Duolingo',category:'Education',detail:'Language learning',url:'https://www.duolingo.com/'},
+{id:'blackboard',name:'Blackboard',category:'Education',detail:'Learning management system',url:'https://www.blackboard.com/'},
+{id:'schoology',name:'Schoology',category:'Education',detail:'Learning management platform',url:'https://www.schoology.com/'},
+{id:'brilliant',name:'Brilliant',category:'Education',detail:'Interactive maths and science',url:'https://brilliant.org/'},
+{id:'wolframalpha',name:'WolframAlpha',category:'Education',detail:'Computational knowledge engine',url:'https://www.wolframalpha.com/'},
+{id:'desmos',name:'Desmos',category:'Education',detail:'Online graphing calculator',url:'https://www.desmos.com/'},
+{id:'whatsapp',name:'WhatsApp Web',category:'Communication',detail:'Messages and calls',url:'https://web.whatsapp.com/'},
+{id:'telegram',name:'Telegram Web',category:'Communication',detail:'Cloud messaging',url:'https://web.telegram.org/'},
+{id:'signal',name:'Signal',category:'Communication',detail:'Private messaging companion',url:'https://signal.org/'},
+{id:'paypal',name:'PayPal',category:'Productivity',detail:'Payments and account management',url:'https://www.paypal.com/'},
+{id:'wise',name:'Wise',category:'Productivity',detail:'International money and transfers',url:'https://wise.com/'},
+{id:'xero',name:'Xero',category:'Productivity',detail:'Accounting and invoices',url:'https://go.xero.com/'},
+{id:'quickbooks',name:'QuickBooks Online',category:'Productivity',detail:'Accounting and bookkeeping',url:'https://quickbooks.intuit.com/'},
+{id:'shopify',name:'Shopify',category:'Productivity',detail:'Online store management',url:'https://admin.shopify.com/'},
+{id:'etsy',name:'Etsy',category:'Productivity',detail:'Marketplace and shop management',url:'https://www.etsy.com/'},
+{id:'ebay',name:'eBay',category:'Productivity',detail:'Marketplace and seller tools',url:'https://www.ebay.com/'},
+{id:'amazon',name:'Amazon',category:'Productivity',detail:'Shopping and orders',url:'https://www.amazon.com/'}
+];
+const APP_DISCOVERY_CATALOG=(()=>{
+ const base=A.filter(app=>app[3]&&/^https?:\\/\\//i.test(app[3])).map(([name,category,status,url])=>({id:'app:'+name.toLowerCase().replace(/[^a-z0-9]+/g,'-').replace(/^-|-$/g,''),name,category:CATS[category]||'Other',detail:'Open '+name+' in LifeLink',url}));
+ const google=GOOGLE_SERVICE_CATALOG.map(service=>({id:'google:'+service.id,name:service.name,category:'Google',detail:service.detail,url:service.url}));
+ const all=[...base,...google,...EXTRA_APP_CATALOG.map(app=>({...app,id:'extra:'+app.id}))];
+ const unique=new Map();all.forEach(app=>{if(!unique.has(app.id))unique.set(app.id,app)});
+ return [...unique.values()].sort((a,b)=>a.name.localeCompare(b.name));
+})();
+function appShelfRecords(){
+ const selected=Array.isArray(S.apps)?S.apps:[];
+ return selected.map(id=>(S.customApps||[]).find(app=>app.id===id)||APP_DISCOVERY_CATALOG.find(app=>app.id===id)).filter(Boolean);
+}
+function addAppToShelf(appId){
+ const app=APP_DISCOVERY_CATALOG.find(item=>item.id===appId);if(!app)return;
+ if(!Array.isArray(S.apps))S.apps=[];
+ if(!S.apps.includes(appId))S.apps.push(appId);
+ if(appId.startsWith('google:')){const googleId=appId.slice(7);if(!S.googleServices.includes(googleId))S.googleServices.push(googleId)}
+ save();al();toast(app.name+' added to My Apps');
+}
+function removeAppFromShelf(appId){
+ S.apps=(S.apps||[]).filter(id=>id!==appId);
+ if(String(appId).startsWith('google:'))S.googleServices=(S.googleServices||[]).filter(id=>id!==String(appId).slice(7));
+ S.customApps=(S.customApps||[]).filter(app=>app.id!==appId);
+ save();al();toast('App removed from My Apps');
+}
+
 function setGoogleService(serviceId,add){
   const service=GOOGLE_SERVICE_CATALOG.find(item=>item.id===serviceId);
   if(!service||!S?.loggedIn)return;
   const selected=Array.isArray(S.googleServices)?S.googleServices.slice():[];
-  const next=add?[...new Set([...selected,serviceId])]:selected.filter(id=>id!==serviceId);
-  S.googleServices=next;
+  S.googleServices=add?[...new Set([...selected,serviceId])]:selected.filter(id=>id!==serviceId);
+  const appId='google:'+serviceId;if(!Array.isArray(S.apps))S.apps=[];
+  if(add&&!S.apps.includes(appId))S.apps.push(appId);if(!add)S.apps=S.apps.filter(id=>id!==appId);
   if(!save()){toast('Could not save this tile. Check your browser storage.');return}
-  renderGoogleManager();
-  if(location.hash==='#/apps')al();
-  toast(add?service.name+' added to Apps':service.name+' removed from Apps');
+  renderGoogleManager();if(location.hash==='#/apps')al();
+  toast(add?service.name+' added to My Apps':service.name+' removed from My Apps');
 }
 function filterGoogleServices(value){
   const query=String(value||'').trim().toLowerCase();
