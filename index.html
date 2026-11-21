@@ -2256,10 +2256,17 @@ async function builtInGeneralAI(raw){
   const topic=q.replace(/^(?:please\s+)?(?:what(?:'s| is| are| was| were)|who(?:'s| is| was| were)|where(?:'s| is| was)|when (?:did|was|is|were)|why (?:does|is|do|are)|how (?:does|do|is)|explain|define|describe|tell me about|what does)\s+(?:a\s+|an\s+|the\s+)?/i,'')
     .replace(/\b(?:simply|briefly|in simple terms|in short|to me|for me|please|work|mean)\b/gi,' ').replace(/[?!.]+$/g,'').replace(/\s+/g,' ').trim();
   if(topic.length>=2&&topic.split(' ').length<=8){
+    try{
+      const live=await lifeLinkWebSearch(q);
+      if(live&&live.text){
+        const refs=(live.sources||[]).slice(0,6).map((source,index)=>'<a href="'+esc(source.url)+'" target="_blank" rel="noopener noreferrer" style="color:var(--ac)">'+esc(source.title||('Source '+(index+1)))+' ↗</a>').join(' · ');
+        return '<b>Live web answer</b><br>'+esc(live.text).replace(/\n/g,'<br>')+(refs?'<br><small>Sources: '+refs+'</small>':'');
+      }
+    }catch(error){console.warn('LifeLink web fallback unavailable:',error.message)}
     const w=await fetchWikipediaSummary(topic);
     if(w){
-      return (reasoning?`<i>I can only look things up in built-in mode, so here’s the closest Wikipedia article. Connect an AI model (⚙) for a proper explanation.</i><br><br>`:'')
-        +`<b>${esc(w.title)}</b><br>${esc(w.extract)}`+(w.url?`<br><small><a href="${esc(w.url)}" target="_blank" rel="noopener noreferrer" style="color:var(--ac)">Source: Wikipedia ↗</a></small>`:'');
+      return (reasoning?'<i>I can only look things up in built-in mode, so here’s the closest Wikipedia article. Connect an AI model (⚙) for a proper explanation.</i><br><br>':'')
+        +'<b>'+esc(w.title)+'</b><br>'+esc(w.extract)+(w.url?'<br><small><a href="'+esc(w.url)+'" target="_blank" rel="noopener noreferrer" style="color:var(--ac)">Source: Wikipedia ↗</a></small>':'');
     }
   }
   return `I couldn’t answer “<b>${esc(q.length>80?q.slice(0,80)+'…':q)}</b>” in built-in mode. I can manage tasks, events and notes, do maths and unit conversions, and look up topics on Wikipedia.<br><br>Say <i>help</i> for examples, or choose an available model from the selector for open-ended questions.`;
