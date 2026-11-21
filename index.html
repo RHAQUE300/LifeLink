@@ -1612,12 +1612,12 @@ function workspaceCommand(raw,strict){
     if(match.ambiguous)return taskChoiceMessage(match.matches);
     if(t){
       const snap=aiSnap();
-      askConfirm('Delete task',\`Delete task #\${t.n} “\${t.title}” permanently?\`,()=>{
+      askConfirm('Delete task',`Delete task #${t.n} “${t.title}” permanently?`,()=>{
         S.tasks=S.tasks.filter(x=>x.id!==t.id);save();stashUndo(snap);render();toast('Task deleted.');
       });
       return '⏳ Waiting for your confirmation before deleting task #'+t.n+'.';
     }
-    return \`I couldn’t find a task matching “<b>\${esc((m[1]||m[2]).trim())}</b>”.\`;
+    return `I couldn’t find a task matching “<b>${esc((m[1]||m[2]).trim())}</b>”.`;
   }
   m=q.match(/^(?:please\s+)?(?:delete|remove)\s+(?:the\s+|my\s+)?(note|event)\s+(.+)$/i);
   if(m){
@@ -1625,7 +1625,7 @@ function workspaceCommand(raw,strict){
     const found=kind==='note'
       ? S.notes.find(x=>x.id===target||String(x.title||'').toLowerCase()===target.toLowerCase())
       : S.events.find(x=>x.id===target||String(x.title||'').toLowerCase()===target.toLowerCase());
-    if(!found)return \`I couldn’t find a \${kind} matching “<b>\${esc(target)}</b>”.\`;
+    if(!found)return `I couldn’t find a ${kind} matching “<b>${esc(target)}</b>”.`;
     const snap=aiSnap(),label=kind==='note'?(found.title||'Untitled'):found.title;
     askConfirm('Delete '+kind,'Delete “'+label+'” permanently?',()=>{
       if(kind==='note')S.notes=S.notes.filter(x=>x!==found);else S.events=S.events.filter(x=>x!==found);
