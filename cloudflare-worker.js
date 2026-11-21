@@ -296,6 +296,36 @@ export default {
 
     const url = new URL(request.url);
 
+    // Shared authenticated web search endpoint for AI and other LifeLink features.
+    if (url.pathname === "/api/search") {
+      if (request.method !== "POST") return json({ error: "Method not allowed" }, 405);
+      const user = await verifyUser(request, env);
+      if (!user) return json({ error: "Authentication required" }, 401);
+      if (!env.GEMINI_API_KEY) return json({ error: "Live web search is not configured" }, 503);
+      if (!env.MY_RATE_LIMITER) return json({ error: "Rate limiter is not configured" }, 500);
+      const { success } = await env.MY_RATE_LIMITER.limit({ key: user.id });
+      if (!success) return json({ error: "Rate limit exceeded. Please try again in one minute." }, 429);
+      const contentLength = Number(request.headers.get("Content-Length") || 0);
+      if (contentLength > 10000) return json({ error: "Request too large" }, 413);
+      let body;
+      try { body = await request.json(); } catch { return json({ error: "Invalid JSON" }, 400); }
+      const query = typeof body.query === "string" ? body.query.trim() : "";
+      if (query.length < 3 || query.length > 1200) return json({ error: "Search query must be between 3 and 1,200 characters" }, 400);
+      try {
+        const result = await searchWithGemini([{ role: "user", content: query }], env);
+        return json({
+          query,
+          text: result.text,
+          sources: result.citations,
+          provider: "gemini-3.6-flash",
+          webSearch: true
+        });
+      } catch (error) {
+        console.error("LifeLink web search endpoint failed:", error.message);
+        return json({ error: "Live web search is temporarily unavailable" }, 502);
+      }
+    }
+
     // Multiple Google accounts, isolated under the authenticated LifeLink user.
     const googleRoute = ["/api/google/connect", "/api/google/status", "/api/google/disconnect"].includes(url.pathname);
     if (googleRoute) {
@@ -519,6 +549,13 @@ export default {
       }
 
       const available = availableModels(env);
+      if (requested !== "auto" && !available[requested]) {
+        return json({
+          error: "This model is not connected yet.",
+          code: "MODEL_NOT_CONNECTED",
+          model: requested
+        }, 409);
+      }
       let webSearchResult = null;
       const wantsWebSearch = body.webSearch === true || shouldSearchWeb(messages);
       if (wantsWebSearch && available.gemini) {
@@ -538,14 +575,6 @@ export default {
         }
       }
 
-      if (requested !== "auto" && !available[requested]) {
-        return json({
-          error: "This model is not connected yet.",
-          code: "MODEL_NOT_CONNECTED",
-          model: requested
-        }, 409);
-      }
-
       // The selected provider is tried first. If it fails, try other connected
       // providers before allowing the frontend's LifeLink fallback to respond.
       const order = requested === "auto"
@@ -553,16 +582,6 @@ export default {
         : [requested, "groq", "gemini", "openai", "anthropic"].filter(
             (name, index, list) => list.indexOf(name) === index
           );
-
-      if (webSearchResult && requested === "gemini") {
-        return json({
-          reply: webSearchResult.text,
-          provider: "gemini",
-          requested,
-          webSearch: true,
-          sources: webSearchResult.citations
-        });
-      }
 
       const failures = [];
       for (const provider of order) {
