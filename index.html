@@ -261,6 +261,9 @@ main.in{animation:pg .45s cubic-bezier(.22,1,.36,1)}@keyframes pg{from{opacity:0
 <script>
 /* Fill these in once the site is live. Nothing else in the file needs to change. */
 const LL_CONFIG={
+  supabaseUrl:'https://tvjaljmlmeywkhabdymg.supabase.co',
+  supabasePublishableKey:'PASTE_SUPABASE_PUBLISHABLE_KEY_HERE',
+  apiUrl:'https://lifelink-api.ruhaque300.workers.dev',
   // GitHub connector: create a GitHub OAuth App (callback URL = your site's address), paste its Client ID here,
   // and deploy github-oauth-worker.js (it holds the client secret). Paste the worker's URL below.
   githubClientId:'',
@@ -268,6 +271,46 @@ const LL_CONFIG={
   // Password-reset emails via EmailJS (emailjs.com). The template needs {{to_email}}, {{to_name}} and {{password}}.
   emailjs:{serviceId:'',templateId:'',publicKey:''}
 };
+let supabaseClient=null, supabaseSession=null;
+try{
+  if(window.supabase?.createClient && LL_CONFIG.supabasePublishableKey && !LL_CONFIG.supabasePublishableKey.includes('PASTE_')){
+    supabaseClient=window.supabase.createClient(LL_CONFIG.supabaseUrl,LL_CONFIG.supabasePublishableKey);
+  }
+}catch(e){console.warn('Supabase initialization failed',e)}
+async function finishSupabaseLogin(user){
+  if(!user?.email)throw new Error('Authenticated user has no email address');
+  currentEmail=user.email.toLowerCase();
+  if(!userAccounts[currentEmail])userAccounts[currentEmail]={data:freshUserData(nameFromEmail(currentEmail))};
+  if(!userAccounts[currentEmail].data)userAccounts[currentEmail].data=freshUserData(nameFromEmail(currentEmail));
+  localStorage.setItem('lifelink.currentEmail',currentEmail);
+  supabaseSession=(await supabaseClient.auth.getSession()).data.session;
+  enterApp('Welcome to LifeLink');
+}
+async function signInWithGoogle(){
+  if(!supabaseClient){toast('Supabase is not configured yet.');return}
+  const {error}=await supabaseClient.auth.signInWithOAuth({provider:'google',options:{redirectTo:location.origin+location.pathname}});
+  if(error)toast('Google sign-in failed: '+error.message);
+}
+
+function openSupabasePasswordChange(){
+  const mc=$('#modal-card'),bd=$('#modal-backdrop');
+  mc.style.width='';
+  mc.innerHTML=`<form id="supabase-password-form"><h2>Set a new password</h2><label>New password</label><input name="password" type="password" minlength="8" required autocomplete="new-password"><label>Confirm password</label><input name="confirm" type="password" minlength="8" required autocomplete="new-password"><div class="row" style="border:0;margin-top:16px;padding-bottom:0"><button class="btn pri" type="submit">Update password</button></div></form>`;
+  bd.classList.add('open');
+  $('#supabase-password-form').onsubmit=async e=>{
+    e.preventDefault();const f=e.target;
+    if(f.password.value!==f.confirm.value){toast('Passwords do not match');return}
+    try{const {error}=await supabaseClient.auth.updateUser({password:f.password.value});if(error)throw error;closeModal();toast('Password updated successfully');}
+    catch(err){toast('Password update failed: '+err.message)}
+  };
+}
+
+async function sendSupabasePasswordReset(email){
+  if(!supabaseClient)throw new Error('Supabase is not configured');
+  const {error}=await supabaseClient.auth.resetPasswordForEmail(email,{redirectTo:location.origin+location.pathname+'#reset-password'});
+  if(error)throw error;
+  toast('If that email has an account, a password-reset link will be sent.');
+}
 const $=s=>document.querySelector(s),uid=()=>Math.random().toString(36).slice(2,9),
 ymd=d=>d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0'),
 add=n=>{const d=new Date();d.setDate(d.getDate()+n);return ymd(d)},
@@ -480,16 +523,17 @@ function openTaskBubble(id){location.hash='#/task/'+id}
 /* Login View */
 const V_login=()=>`<div style="display:grid;place-items:center;min-height:75vh"><div class="glass card" style="width:min(440px,94vw);padding:36px;text-align:center">
   <div style="display:inline-grid;place-items:center;width:56px;height:56px;border-radius:50%;margin-bottom:16px;box-shadow:0 4px 16px rgba(106,160,255,.3);overflow:hidden">
-    <svg width="56" height="56" viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg" aria-label="LifeLink"><defs><radialGradient id="ll-login-grad" cx="30%" cy="25%" r="85%"><stop offset="0%" stop-color="#fde4e4"/><stop offset="50%" stop-color="#d6f5f0"/><stop offset="100%" stop-color="#c4d9ff"/></radialGradient></defs><circle cx="50" cy="50" r="50" fill="url(#ll-login-grad)"/></svg>
+    <img src="data:image/webp;base64,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" alt="LifeLink" width="56" height="56" style="display:block;object-fit:contain;background:transparent">
   </div>
   <h1 style="font-size:26px;margin-bottom:6px">Welcome to LifeLink</h1>
-  <p class="sub" style="margin-bottom:16px">Link your day, your way.</p><div role="note" style="text-align:left;font-size:12px;line-height:1.5;padding:10px 12px;margin:0 0 18px;border:1px solid rgba(190,140,40,.35);border-radius:12px;background:rgba(255,190,70,.10)"><b>Website preview:</b> This version stores demo data in this browser only. It does not provide secure accounts, cloud sync, or production password recovery. Do not enter a real password or sensitive information.</div>
+  <p class="sub" style="margin-bottom:16px">Link your day, your way.</p><div role="note" style="text-align:left;font-size:12px;line-height:1.5;padding:10px 12px;margin:0 0 18px;border:1px solid rgba(190,140,40,.35);border-radius:12px;background:rgba(255,190,70,.10)"><b>LifeLink account:</b> Sign in or create an account using Supabase Authentication. Your workspace data is still stored locally in this browser for now.</div>
   <form id="login-form" style="text-align:left">
     <label>Email address</label>
     <input id="l-email" type="email" placeholder="e.g. alex@university.edu" required style="margin-bottom:12px">
     <label>Password</label>
     <input id="l-pass" type="password" placeholder="••••••••" required style="margin-bottom:16px">
     <button type="submit" class="btn pri" style="width:100%;padding:10px">Sign In to LifeLink</button>
+    <button type="button" class="btn" onclick="signInWithGoogle()" style="width:100%;padding:10px;margin-top:10px">Continue with Google</button>
   </form>
   <div style="margin-top:16px;display:flex;justify-content:space-between;font-size:13px">
     <a href="#" onclick="openRecoveryModal();return false" style="color:var(--mut)">Forgot password?</a>
@@ -575,31 +619,33 @@ function render(){
     $('#dock').style.display='none';
     $('main').innerHTML=V_login();
     const lf=$('#login-form');
-    if(lf) lf.onsubmit=e=>{
+    if(lf) lf.onsubmit=async e=>{
       e.preventDefault();
       const email=$('#l-email').value.trim().toLowerCase();
       const pass=$('#l-pass').value;
-      if(userAccounts[email]){
-        if(userAccounts[email].pass===pass){
-          currentEmail=email;
-          localStorage.setItem('lifelink.currentEmail',currentEmail);
-          enterApp('Signed in successfully');
-          if(userAccounts[email].resetPending){queueResetPrompt();toast('Please reset your password now.');openIsland('notifications')}
-        }else{
-          toast('Incorrect password. Try again or recover.');
+      if(!supabaseClient){toast('Supabase is not configured yet.');return}
+      try{
+        const {data,error}=await supabaseClient.auth.signInWithPassword({email,password:pass});
+        if(error){
+          if(/invalid login credentials|user not found/i.test(error.message)){
+            askConfirm('Create LifeLink account',`No account could be signed in for ${email}. Create a new account?`,async()=>{
+              try{
+                const {data:signup,error:se}=await supabaseClient.auth.signUp({email,password:pass,options:{emailRedirectTo:location.origin+location.pathname}});
+                if(se)throw se;
+                if(signup.session){await finishSupabaseLogin(signup.user);toast('Account created and signed in');}
+                else toast('Account created. Check your email to confirm, then sign in.');
+              }catch(err){toast('Sign-up failed: '+String(err.message||err).slice(0,160))}
+            });
+          }else toast(error.message);
+          return;
         }
-      }else{
-        askConfirm('Account Not Found', `No account exists for ${email}. Would you like to register this new account?`,()=>{
-          userAccounts[email]={pass:pass,data:freshUserData(nameFromEmail(email))};
-          if(!persistAccounts())return;
-          currentEmail=email;
-          localStorage.setItem('lifelink.currentEmail',currentEmail);
-          enterApp('Account registered and signed in!');
-        });
-      }
+        await finishSupabaseLogin(data.user);
+        toast('Signed in successfully');
+      }catch(err){toast('Sign-in failed: '+String(err.message||err).slice(0,160))}
     };
     return;
   }
+
   const [r,id]=(location.hash.slice(2)||'home').split('/');
   const rt=Object.prototype.hasOwnProperty.call(V,r)?r:'home';
   $('main').innerHTML=V[rt](id);
@@ -1369,6 +1415,18 @@ function aiMessages(){
   return out;
 }
 async function callLLM(msgs,opts={}){
+  if(!aiExternal()){
+    if(!supabaseClient)throw new Error('Supabase is not configured');
+    const {data:{session},error:se}=await supabaseClient.auth.getSession();
+    if(se||!session?.access_token)throw new Error('Please sign in again to use LifeLink AI.');
+    const fullMsgs=[{role:'system',text:opts.sys!=null?opts.sys:aiSystemPrompt()},...msgs].slice(-20);
+    const res=await fetch(LL_CONFIG.apiUrl+'/api/chat',{method:'POST',headers:{'Content-Type':'application/json','Authorization':'Bearer '+session.access_token},body:JSON.stringify({messages:fullMsgs.map(m=>({role:m.role,content:m.text}))})});
+    let data={};try{data=await res.json()}catch{}
+    if(!res.ok)throw new Error(data.error||('AI backend HTTP '+res.status));
+    const out=data.reply||data.response||data.text||data.output||data.message;
+    if(typeof out!=='string'||!out.trim())throw new Error('The LifeLink backend returned an empty response.');
+    return out;
+  }
   const cfg=S.aiCfg,P=cfg.provider,model=cfg.model||AI_DEFAULT_MODELS[P],sys=opts.sys!=null?opts.sys:aiSystemPrompt(),maxTok=opts.maxTokens||4096;
   const ctl=new AbortController(),to=setTimeout(()=>ctl.abort(),opts.timeout||60000);
   let url,headers={'Content-Type':'application/json'},body,pick;
@@ -1620,8 +1678,8 @@ async function getAIResponse(raw){
 let lastResetSent={};
 const isDevHost=()=>location.protocol==='file:'||/^(localhost|127\.0\.0\.1|\[::1\])$/.test(location.hostname);
 async function emailPassword(email){
-  // Browser-only prototype: never email or reveal plaintext passwords.
-  throw new Error('Password recovery is not available in this preview. Secure account recovery will be added with the LifeLink authentication backend.');
+  await sendSupabasePasswordReset(email);
+  return true;
 }
 const previewHtml=()=> '';
 function showResetSent(email,r){
@@ -1632,44 +1690,15 @@ function showResetSent(email,r){
 function openRecoveryModal(){
   ask('Reset password',[['email','Your account email*','email']],{},async data=>{
     const em=(data.email||'').trim().toLowerCase();
-    try{showResetSent(em,await emailPassword(em))}catch(err){toast(err.message)}
+    try{await emailPassword(em);closeModal()}catch(err){toast(err.message)}
   });
 }
 async function startPasswordReset(){
   const em=currentEmail;
-  try{openEmailedPasswordPrompt(em,await emailPassword(em))}catch(err){toast(err.message)}
+  try{await emailPassword(em)}catch(err){toast(err.message)}
 }
-function openEmailedPasswordPrompt(em,r){
-  const mc=$('#modal-card');mc.style.width='';
-  mc.innerHTML=`<form id="modal-form"><h2>Check your email</h2><p class="sub" style="margin:6px 0 0">We’ve emailed your password to <b>${esc(em)}</b>. Enter it below to continue.</p>${previewHtml(r)}<label>Password from the email</label><input name="pw" type="password" required autocomplete="off"><div class="row" style="border:0;margin-top:16px;padding-bottom:0"><button type="submit" class="btn pri">Continue</button><button type="button" class="btn" onclick="closeModal()">Cancel</button></div></form>`;
-  $('#modal-backdrop').classList.add('open');
-  const f=$('#modal-form');f.onsubmit=e=>{
-    e.preventDefault();
-    if(f.pw.value===userAccounts[em].pass){closeModal();queueResetPrompt();openNewPasswordModal()}
-    else toast('That doesn’t match the password we emailed.');
-  };
-  setTimeout(()=>f.pw.focus(),50);
-}
-function queueResetPrompt(){
-  if(S.notifs.some(n=>n.action==='resetpw'))return;
-  S.notifs.unshift({id:uid(),type:'System',text:'Please reset your password. You’re using one we emailed you.',ts:Date.now(),read:false,dismissable:true,action:'resetpw'});
-  save();badge();
-}
-function openNewPasswordModal(){
-  ask('Set a new password',[['p1','New password*','password'],['p2','Confirm new password*','password']],{},d=>{
-    const a=userAccounts[currentEmail];
-    if((d.p1||'').length<6){toast('Use at least 6 characters.');return openNewPasswordModal()}
-    if(d.p1!==d.p2){toast('The two passwords don’t match.');return openNewPasswordModal()}
-    if(d.p1===a.pass){toast('Choose a password different from the emailed one.');return openNewPasswordModal()}
-    a.pass=d.p1;delete a.resetPending;
-    S.notifs=S.notifs.filter(n=>n.action!=='resetpw');
-    persistAccounts();save();badge();
-    toast('Password updated ✓');
-    if(islandMode=='notifications')refreshIsland();
-    if(location.hash=='#/activity')render();
-  });
-}
-function clearResetFlag(n){if(n&&n.action==='resetpw'&&userAccounts[currentEmail]){delete userAccounts[currentEmail].resetPending;persistAccounts()}}
+function queueResetPrompt(){return;}
+function clearResetFlag(n){}
 
 let isDragging=false,startX,startY,initialX,initialY;
 const isl=$('#island'),ish=$('#island-header');
@@ -1694,7 +1723,7 @@ const X=(i,b)=>{const t=S.tasks.find(x=>x.id==i),delT=()=>{S.tasks=S.tasks.filte
  nf:()=>{U.nf=i;render()},readall:()=>{S.notifs.forEach(n=>n.read=true);save();render()},
  nread:()=>{const n=S.notifs.find(x=>x.id==i);n.read=!n.read;save();render()},
  dismissnotif:()=>{const n=S.notifs.find(x=>x.id==i);if(n){clearResetFlag(n);S.notifs=S.notifs.filter(x=>x.id!=i);save();render();toast('Notification dismissed')}},
- pwreset:()=>startPasswordReset(),resetpw:()=>openNewPasswordModal(),
+ pwreset:()=>startPasswordReset(),resetpw:()=>toast('Use the password-reset link sent by Supabase.'),
  aichat:()=>openChat(i),aichatren:()=>renameChat(i),aichatdel:()=>deleteChat(i),clearchats:()=>clearAllChats(),
  aifeedback:()=>{const rating=b.dataset.k;if(rating==='up')recordAIFeedback(i,'up');else ask('Improve this response',[['reason','What should LifeLink change or learn?','text']],{},d=>recordAIFeedback(i,'down',d.reason||''));},
  aimemdel:()=>{S.aiLearning.memories=S.aiLearning.memories.filter(m=>m.id!==i);save();render()},aimemclear:()=>clearAILearning(),
@@ -1708,8 +1737,10 @@ const X=(i,b)=>{const t=S.tasks.find(x=>x.id==i),delT=()=>{S.tasks=S.tasks.filte
  tcus:()=>ask('Custom session',[['m','Minutes*','number']],{m:30},o=>{if(!T.run){T.len=Math.min(180,Math.max(1,+o.m||25));T.brk=false;T.left=T.len*60;render()}}),
  exp:()=>{const out=JSON.parse(JSON.stringify(S));delete out.aiHist;delete out.chats;delete out.curChat;delete out.loggedIn;if(out.aiCfg)out.aiCfg.apiKey='';const u=URL.createObjectURL(new Blob([JSON.stringify(out,null,1)],{type:'application/json'})),a=document.createElement('a');a.href=u;a.download='lifelink-'+currentEmail+'-backup.json';a.click();setTimeout(()=>URL.revokeObjectURL(u),2000);toast('Backup downloaded (API keys are not included)')},
  rmdemo:()=>{['tasks','events','notes','notifs'].forEach(k=>S[k]=S[k].filter(x=>!x.demo));save();render();toast('Sample data removed')},
- logout:()=>{
+ logout:async()=>{
    save();
+   try{if(supabaseClient)await supabaseClient.auth.signOut()}catch(e){console.warn('Sign-out error',e)}
+   supabaseSession=null;
    closeIsland();closeModal();closeBrowser();closeAIFull(true);
    clearInterval(iv);T.run=false;T.brk=false;document.title='LifeLink';
    resetTransientState();
@@ -1816,16 +1847,29 @@ function disconnectGitHub(){
 })();
 
 applyPrefs();
-if(!currentEmail || !userAccounts[currentEmail]){
-  S.loggedIn=false;
-  location.hash='#/login';
-}else{
-  $('#app-header').style.display='flex';
-  $('#dock').style.display='flex';
-  if(!location.hash || location.hash==='#/login') location.hash='#/home';
-}
-syncTimer();
-loadAIHistory();
-render();
-$('main').classList.add('in');
+(async function bootAuth(){
+  if(supabaseClient){
+    try{
+      const {data,error}=await supabaseClient.auth.getSession();
+      if(error)throw error;
+      supabaseSession=data.session;
+      if(data.session?.user){
+        currentEmail=data.session.user.email.toLowerCase();
+        if(!userAccounts[currentEmail])userAccounts[currentEmail]={data:freshUserData(nameFromEmail(currentEmail))};
+        if(!userAccounts[currentEmail].data)userAccounts[currentEmail].data=freshUserData(nameFromEmail(currentEmail));
+        localStorage.setItem('lifelink.currentEmail',currentEmail);
+        loadUserSession();
+      }else{
+        currentEmail=null;S={loggedIn:false};localStorage.removeItem('lifelink.currentEmail');
+      }
+      supabaseClient.auth.onAuthStateChange(async (event,session)=>{
+        supabaseSession=session;
+        if(event==='PASSWORD_RECOVERY'){openSupabasePasswordChange()}
+      });
+    }catch(err){console.warn('Supabase session restoration failed',err);S={loggedIn:false}}
+  }else{
+    S={loggedIn:false};currentEmail=null;
+  }
+  syncTimer();loadAIHistory();render();$('main').classList.add('in');
+})();
 </script></body></html>
