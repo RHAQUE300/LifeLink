@@ -262,6 +262,7 @@ body.google-manager-active:after{content:"";position:fixed;inset:0;z-index:49;ba
 
 <div id="browser-modal">
   <div id="browser-toolbar">
+    <span id="browser-status" class="sub" style="font-size:11px;white-space:nowrap;max-width:310px;overflow:hidden;text-overflow:ellipsis">Ready to open inside LifeLink</span>
     <button class="btn" onclick="closeBrowser()">✕ Close</button>
     <input id="browser-url" readonly style="flex:1;background:rgba(0,0,0,.04);font-size:13px">
     <button class="btn" id="browser-embed-btn" onclick="forceEmbedBrowser()" style="display:none">Try Inline Embed</button>
@@ -624,6 +625,7 @@ function toast(m){
   const t=$('#toast');t.textContent=m;t.classList.add('open');
   clearTimeout(toast.t);toast.t=setTimeout(()=>t.classList.remove('open'),3200);
 }
+let browserStatusTimer=null;
 function openBrowser(u){
   let target=String(u||'').trim();
   if(!/^https?:\/\//i.test(target))target='https://'+target;
@@ -633,15 +635,26 @@ function openBrowser(u){
     target=parsed.href;
   }catch(e){toast('Enter a valid website URL');return}
   $('#browser-url').value=target;
-  const iframe=$('#browser-frame'),fb=$('#browser-fallback'),eb=$('#browser-embed-btn');
+  const iframe=$('#browser-frame'),fb=$('#browser-fallback'),eb=$('#browser-embed-btn'),status=$('#browser-status');
   fb.style.display='none';eb.style.display='inline-block';iframe.style.display='block';
+  clearTimeout(browserStatusTimer);
+  if(status)status.textContent='Trying to open '+new URL(target).hostname+' inside LifeLink…';
+  iframe.onload=()=>{
+    if(status&&$('#browser-url').value===target)status.textContent='The frame finished loading. If it is blank, the site may block embedding or require a separate sign-in.';
+  };
   iframe.removeAttribute('src');iframe.src=target;
   const title=$('#bf-title');if(title)title.textContent=new URL(target).hostname.replace(/^www\./,'');
   $('#browser-modal').classList.add('open');
+  browserStatusTimer=setTimeout(()=>{
+    if(status&&$('#browser-url').value===target&&status.textContent.startsWith('Trying to open'))status.textContent='Still waiting. The site may be slow or may not allow inline embedding.';
+  },9000);
 }
 function forceEmbedBrowser(){
-  const u=$('#browser-url').value,iframe=$('#browser-frame'),fb=$('#browser-fallback');
-  fb.style.display='none';iframe.style.display='block';iframe.removeAttribute('src');iframe.src=u;
+  const u=$('#browser-url').value,iframe=$('#browser-frame'),fb=$('#browser-fallback'),status=$('#browser-status');
+  fb.style.display='none';iframe.style.display='block';clearTimeout(browserStatusTimer);
+  if(status)status.textContent='Retrying the inline embed…';
+  iframe.removeAttribute('src');iframe.src=u;
+  browserStatusTimer=setTimeout(()=>{if(status&&status.textContent==='Retrying the inline embed…')status.textContent='Still waiting. The site may block inline embedding.'},9000);
 }
 function openBrowserPopup(){
   const url=$('#browser-url').value;
@@ -654,6 +667,7 @@ function openBrowserExternal(){
   window.open(url,'_blank','noopener,noreferrer');
 }
 function closeBrowser(){
+  clearTimeout(browserStatusTimer);
   $('#browser-modal').classList.remove('open');
   setTimeout(()=>{const f=$('#browser-frame');if(f){f.removeAttribute('src');f.style.display='block';}$('#browser-fallback').style.display='none';},280);
 }
@@ -827,7 +841,7 @@ function al(){
     grid.appendChild(card);
   }
   if(S.oauth&&S.oauth.connected&&S.oauth.connected.google){
-    const card=appCardNode({name:'Google account',category:'Connected account',detail:'Google services connected to LifeLink'},'mine','Connected','Manage account','googlepopup','',{});
+    const card=appCardNode({name:'Google account',category:'Connected account',detail:'Google services connected to LifeLink'},'mine','Connected','Manage account','googlepopup','',null);
     grid.appendChild(card);
   }
   const entries=appShelfRecords();
@@ -1080,6 +1094,7 @@ const EXTRA_APP_CATALOG=[
 {id:'jira',name:'Jira',category:'Productivity',detail:'Project and issue tracking',url:'https://www.atlassian.com/software/jira'},
 {id:'confluence',name:'Confluence',category:'Productivity',detail:'Team knowledge and documentation',url:'https://www.atlassian.com/software/confluence'},
 {id:'bitbucket',name:'Bitbucket',category:'Business & developer',detail:'Git repositories and code review',url:'https://bitbucket.org/'},
+{id:'github',name:'GitHub',category:'Business & developer',detail:'Code hosting and collaboration',url:'https://github.com/'},
 {id:'gitlab',name:'GitLab',category:'Business & developer',detail:'Code hosting and DevSecOps',url:'https://gitlab.com/'},
 {id:'replit',name:'Replit',category:'Business & developer',detail:'Online IDE and app development',url:'https://replit.com/'},
 {id:'codesandbox',name:'CodeSandbox',category:'Business & developer',detail:'Browser-based development environments',url:'https://codesandbox.io/'},
@@ -2023,6 +2038,22 @@ async function callLLM(msgs,opts={}){
   const providerNames={groq:'GPT-OSS 120B',gemini:'Gemini 3.8 Flash',openai:'GPT-4o mini',anthropic:'Claude Sonnet'};
   if(status)status.textContent='Using '+(providerNames[S.aiLastProvider]||'Auto')+(data.webSearch?' · Web':'');
   return out;
+}
+async function lifeLinkWebSearch(query){
+  const text=String(query||'').trim();
+  if(text.length<3)throw new Error('Enter a search query');
+  if(!supabaseClient)throw new Error('LifeLink sign-in is unavailable');
+  const {data:{session},error}=await supabaseClient.auth.getSession();
+  if(error||!session?.access_token)throw new Error('Please sign in to LifeLink again');
+  const response=await fetch(LL_CONFIG.apiUrl+'/api/search',{
+    method:'POST',
+    headers:{'Content-Type':'application/json','Authorization':'Bearer '+session.access_token},
+    body:JSON.stringify({query:text}),
+    signal:AbortSignal.timeout(45000)
+  });
+  let data={};try{data=await response.json()}catch{}
+  if(!response.ok)throw new Error(data.error||'LifeLink web search failed');
+  return data;
 }
 const aiHint=s=>s===401?'Your session may have expired. Sign in again.':s===403?'Your account is not authorised for this request.':s===409?'That model is not connected yet. Choose Auto or connect the model securely.':s===429?'Rate limit reached. Wait a moment and try again.':s>=500?'All connected models may be temporarily unavailable. LifeLink will use its fallback assistant.':'';
 
