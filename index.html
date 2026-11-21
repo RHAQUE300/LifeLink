@@ -244,7 +244,7 @@ main.in{animation:pg .45s cubic-bezier(.22,1,.36,1)}@keyframes pg{from{opacity:0
       <b style="font-size:17px">✦ LifeLink AI</b><span class="tag" id="af-prov"></span>
       <span class="sp"></span>
       <button class="btn" id="af-new" onclick="clearAI()" aria-label="New chat">＋<span class="lbl"> New chat</span></button>
-      <button class="btn" onclick="openAIConfigModal()" aria-label="Connect AI">⚙<span class="lbl"> Connect AI</span></button>
+      
       <button class="btn" onclick="closeAIFull()" aria-label="Close">✕<span class="lbl"> Close</span></button>
     </div>
     <div id="af-msgs"><div id="af-col"></div></div>
@@ -408,7 +408,8 @@ function loadUserSession(){
   ['tasks','events','notes','notifs','sessions','links','chats'].forEach(k=>{ if(!Array.isArray(S[k])) S[k] = base[k] || []; });
   if(!S.oauth || typeof S.oauth!=='object') S.oauth = base.oauth;
   if(!S.oauth.connected || typeof S.oauth.connected!=='object') S.oauth.connected = {};
-  if(!S.aiCfg || typeof S.aiCfg!=='object') S.aiCfg = {provider:'LifeLink Built-in AI',apiKey:'',model:'',customUrl:''};
+  S.aiCfg = {provider:'LifeLink Built-in AI',apiKey:'',model:'',customUrl:''};
+   if(!S.aiModel)S.aiModel='auto';
   if(!S.aiLearning||typeof S.aiLearning!=='object')S.aiLearning={enabled:true,memories:[],feedback:[]};
   S.aiLearning.enabled=S.aiLearning.enabled!==false;
   if(!Array.isArray(S.aiLearning.memories))S.aiLearning.memories=[];if(!Array.isArray(S.aiLearning.feedback))S.aiLearning.feedback=[];
@@ -626,9 +627,10 @@ recovery:()=>{const full=T.brk?S.p.bLen*60:T.len*60,tot=(S.sessions||[]).reduce(
 settings:()=>`<h1>Settings</h1><p class="sub">Account: <b>${esc(currentEmail)}</b></p><div class="col"><div class="glass card"><h2>Profile</h2><input id="pn" value="${esc(S.name)}" aria-label="Display name"><p class="sub" style="margin:10px 0 0">Data synced exclusively to account: <code>${esc(currentEmail)}</code></p><button class="btn" data-a="logout" style="margin-top:12px;color:#d6335c">Sign Out</button></div><div class="glass card"><h2>Security</h2><p class="sub" style="font-size:13px;margin-bottom:10px">Want a new password? We’ll email your current one to <b>${esc(currentEmail)}</b>. Enter it to continue, then you can choose a new one.</p><button class="btn" data-a="pwreset">Reset password</button></div>`
 +SET.map(([h,f])=>`<div class="glass card"><h2>${h}</h2>${f.map(([k,l,t,o])=>`<div class="row"><label for="s_${k}" style="flex:1">${l}</label>${ctl(k,t,o)}</div>`).join('')}${h=='Appearance'?'<div class="row"><span style="flex:1">Profile icon / Custom picture (supports large MB images)</span><label class="btn">Upload<input id="logo" type="file" accept="image/*" hidden></label><button class="btn" data-a="nologo">Reset</button></div>':''}</div>`).join('')
 +`<div class="glass card">
-  <h2>AI Assistant Provider</h2>\n  <p role="note" style="font-size:12px;line-height:1.5;padding:10px 12px;border:1px solid rgba(190,140,40,.35);border-radius:12px;background:rgba(255,190,70,.10)">Preview security: AI provider keys are currently stored in this browser. Do not paste a real API key into this public preview. We will move keys behind a secure server-side proxy before enabling production AI connections.</p>
-  <p class="sub" style="font-size:13px;margin-bottom:10px">Current engine: <b>${esc(aiExternal()?S.aiCfg.provider:'LifeLink Built-in AI')}</b></p>
-  <div class="row" style="border:0;padding:0;flex-wrap:wrap"><button class="btn pri" onclick="openAIConfigModal()">Configure / Connect Any AI</button><button class="btn" onclick="openAIFull()">Open full-screen chat</button><button class="btn" data-a="clearchats">Clear chat history</button></div>
+  <h2>AI model</h2>
+  <p class="sub" style="font-size:13px;margin-bottom:10px">Choose an available model in the chat header. Auto tries Groq first, Gemini next, then uses LifeLink's built-in fallback if neither service is working.</p>
+  <div class="row" style="border:0;padding:0;flex-wrap:wrap"><button class="btn pri" onclick="openAIFull()">Open chat &amp; choose model</button><button class="btn" data-a="clearchats">Clear chat history</button></div>
+</div>
 </div>
 <div class="glass card"><h2>AI learning &amp; memory</h2><p class="sub" style="font-size:13px">LifeLink can learn from explicit preferences and your feedback. Memories are stored locally with this prototype’s account data; they do not retrain the underlying model.</p><div class="row"><label style="flex:1">Automatically learn explicit preferences and corrections</label><input id="ai-learn-enabled" type="checkbox" ${S.aiLearning?.enabled!==false?'checked':''} style="width:auto"></div><p class="sub" style="font-size:12px">${(S.aiLearning?.memories||[]).length} saved memories · ${(S.aiLearning?.feedback||[]).length} feedback examples</p><div style="max-height:220px;overflow:auto">${(S.aiLearning?.memories||[]).length?S.aiLearning.memories.slice(-12).reverse().map(m=>`<div class="row" style="align-items:flex-start"><span style="flex:1;font-size:12px">${esc(m.text||'')}</span><button class="btn" data-a="aimemdel" data-i="${m.id}" style="padding:2px 7px">×</button></div>`).join(''):'<p class="sub">No saved memories yet. Explicit preferences and corrections can be learned from chat.</p>'}</div><div class="row" style="border:0;flex-wrap:wrap"><button class="btn" data-a="aimemclear">Clear learned memories &amp; feedback</button></div></div>
 <div class="glass card"><h2>Data</h2><div class="row" style="border:0;flex-wrap:wrap"><button class="btn" data-a="exp">Export JSON</button><label class="btn">Import JSON<input id="imp" type="file" accept=".json" hidden></label><button class="btn" data-a="rmdemo">Remove sample data</button><button class="btn" data-a="reset">Reset account data</button></div></div></div>`,
@@ -804,13 +806,13 @@ function openIsland(mode){
   if(isl.classList.contains('open') && islandMode === mode){closeIsland();return;}
   islandMode=mode;isl.classList.add('open');exp.style.display='inline-block';
   if(mode=='ai'){
-    const activeProvider = aiExternal() ? S.aiCfg.provider : 'LifeLink Built-in AI';
+    const activeProvider = S.aiModel&&S.aiModel!=='auto' ? S.aiModel : 'Auto';
     tit.innerHTML=`✦ AI <span class="tag" style="margin-left:6px;font-size:10px">${esc(activeProvider)}</span>`;exp.textContent='Show more';
     exp.onclick=()=>{const rect=$('#island').getBoundingClientRect();closeIsland();openAIFull(rect)};
     body.innerHTML=`
       <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;gap:6px">
-        <span class="sub" style="margin:0;font-size:11.5px">${aiExternal()?'Connected to '+esc(S.aiCfg.provider):'Using built-in mode'}</span>
-        <span style="display:flex;gap:4px"><button class="btn" onclick="clearAI()" style="padding:3px 10px;font-size:11px">New chat</button><button class="btn" onclick="openAIConfigModal()" style="padding:3px 10px;font-size:11px">⚙ Connect AI</button></span>
+        <span class="sub" style="margin:0;font-size:11.5px">${S.aiModel&&S.aiModel!=='auto'?'Selected model: '+esc(S.aiModel):'Automatic model selection'}</span>
+        <span style="display:flex;gap:4px"><button class="btn" onclick="clearAI()" style="padding:3px 10px;font-size:11px">New chat</button><button class="btn" onclick="openAIFull()" style="padding:3px 10px;font-size:11px">Choose model</button></span>
       </div>
       <div id="ai-chips" style="margin-bottom:8px">
         <span class="ai-chip" onclick="sendAI('Add task Review physics notes due tomorrow high priority')">+ Add task</span>
@@ -863,58 +865,59 @@ function dismissNotif(id){
 }
 
 function leaveAICfg(){closeModal()}
-function disconnectAI(){S.aiCfg={provider:'LifeLink Built-in AI',apiKey:'',model:'',customUrl:''};save();leaveAICfg();if(islandMode=='ai')refreshIsland();refreshAIFull();toast('Switched to built-in AI')}
-function openAIConfigModal(){
-  const cfg = S.aiCfg || {provider:'LifeLink Built-in AI', apiKey:'', model:'', customUrl:''};
-  const bd=$('#modal-backdrop'),mc=$('#modal-card');
-  mc.style.width='min(480px,94vw)';
-  mc.innerHTML=`<form id="ai-cfg-form">
-    <h2>Connect an AI model</h2>
-    <p class="sub" style="font-size:13px;margin-bottom:12px">Recommended: Groq’s free API tier with the open-weight GPT-OSS 120B model. Create a free key, paste it below, and LifeLink will test the connection. Other providers and local OpenAI-compatible models are supported too. For this prototype, the key is stored in this browser’s local storage—don’t use a shared/public computer or a production account key.</p>
-    <label>AI Provider</label>
-    <select name="provider" id="aic-prov">
-      ${['LifeLink Built-in AI','OpenAI (ChatGPT)','Google Gemini','Anthropic Claude','OpenRouter','Groq','Custom OpenAI-Compatible'].map(p=>`<option value="${p}"${(cfg.provider===p||(!cfg.apiKey&&p==='Groq'))?' selected':''}>${p==='Groq'?'Groq (recommended free)':p}</option>`).join('')}
-    </select>
-    <label>API Key</label>
-    <input name="apiKey" type="password" value="${esc(cfg.apiKey||'')}" placeholder="sk-... or AIza..." autocomplete="off">
-    <label>Model (optional — leave blank for a sensible default)</label>
-    <input name="model" type="text" value="${esc(cfg.model||'')}" placeholder="Default: openai/gpt-oss-120b (Groq)">
-    <div class="sub" style="font-size:12px;margin:4px 0 10px">Free Groq key: <a href="https://console.groq.com/keys" target="_blank" rel="noopener noreferrer">Create API key ↗</a>. Leave Model blank to use the provider default.
-    </div>
-    <label>Custom endpoint URL (only for “Custom OpenAI-Compatible”)</label>
-    <input name="customUrl" type="text" value="${esc(cfg.customUrl||'')}" placeholder="https://api.example.com/v1/chat/completions">
-    <div class="row" style="border:0;margin-top:16px;padding-bottom:0;flex-wrap:wrap">
-      <button type="submit" class="btn pri">Save &amp; test</button>
-      <button type="button" class="btn" onclick="disconnectAI()">Disconnect</button>
-      <button type="button" class="btn" onclick="leaveAICfg()">Cancel</button>
-    </div>
-  </form>`;
-  bd.classList.add('open');
-  $('#ai-cfg-form').onsubmit=async e=>{
-    e.preventDefault();
-    const d=Object.fromEntries(new FormData(e.target));
-    let provider=d.provider,key=(d.apiKey||'').trim(),detected=false;
-    if(key){const g=guessProvider(key),sure=/^(?:sk-ant-|AIza|gsk_|sk-or-)/.test(key);
-      if(g&&g!==provider&&(provider==='LifeLink Built-in AI'||(sure&&provider!=='Custom OpenAI-Compatible'))){provider=g;detected=true}}
-    S.aiCfg={provider,apiKey:key,model:(d.model||'').trim(),customUrl:(d.customUrl||'').trim()};
-    save();leaveAICfg();if(islandMode=='ai')refreshIsland();refreshAIFull();
-    if(!aiExternal()){toast(key?'I couldn’t tell which provider that key is for. Pick one and save again.':'Using the built-in AI');return}
-    toast('Testing connection…');
-    try{
-      await callLLM([{role:'user',text:'Reply with the single word: OK'}],{sys:'This is a connection test.',maxTokens:256,timeout:20000});
-      toast('✓ Connected to '+provider+(detected?' (detected from your key)':''));
-    }catch(err){
-      toast('⚠️ '+provider+': '+String(err.message||err).slice(0,150)+(aiHint(err.status)?' '+aiHint(err.status):''));
-    }
-  };
+function openAIModelConnect(model){
+  const names={groq:'Groq · GPT-OSS 120B',gemini:'Google · Gemini 3.8 Flash',openai:'OpenAI · GPT-4o mini',anthropic:'Anthropic · Claude Sonnet'};
+  const name=names[model]||'this model';
+  alert(name+' is not connected to LifeLink yet. To connect it securely, add the provider API key as a Cloudflare Worker secret, then redeploy the LifeLink API. Never paste provider API keys into this page.');
 }
-
+async function refreshAIModelStatus(){
+  const p=$('#af-prov'),sel=$('#af-model');
+  if(p)p.textContent='Checking models…';
+  try{
+    if(!supabaseClient)await ensureSupabaseClient();
+    const {data:{session}}=await supabaseClient.auth.getSession();
+    if(!session?.access_token)throw new Error('Sign in required');
+    const res=await fetch(LL_CONFIG.apiUrl+'/api/models',{headers:{'Authorization':'Bearer '+session.access_token}});
+    const data=await res.json();
+    if(!res.ok)throw new Error(data.error||'Could not load models');
+    window.aiModelAvailability=data.models||{};
+    if(sel){
+      [...sel.options].forEach(o=>{
+        if(o.value==='auto')o.textContent='Auto · Groq → Gemini → LifeLink fallback';
+        else{
+          const label=o.dataset.label||o.value;
+          o.textContent=label+(window.aiModelAvailability[o.value]?'':' · Connect');
+        }
+      });
+      const chosen=S.aiModel||'auto';
+      if(chosen!=='auto'&&!window.aiModelAvailability[chosen]){S.aiModel='auto';save();sel.value='auto';}
+      else sel.value=chosen;
+    }
+    if(p)p.textContent='Active: '+(S.aiModel&&S.aiModel!=='auto'?({'groq':'GPT-OSS 120B','gemini':'Gemini 3.8 Flash','openai':'GPT-4o mini','anthropic':'Claude Sonnet'}[S.aiModel]||S.aiModel):'Auto');
+  }catch(e){
+    window.aiModelAvailability={};
+    if(p)p.textContent='Auto · availability check failed';
+    if(sel)sel.value='auto';
+  }
+}
+function selectAIModel(model){
+  const available=window.aiModelAvailability||{};
+  if(model!=='auto'&&!available[model]){
+    $('#af-model').value=S.aiModel||'auto';
+    openAIModelConnect(model);
+    return;
+  }
+  S.aiModel=model||'auto';save();
+  refreshAIFull();
+  const labels={auto:'Automatic model selection',groq:'GPT-OSS 120B',gemini:'Gemini 3.8 Flash',openai:'GPT-4o mini',anthropic:'Claude Sonnet'};
+  toast('Model set to '+(labels[S.aiModel]||'Auto'));
+}
 /* ===================== LifeLink AI ===================== */
 const AI_DEFAULT_MODELS={'OpenAI (ChatGPT)':'gpt-4o-mini','Google Gemini':'gemini-2.5-flash','Anthropic Claude':'claude-sonnet-5-5','OpenRouter':'openai/gpt-4o-mini','Groq':'openai/gpt-oss-120b','Custom OpenAI-Compatible':'gpt-3.5-turbo'};
 const AI_RECOMMENDED_PROVIDER='Groq',AI_RECOMMENDED_MODEL='openai/gpt-oss-120b';
 const FENCE='`'.repeat(3);
 
-function aiExternal(){const c=S&&S.aiCfg;return !!(c&&c.provider&&c.provider!=='LifeLink Built-in AI'&&(c.apiKey||(c.provider==='Custom OpenAI-Compatible'&&c.customUrl)))}
+function aiExternal(){return false}
 function guessProvider(k){k=(k||'').trim();return /^sk-ant-/.test(k)?'Anthropic Claude':/^AIza/.test(k)?'Google Gemini':/^gsk_/.test(k)?'Groq':/^sk-or-/.test(k)?'OpenRouter':/^sk-/.test(k)?'OpenAI (ChatGPT)':null}
 function htmlToText(h){return new DOMParser().parseFromString(String(h||'').replace(/<br\s*\/?>/gi,'\n'),'text/html').body.textContent.trim()}
 
@@ -999,7 +1002,8 @@ function refreshAIFull(){
   f.classList.toggle('nohist',!hist);
   f.classList.toggle('collapsed',hist&&S.p.aiSidebar===false);
   const t=$('#af-toggle');if(t)t.setAttribute('aria-expanded',String(hist&&S.p.aiSidebar!==false));
-  const p=$('#af-prov');if(p)p.textContent=aiExternal()?S.aiCfg.provider:'Built-in mode';
+  const p=$('#af-prov');if(p)p.textContent='Auto';
+  const sel=$('#af-model');if(sel)sel.value=S.aiModel||'auto';
   renderAI();renderAIChatList();
 }
 let lastAIOriginRect=null;
@@ -1502,52 +1506,24 @@ function aiMessages(){
   return out;
 }
 async function callLLM(msgs,opts={}){
-  if(!aiExternal()){
-    if(!supabaseClient)throw new Error('Supabase is not configured');
-    const {data:{session},error:se}=await supabaseClient.auth.getSession();
-    if(se||!session?.access_token)throw new Error('Please sign in again to use LifeLink AI.');
-    const fullMsgs=[{role:'system',text:opts.sys!=null?opts.sys:aiSystemPrompt()},...msgs].slice(-20);
-    const res=await fetch(LL_CONFIG.apiUrl+'/api/chat',{method:'POST',headers:{'Content-Type':'application/json','Authorization':'Bearer '+session.access_token},body:JSON.stringify({messages:fullMsgs.map(m=>({role:m.role,content:m.text}))})});
-    let data={};try{data=await res.json()}catch{}
-    if(!res.ok)throw new Error(data.error||('AI backend HTTP '+res.status));
-    const out=data.reply||data.response||data.text||data.output||data.message;
-    if(typeof out!=='string'||!out.trim())throw new Error('The LifeLink backend returned an empty response.');
-    return out;
-  }
-  const cfg=S.aiCfg,P=cfg.provider,model=cfg.model||AI_DEFAULT_MODELS[P],sys=opts.sys!=null?opts.sys:aiSystemPrompt(),maxTok=opts.maxTokens||4096;
-  const ctl=new AbortController(),to=setTimeout(()=>ctl.abort(),opts.timeout||60000);
-  let url,headers={'Content-Type':'application/json'},body,pick;
-  if(P==='Google Gemini'){
-    url=`https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent`;
-    headers['x-goog-api-key']=cfg.apiKey;
-    body={systemInstruction:{parts:[{text:sys}]},contents:msgs.map(m=>({role:m.role==='user'?'user':'model',parts:[{text:m.text}]})),generationConfig:{maxOutputTokens:maxTok}};
-    pick=d=>(d.candidates?.[0]?.content?.parts||[]).map(p=>p.text||'').join('')||(d.promptFeedback?.blockReason?'(The provider blocked this request: '+d.promptFeedback.blockReason+')':'');
-  }else if(P==='Anthropic Claude'){
-    url='https://api.anthropic.com/v1/messages';
-    headers['x-api-key']=cfg.apiKey;headers['anthropic-version']='2023-06-01';headers['anthropic-dangerous-direct-browser-access']='true';
-    body={model,max_tokens:maxTok,system:sys,messages:msgs.map(m=>({role:m.role,content:m.text}))};
-    pick=d=>(d.content||[]).filter(b=>b.type==='text').map(b=>b.text).join('');
-  }else{
-    url=P==='OpenRouter'?'https://openrouter.ai/api/v1/chat/completions':P==='Groq'?'https://api.groq.com/openai/v1/chat/completions':(P==='Custom OpenAI-Compatible'&&cfg.customUrl)?cfg.customUrl:'https://api.openai.com/v1/chat/completions';
-    if(cfg.apiKey)headers.Authorization='Bearer '+cfg.apiKey;
-    body={model,messages:[{role:'system',content:sys},...msgs.map(m=>({role:m.role,content:m.text}))]};
-    pick=d=>{const c=d.choices?.[0]?.message?.content;return Array.isArray(c)?c.map(x=>x.text||'').join(''):(c||'')};
-  }
-  try{
-    const res=await fetch(url,{method:'POST',headers,body:JSON.stringify(body),signal:ctl.signal});
-    let d=null;try{d=await res.json()}catch(e){}
-    if(!res.ok||(d&&d.error)){
-      const em=d&&d.error&&(d.error.message||(typeof d.error==='string'?d.error:JSON.stringify(d.error)));
-      const e=new Error(em||('HTTP '+res.status));e.status=res.status;throw e;
-    }
-    const out=d?String(pick(d)||''):'';
-    if(!out.trim())throw new Error('The model returned an empty response.');
-    return out;
-  }catch(err){
-    if(err&&err.name==='AbortError')err.message='The request timed out.';
-    else if(err instanceof TypeError)err.message='Couldn’t reach the provider (network problem, or the endpoint doesn’t allow browser requests / CORS).';
-    throw err;
-  }finally{clearTimeout(to)}
+  if(!supabaseClient)throw new Error('Supabase is not configured');
+  const {data:{session},error:se}=await supabaseClient.auth.getSession();
+  if(se||!session?.access_token)throw new Error('Please sign in again to use LifeLink AI.');
+  const fullMsgs=[{role:'system',text:opts.sys!=null?opts.sys:aiSystemPrompt()},...msgs].slice(-20);
+  const res=await fetch(LL_CONFIG.apiUrl+'/api/chat',{
+    method:'POST',
+    headers:{'Content-Type':'application/json','Authorization':'Bearer '+session.access_token},
+    body:JSON.stringify({
+      messages:fullMsgs.map(m=>({role:m.role,content:m.text})),
+      model:S.aiModel||'auto'
+    }),
+    signal:AbortSignal.timeout(opts.timeout||60000)
+  });
+  let data={};try{data=await res.json()}catch{}
+  if(!res.ok)throw new Error(data.error||('AI backend HTTP '+res.status));
+  const out=data.reply||data.response||data.text||data.output||data.message;
+  if(typeof out!=='string'||!out.trim())throw new Error('The LifeLink backend returned an empty response.');
+  return out;
 }
 const aiHint=s=>s===401||s===403?'Check that the API key is correct and allowed to use this model.':s===404?'The model name may be wrong. Check the Model field in ⚙ Connect AI.':s===429?'Rate limit or quota reached. Wait a moment and try again.':s>=500?'The provider seems to be having trouble. Try again shortly.':'';
 
@@ -1760,26 +1736,14 @@ async function builtInGeneralAI(raw){
 }
 
 async function getAIResponse(raw){
-  const external=aiExternal();
   const ac=appCommand(raw);if(ac)return{html:ac};
-  const wc=workspaceCommand(raw,external);if(wc)return{html:wc};
-  if(external){
-    try{
-      return applyAIActions(await callLLM(aiMessages()));
-    }catch(err){
-      const msg=String(err&&err.message||err),hint=aiHint(err&&err.status);
-      const fb=await builtInGeneralAI(raw);
-      return{err:true,html:`⚠️ <b>${esc(S.aiCfg.provider)} error:</b> ${esc(msg)}${hint?'<br>'+esc(hint):''}<br><br><i>Built-in assistant instead:</i><br>${fb}`};
-    }
-  }
-  // In built-in mode, send open-ended questions through the authenticated
-  // Cloudflare Worker. Workspace commands above remain local and free.
+  const wc=workspaceCommand(raw,false);if(wc)return{html:wc};
   try{
     return applyAIActions(await callLLM(aiMessages()));
   }catch(err){
     const msg=String(err&&err.message||err),hint=aiHint(err&&err.status);
     const fb=await builtInGeneralAI(raw);
-    return{err:true,html:`⚠️ <b>LifeLink AI backend error:</b> ${esc(msg)}${hint?'<br>'+esc(hint):''}<br><br><i>Built-in assistant instead:</i><br>${fb}`};
+    return{err:true,html:`⚠️ <b>AI service unavailable:</b> ${esc(msg)}${hint?'<br>'+esc(hint):''}<br><br><i>LifeLink fallback assistant:</i><br>${fb}`};
   }
 }
 
