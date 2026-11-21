@@ -914,7 +914,7 @@ function selectAIModel(model){
     openAIModelConnect(model);
     return;
   }
-  S.aiModel=model||'auto';save();
+  S.aiModel=model||'auto';S.aiLastProvider='';save();
   refreshAIFull();
   const labels={auto:'Automatic model selection',groq:'GPT-OSS 120B',gemini:'Gemini 3.8 Flash',openai:'GPT-4o mini',anthropic:'Claude Sonnet'};
   toast('Model set to '+(labels[S.aiModel]||'Auto'));
@@ -1009,7 +1009,7 @@ function refreshAIFull(){
   f.classList.toggle('nohist',!hist);
   f.classList.toggle('collapsed',hist&&S.p.aiSidebar===false);
   const t=$('#af-toggle');if(t)t.setAttribute('aria-expanded',String(hist&&S.p.aiSidebar!==false));
-  const p=$('#af-prov');if(p)p.textContent='Auto';
+  const p=$('#af-prov');if(p)p.textContent=S.aiLastProvider?('Using '+S.aiLastProvider):'Auto';
   const sel=$('#af-model');if(sel)sel.value=S.aiModel||'auto';
   renderAI();renderAIChatList();
 }
@@ -1531,9 +1531,12 @@ async function callLLM(msgs,opts={}){
   if(!res.ok)throw new Error(data.error||('AI backend HTTP '+res.status));
   const out=data.reply||data.response||data.text||data.output||data.message;
   if(typeof out!=='string'||!out.trim())throw new Error('The LifeLink backend returned an empty response.');
+  S.aiLastProvider=data.provider||'';
+  const providerNames={groq:'GPT-OSS 120B',gemini:'Gemini 3.8 Flash',openai:'GPT-4o mini',anthropic:'Claude Sonnet'};
+  const status=$('#af-prov');if(status)status.textContent='Using '+(providerNames[S.aiLastProvider]||'Auto');
   return out;
 }
-const aiHint=s=>s===401||s===403?'Check that the API key is correct and allowed to use this model.':s===404?'The model name may be wrong. Check the Model field in ⚙ Connect AI.':s===429?'Rate limit or quota reached. Wait a moment and try again.':s>=500?'The provider seems to be having trouble. Try again shortly.':'';
+const aiHint=s=>s===401?'Your session may have expired. Sign in again.':s===403?'Your account is not authorised for this request.':s===409?'That model is not connected yet. Choose Auto or connect the model securely.':s===429?'Rate limit reached. Wait a moment and try again.':s>=500?'All connected models may be temporarily unavailable. LifeLink will use its fallback assistant.':'';
 
 /* ---------- local, deterministic workspace commands ---------- */
 function cmdAddTask(rest){
@@ -1726,7 +1729,7 @@ async function builtInGeneralAI(raw){
     return `<b>A simple study plan for ${esc(topic)}</b><br>1. <b>Map it (10 min):</b> list the key topics and mark the ones you feel shaky on.<br>2. <b>Learn (25 min):</b> work through the hardest topic first, then take a 5-minute break.<br>3. <b>Recall (25 min):</b> close your notes and write down everything you remember, then fill the gaps.<br>4. <b>Practise (30 min):</b> do timed questions without looking at solutions.<br>5. <b>Review (10 min):</b> revisit mistakes, and repeat the topic again in 1 day, 3 days and 7 days.<br><br>Want me to add these as tasks? Say <i>Add task Study ${esc(topic)} due Friday</i>. I can run the timer from the <b>Recovery</b> tab.`;
   }
   if(/\b(write|show|give|example|snippet|how (?:do|to)|code)\b/i.test(low)&&/\bpython\b/i.test(low))
-    return `Here’s a small Python example:<pre style="background:rgba(0,0,0,.08);padding:8px 10px;border-radius:8px;font-size:12px;margin:6px 0;overflow-x:auto"><code>def keep_valid(items):\n    return [x for x in items if x is not None]\n\nprint(keep_valid([1, None, 3]))</code></pre>For anything specific, connect an AI model with <b>⚙ Connect AI</b>. The built-in mode can’t write custom code.`;
+    return `Here’s a small Python example:<pre style="background:rgba(0,0,0,.08);padding:8px 10px;border-radius:8px;font-size:12px;margin:6px 0;overflow-x:auto"><code>def keep_valid(items):\n    return [x for x in items if x is not None]\n\nprint(keep_valid([1, None, 3]))</code></pre>For anything specific, select an available model in the chat header. The built-in mode can’t write custom code.`;
   if(/\b(write|show|give|example|snippet|how (?:do|to)|code)\b/i.test(low)&&/\b(javascript|js)\b/i.test(low))
     return `Here’s a small JavaScript example:<pre style="background:rgba(0,0,0,.08);padding:8px 10px;border-radius:8px;font-size:12px;margin:6px 0;overflow-x:auto"><code>const doubled = [1, 2, 3].filter(Boolean).map(x => x * 2);\nconsole.log(doubled);</code></pre>For anything specific, connect an AI model with <b>⚙ Connect AI</b>. The built-in mode can’t write custom code.`;
   // Wikipedia lookup
