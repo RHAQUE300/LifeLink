@@ -194,7 +194,7 @@ async function searchWithGemini(messages, env) {
         "x-goog-api-key": env.GEMINI_API_KEY
       },
       body: JSON.stringify({
-        model: "gemini-3.6-flash",
+        model: "gemini-3.8-flash",
         input: conversation,
         tools: [{ type: "google_search" }],
         store: false
@@ -317,7 +317,7 @@ export default {
           query,
           text: result.text,
           sources: result.citations,
-          provider: "gemini-3.6-flash",
+          provider: "gemini-3.8-flash",
           webSearch: true
         });
       } catch (error) {
