@@ -932,7 +932,9 @@ function openIsland(mode){
   const isl=$('#island'),tit=$('#island-title'),body=$('#island-body'),exp=$('#island-expand');
   exp.style.display='inline-block';
   if(isl.classList.contains('open') && islandMode === mode){closeIsland();return;}
-  islandMode=mode;isl.classList.toggle('google-manager-open',mode==='google');isl.classList.add('open');exp.style.display='inline-block';
+  islandMode=mode;
+  if(mode==='google'){isl.style.left='';isl.style.top='';isl.style.right='';}
+  isl.classList.toggle('google-manager-open',mode==='google');isl.classList.add('open');exp.style.display='inline-block';
   if(mode==='google'){
     tit.textContent='Google accounts';exp.style.display='none';body.innerHTML=googleManagerMarkup();
     if(googleConnectionStatus===null)refreshGoogleConnectionStatus();
