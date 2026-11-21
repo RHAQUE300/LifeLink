@@ -241,14 +241,49 @@ export default {
       const legacyKey = "google:" + user.id;
 
       if (url.pathname === "/api/google/status") {
-        const listed = await env.GOOGLE_TOKENS.list({ prefix });
-        const accounts = [];
-        for (const item of listed.keys || []) {
-          const saved = await env.GOOGLE_TOKENS.get(item.name, "json");
-          if (saved && saved.refresh_token) accounts.push({ id: item.name.slice(prefix.length), email: saved.email || null, scopes: saved.scope || "" });
-        }
+        const accountsById = new Map();
+        let cursor = undefined;
+        do {
+          const options = cursor ? { prefix, cursor } : { prefix };
+          const listed = await env.GOOGLE_TOKENS.list(options);
+          for (const item of listed.keys || []) {
+            const saved = await env.GOOGLE_TOKENS.get(item.name, "json");
+            if (!saved || typeof saved !== "object") continue;
+            // Accept the current record format and common legacy wrappers without exposing tokens.
+            const tokenData = saved.tokens || saved.data || saved;
+            const hasCredential = !!(
+              tokenData.refresh_token || tokenData.refreshToken ||
+              tokenData.access_token || tokenData.accessToken
+            );
+            if (!hasCredential) continue;
+            const accountId = item.name.slice(prefix.length);
+            accountsById.set(accountId, {
+              id: accountId,
+              email: saved.email || saved.profile?.email || saved.user?.email || null,
+              scopes: saved.scope || tokenData.scope || ""
+            });
+          }
+          cursor = listed.list_complete === false && listed.cursor ? listed.cursor : undefined;
+        } while (cursor);
+
+        // Older single-account connections used google:<user-id> without an account suffix.
         const legacy = await env.GOOGLE_TOKENS.get(legacyKey, "json");
-        if (legacy && legacy.refresh_token) accounts.unshift({ id: "legacy", email: legacy.email || null, scopes: legacy.scope || "" });
+        if (legacy && typeof legacy === "object") {
+          const tokenData = legacy.tokens || legacy.data || legacy;
+          const hasCredential = !!(
+            tokenData.refresh_token || tokenData.refreshToken ||
+            tokenData.access_token || tokenData.accessToken
+          );
+          if (hasCredential) {
+            accountsById.set("legacy", {
+              id: "legacy",
+              email: legacy.email || legacy.profile?.email || legacy.user?.email || null,
+              scopes: legacy.scope || tokenData.scope || ""
+            });
+          }
+        }
+
+        const accounts = [...accountsById.values()];
         return json({ connected: accounts.length > 0, accounts });
       }
 
