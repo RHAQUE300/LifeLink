@@ -374,10 +374,10 @@ export default {
     }
 
     // Multiple Google accounts, isolated under the authenticated LifeLink user.
-    const googleRoute = ["/api/google/connect", "/api/google/status", "/api/google/disconnect", "/api/google/data"].includes(url.pathname);
+    const googleRoute = ["/api/google/connect", "/api/google/status", "/api/google/disconnect", "/api/google/data", "/api/google/file", "/api/google/upload"].includes(url.pathname);
     if (googleRoute) {
       if (origin !== ALLOWED_ORIGIN) return json({ error: "Origin not allowed" }, 403);
-      const expectedMethod = url.pathname === "/api/google/status" ? "GET" : "POST";
+      const expectedMethod = ["/api/google/status", "/api/google/file"].includes(url.pathname) ? "GET" : "POST";
       if (request.method !== expectedMethod) return json({ error: "Method not allowed" }, 405);
       if (!env.GOOGLE_TOKENS) return json({ error: "Google token storage is not configured" }, 500);
       const user = await verifyUser(request, env);
@@ -475,13 +475,13 @@ export default {
           const fileId = url.searchParams.get("fileId") || "";
           if (!/^[A-Za-z0-9_-]{1,200}$/.test(fileId)) return json({ error: "Invalid Drive file identifier" }, 400);
           const exportPdf = url.searchParams.get("export") === "pdf";
-          const fileName = String(url.searchParams.get("name") || "Drive file").replace(/[\\r\\n\\0]/g, " ").slice(0, 240);
+          const fileName = String(url.searchParams.get("name") || "Drive file").replace(/[\r\n\0]/g, " ").slice(0, 240);
           const apiPath = exportPdf
             ? "/drive/v3/files/" + encodeURIComponent(fileId) + "/export?mimeType=application%2Fpdf"
             : "/drive/v3/files/" + encodeURIComponent(fileId) + "?alt=media";
           const headers = { Authorization: "Bearer " + accessToken };
           const range = request.headers.get("Range");
-          if (range && !exportPdf && /^bytes=\\d*-\\d*(,\\d*-\\d*)*$/.test(range)) headers.Range = range;
+          if (range && !exportPdf && /^bytes=[0-9]*-[0-9]*(,[0-9]*-[0-9]*)*$/.test(range)) headers.Range = range;
           const upstream = await fetch("https://www.googleapis.com" + apiPath, {
             method: "GET", headers, signal: AbortSignal.timeout(60000)
           });
@@ -491,7 +491,7 @@ export default {
             return json({ error: String(detail?.error?.message || "Google Drive could not provide this file (" + upstream.status + ")").slice(0, 240) }, upstream.status === 404 ? 404 : 502);
           }
           let contentType = (upstream.headers.get("Content-Type") || (exportPdf ? "application/pdf" : "application/octet-stream")).split(";")[0].trim().toLowerCase();
-          // Never execute HTML or script files from a Drive blob inside the LifeLink origin.
+          // Never execute HTML, SVG or script files from Drive inside the LifeLink origin.
           if (["text/html", "application/xhtml+xml", "application/javascript", "text/javascript", "image/svg+xml"].includes(contentType)) contentType = "text/plain";
           const inline = contentType === "application/pdf" || contentType.startsWith("image/") ||
             contentType.startsWith("video/") || contentType.startsWith("audio/") ||
@@ -513,19 +513,16 @@ export default {
 
         const contentLength = Number(request.headers.get("Content-Length") || 0);
         if (contentLength > 99000000) return json({ error: "This file is larger than the current 99 MB per-request upload limit." }, 413);
-        const fileName = String(url.searchParams.get("name") || "").trim().replace(/[\\r\\n\\0]/g, " ").slice(0, 240);
+        const fileName = String(url.searchParams.get("name") || "").trim().replace(/[\r\n\0]/g, " ").slice(0, 240);
         const parentId = url.searchParams.get("parentId") || "";
         if (!fileName) return json({ error: "A file name is required" }, 400);
         if (parentId && !/^[A-Za-z0-9_-]{1,200}$/.test(parentId)) return json({ error: "Invalid Drive folder identifier" }, 400);
         if (!request.body) return json({ error: "The upload does not contain a file" }, 400);
         const contentType = String(request.headers.get("Content-Type") || "application/octet-stream").split(";")[0].trim().slice(0, 160);
-        if (!/^[A-Za-z0-9!#        return json({ connected: accounts.length > 0, accounts });
-      }
-
-      if (request.headers.get("X-Requested-With") !== "XMLHttpRequest") return json({ error: "Invalid request" }, 400);^_.+-]+\\/[A-Za-z0-9!#        return json({ connected: accounts.length > 0, accounts });
-      }
-
-      if (request.headers.get("X-Requested-With") !== "XMLHttpRequest") return json({ error: "Invalid request" }, 400);^_.+-]+$/.test(contentType)) return json({ error: "Invalid file content type" }, 400);
+        const mimeParts = contentType.split("/");
+        if (mimeParts.length !== 2 || !/^[A-Za-z0-9.+_-]+$/.test(mimeParts[0]) || !/^[A-Za-z0-9.+_-]+$/.test(mimeParts[1])) {
+          return json({ error: "Invalid file content type" }, 400);
+        }
 
         try {
           const metadata = { name: fileName, ...(parentId ? { parents: [parentId] } : {}) };
