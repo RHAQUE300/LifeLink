@@ -333,15 +333,15 @@ const PROVIDERS = {
 export default {
   async fetch(request, env) {
     const origin = request.headers.get("Origin");
-    if (origin && origin !== ALLOWED_ORIGIN) {
+    const url = new URL(request.url);
+    const sameWorkerDriveStream = url.pathname === "/api/google/stream" && origin === url.origin;
+    if (origin && origin !== ALLOWED_ORIGIN && !sameWorkerDriveStream) {
       return json({ error: "Origin not allowed" }, 403);
     }
 
     if (request.method === "OPTIONS") {
       return new Response(null, { status: 204, headers: corsHeaders });
     }
-
-    const url = new URL(request.url);
 
     // Short-lived capability URLs let native browser media viewers request byte ranges
     // directly from Google Drive without exposing Google OAuth tokens to the iframe.
@@ -634,12 +634,18 @@ export default {
           if (sessionUrl.protocol !== "https:" || !["www.googleapis.com", "content.googleapis.com"].includes(sessionUrl.hostname)) {
             return json({ error: "Google Drive returned an unexpected upload destination" }, 502);
           }
-          const uploadHeaders = { Authorization: "Bearer " + accessToken, "Content-Type": contentType };
-          if (contentLength > 0) uploadHeaders["Content-Length"] = String(contentLength);
-          const uploaded = await fetch(sessionUrl.href, {
-            method: "PUT", headers: uploadHeaders, body: request.body,
+          if (!Number.isSafeInteger(contentLength) || contentLength < 1) {
+            return json({ error: "The upload size could not be determined. Please retry with a normal file selection." }, 411);
+          }
+          const fixedLengthBody = new FixedLengthStream(contentLength);
+          const pipeUploadBody = request.body.pipeTo(fixedLengthBody.writable);
+          const uploadedPromise = fetch(sessionUrl.href, {
+            method: "PUT",
+            headers: { Authorization: "Bearer " + accessToken, "Content-Type": contentType },
+            body: fixedLengthBody.readable,
             signal: AbortSignal.timeout(180000)
           });
+          const [uploaded] = await Promise.all([uploadedPromise, pipeUploadBody]);
           let uploadedFile = {};
           try { uploadedFile = await uploaded.json(); } catch {}
           if (!uploaded.ok || !uploadedFile.id) {
