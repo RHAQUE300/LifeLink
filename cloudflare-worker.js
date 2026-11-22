@@ -73,13 +73,15 @@ function googleHeader(headers, name) {
     .find(header => String(header.name || "").toLowerCase() === name.toLowerCase())?.value || "";
 }
 
-async function googleApiFetch(path, accessToken) {
+async function googleApiFetch(path, accessToken, method = "GET", body) {
   // Gmail uses its own service endpoint; Calendar and Drive use www.googleapis.com.
   const apiHost = path.startsWith("/gmail/")
     ? "https://gmail.googleapis.com"
     : "https://www.googleapis.com";
+  const headers = { Authorization: "Bearer " + accessToken };
+  if (body !== undefined) headers["Content-Type"] = "application/json";
   const response = await fetch(apiHost + path, {
-    headers: { Authorization: "Bearer " + accessToken },
+    method, headers, body: body === undefined ? undefined : JSON.stringify(body),
     signal: AbortSignal.timeout(15000)
   });
   let data = {};
@@ -443,7 +445,7 @@ export default {
         const accountId = body.accountId;
         if (typeof accountId !== "string" || !/^(legacy|[0-9a-f-]{36})$/i.test(accountId)) return json({ error: "Invalid Google account" }, 400);
         const operation = typeof body.operation === "string" ? body.operation : "";
-        const allowed = ["gmail.list", "gmail.get", "calendar.list", "drive.list"];
+        const allowed = ["gmail.list", "gmail.get", "gmail.send", "gmail.modify", "gmail.trash", "calendar.list", "calendar.create", "calendar.update", "calendar.delete", "drive.list", "drive.createFolder", "drive.rename", "drive.trash", "drive.star"];
         if (!allowed.includes(operation)) return json({ error: "Unsupported Google operation" }, 400);
         const key = accountId === "legacy" ? legacyKey : prefix + accountId;
         const saved = await env.GOOGLE_TOKENS.get(key, "json");
@@ -473,6 +475,73 @@ export default {
           expires_at: Date.now() + Math.max(60, Number(tokenData.expires_in) || 3600) * 1000
         }));
         try {
+          if (operation === "gmail.send") {
+            const to = typeof body.to === "string" ? body.to.trim().slice(0, 1000) : "";
+            const subject = typeof body.subject === "string" ? body.subject.slice(0, 998) : "";
+            const messageText = typeof body.message === "string" ? body.message.slice(0, 20000) : "";
+            if (!to || !/^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$/.test(to) || !messageText) return json({ error: "A valid recipient and message are required" }, 400);
+            const rawMessage = "To: " + to + "\\r\\nSubject: " + subject.replace(/[\\r\\n]/g, " ") + "\\r\\nMIME-Version: 1.0\\r\\nContent-Type: text/plain; charset=UTF-8\\r\\n\\r\\n" + messageText;
+            const bytes = new TextEncoder().encode(rawMessage);
+            let binary = "";
+            for (const byte of bytes) binary += String.fromCharCode(byte);
+            const raw = btoa(binary).replace(/\\+/g, "-").replace(/\\//g, "_").replace(/=+$/g, "");
+            const sent = await googleApiFetch("/gmail/v1/users/me/messages/send", accessToken, "POST", { raw });
+            return json({ sent: true, id: sent.id || "", threadId: sent.threadId || "" });
+          }
+          if (operation === "gmail.modify" || operation === "gmail.trash") {
+            const messageId = typeof body.messageId === "string" ? body.messageId : "";
+            if (!/^[A-Za-z0-9_-]{1,200}$/.test(messageId)) return json({ error: "Invalid message identifier" }, 400);
+            if (operation === "gmail.trash") {
+              const result = await googleApiFetch("/gmail/v1/users/me/messages/" + encodeURIComponent(messageId) + "/trash", accessToken, "POST", {});
+              return json({ updated: true, message: result });
+            }
+            const addLabelIds = Array.isArray(body.addLabelIds) ? body.addLabelIds.filter(x => ["UNREAD", "STARRED", "IMPORTANT"].includes(x)).slice(0, 3) : [];
+            const removeLabelIds = Array.isArray(body.removeLabelIds) ? body.removeLabelIds.filter(x => ["UNREAD", "STARRED", "IMPORTANT", "INBOX"].includes(x)).slice(0, 4) : [];
+            const result = await googleApiFetch("/gmail/v1/users/me/messages/" + encodeURIComponent(messageId) + "/modify", accessToken, "POST", { addLabelIds, removeLabelIds });
+            return json({ updated: true, labelIds: result.labelIds || [] });
+          }
+          if (operation === "calendar.create" || operation === "calendar.update" || operation === "calendar.delete") {
+            const eventId = typeof body.eventId === "string" ? body.eventId : "";
+            if (operation !== "calendar.create" && !/^[A-Za-z0-9_-]{1,200}$/.test(eventId)) return json({ error: "Invalid event identifier" }, 400);
+            if (operation === "calendar.delete") {
+              await googleApiFetch("/calendar/v3/calendars/primary/events/" + encodeURIComponent(eventId), accessToken, "DELETE");
+              return json({ deleted: true, eventId });
+            }
+            const summary = typeof body.summary === "string" ? body.summary.trim().slice(0, 500) : "";
+            const start = typeof body.start === "string" ? body.start.slice(0, 40) : "";
+            const end = typeof body.end === "string" ? body.end.slice(0, 40) : "";
+            if (!summary || !start || !end || !Number.isFinite(Date.parse(start)) || !Number.isFinite(Date.parse(end)) || Date.parse(end) <= Date.parse(start)) return json({ error: "A title and valid start/end times are required" }, 400);
+            const event = { summary, start: { dateTime: new Date(start).toISOString() }, end: { dateTime: new Date(end).toISOString() } };
+            if (typeof body.description === "string") event.description = body.description.slice(0, 4000);
+            if (typeof body.location === "string") event.location = body.location.slice(0, 500);
+            const result = operation === "calendar.create"
+              ? await googleApiFetch("/calendar/v3/calendars/primary/events", accessToken, "POST", event)
+              : await googleApiFetch("/calendar/v3/calendars/primary/events/" + encodeURIComponent(eventId), accessToken, "PATCH", event);
+            return json({ saved: true, event: { id: result.id, summary: result.summary, start: result.start?.dateTime || result.start?.date || "", end: result.end?.dateTime || result.end?.date || "", htmlLink: result.htmlLink || "" } });
+          }
+          if (operation === "drive.createFolder" || operation === "drive.rename" || operation === "drive.trash" || operation === "drive.star") {
+            const fileId = typeof body.fileId === "string" ? body.fileId : "";
+            if (operation !== "drive.createFolder" && !/^[A-Za-z0-9_-]{1,200}$/.test(fileId)) return json({ error: "Invalid Drive file identifier" }, 400);
+            if (operation === "drive.createFolder") {
+              const name = typeof body.name === "string" ? body.name.trim().slice(0, 200) : "";
+              if (!name) return json({ error: "Folder name is required" }, 400);
+              const result = await googleApiFetch("/drive/v3/files?fields=id,name,mimeType,webViewLink", accessToken, "POST", { name, mimeType: "application/vnd.google-apps.folder", ...(typeof body.parentId === "string" && /^[A-Za-z0-9_-]{1,200}$/.test(body.parentId) ? { parents: [body.parentId] } : {}) });
+              return json({ created: true, file: result });
+            }
+            if (operation === "drive.trash") {
+              const result = await googleApiFetch("/drive/v3/files/" + encodeURIComponent(fileId), accessToken, "PATCH", { trashed: true });
+              return json({ updated: true, file: result });
+            }
+            if (operation === "drive.star") {
+              const starred = body.starred === true;
+              const result = await googleApiFetch("/drive/v3/files/" + encodeURIComponent(fileId), accessToken, "PATCH", { starred });
+              return json({ updated: true, file: result });
+            }
+            const name = typeof body.name === "string" ? body.name.trim().slice(0, 200) : "";
+            if (!name) return json({ error: "A new file name is required" }, 400);
+            const result = await googleApiFetch("/drive/v3/files/" + encodeURIComponent(fileId), accessToken, "PATCH", { name });
+            return json({ updated: true, file: result });
+          }
           if (operation === "gmail.list") {
             const query = typeof body.query === "string" ? body.query.slice(0, 300) : "in:inbox";
             const maxResults = Math.min(50, Math.max(1, Number(body.maxResults) || 25));
