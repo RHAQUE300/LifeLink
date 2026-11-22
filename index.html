@@ -750,7 +750,7 @@ function openBrowser(u,app=null){
   if(fallbackDescription)fallbackDescription.textContent=info.description;
   iframe.onload=()=>{
     iframe.classList.add('loaded');clearBrowserLoading();
-    if(status&&$('#browser-url').value===target)status.textContent='Frame loaded · provider content is running inside LifeLink';
+    if(status&&$('#browser-url').value===target)status.textContent='Frame loaded · if it looks blank, the provider may block embedding';
   };
   iframe.onerror=()=>{
     clearBrowserLoading();
@@ -774,7 +774,7 @@ function forceEmbedBrowser(){
   fallback.style.display='none';button.style.display='none';iframe.style.display='block';
   iframe.classList.remove('loaded');setBrowserLoading('Retrying inside LifeLink…');
   if(status)status.textContent='Retrying inside LifeLink…';
-  iframe.onload=()=>{iframe.classList.add('loaded');clearBrowserLoading();if(status)status.textContent='Frame loaded · provider content is running inside LifeLink'};
+  iframe.onload=()=>{iframe.classList.add('loaded');clearBrowserLoading();if(status)status.textContent='Frame loaded · if it looks blank, the provider may block embedding'};
   iframe.onerror=()=>{clearBrowserLoading();if(status)status.textContent='This page could not be loaded in the inline viewer.'};
   iframe.src=target;
   browserStatusTimer=setTimeout(()=>{
@@ -807,7 +807,7 @@ function openBrowserStreamPreview(streamUrl,file){
   setBrowserLoading('Opening '+String(file?.name||'Drive file')+'…');
   iframe.onload=()=>{
     iframe.classList.add('loaded');clearBrowserLoading();
-    if(status)status.textContent='Preview ready · '+String(file?.name||'Drive file');
+    if(status)status.textContent='Preview opened · streaming '+String(file?.name||'Drive file');
   };
   iframe.onerror=()=>{
     clearBrowserLoading();iframe.classList.add('loaded');
