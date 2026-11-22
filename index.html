@@ -727,7 +727,7 @@ function openBrowser(u,app=null){
     if(status&&$('#browser-url').value===target)status.textContent='The frame finished loading. If it is blank, the site may block embedding or require a separate sign-in.';
   };
   iframe.removeAttribute('src');iframe.src=target;
-  const title=$('#bf-title');if(title)title.textContent=new URL(target).hostname.replace(/^www\./,'');
+  const title=$('#bf-title');if(title)title.textContent=info.name;
   $('#browser-modal').classList.add('open');
   browserStatusTimer=setTimeout(()=>{
     if(status&&$('#browser-url').value===target&&status.textContent.startsWith('Opening ')){
