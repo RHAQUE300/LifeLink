@@ -715,7 +715,7 @@ function toast(m){
   const t=$('#toast');t.textContent=m;t.classList.add('open');
   clearTimeout(toast.t);toast.t=setTimeout(()=>t.classList.remove('open'),3200);
 }
-let browserStatusTimer=null,activeBrowserApp=null;
+let browserStatusTimer=null,browserCloseTimer=null,activeBrowserApp=null;
 function appIntegrationInfo(app){
   const name=String(app?.name||'Website');
   const host=(()=>{try{return new URL(app?.url||'').hostname.replace(/^www\./,'')}catch{return ''}})();
@@ -738,6 +738,7 @@ function openBrowser(u,app=null){
   $('#browser-url').value=target;
   activeBrowserApp=app||{name:new URL(target).hostname.replace(/^www\./,'') ,url:target};
   const info=appIntegrationInfo(activeBrowserApp);
+  clearTimeout(browserCloseTimer);
   const iframe=$('#browser-frame'),fb=$('#browser-fallback'),eb=$('#browser-embed-btn'),status=$('#browser-status');
   iframe.referrerPolicy='strict-origin-when-cross-origin';
   fb.style.display='none';eb.style.display='inline-block';iframe.style.display='block';
@@ -755,7 +756,7 @@ function openBrowser(u,app=null){
     clearBrowserLoading();
     if(status)status.textContent='This page could not be loaded in the inline viewer.';
   };
-  iframe.removeAttribute('src');iframe.src=target;
+  iframe.src=target;
   $('#browser-modal').classList.add('open');
   browserStatusTimer=setTimeout(()=>{
     if(status&&$('#browser-url').value===target&&status.textContent.startsWith('Opening ')){
@@ -764,7 +765,27 @@ function openBrowser(u,app=null){
     }
   },15000);
 }
+function forceEmbedBrowser(){
+  if(activeBrowserApp?.kind==='drive-file')return;
+  const target=String(activeBrowserApp?.url||$('#browser-url').value||'');
+  if(!/^https?:\/\//i.test(target)){toast('There is no website to retry');return}
+  clearTimeout(browserCloseTimer);clearTimeout(browserStatusTimer);
+  const iframe=$('#browser-frame'),fallback=$('#browser-fallback'),button=$('#browser-embed-btn'),status=$('#browser-status');
+  fallback.style.display='none';button.style.display='none';iframe.style.display='block';
+  iframe.classList.remove('loaded');setBrowserLoading('Retrying inside LifeLink…');
+  if(status)status.textContent='Retrying inside LifeLink…';
+  iframe.onload=()=>{iframe.classList.add('loaded');clearBrowserLoading();if(status)status.textContent='Frame loaded · provider content is running inside LifeLink'};
+  iframe.onerror=()=>{clearBrowserLoading();if(status)status.textContent='This page could not be loaded in the inline viewer.'};
+  iframe.src=target;
+  browserStatusTimer=setTimeout(()=>{
+    if(status&&status.textContent.startsWith('Retrying ')){
+      iframe.classList.add('loaded');clearBrowserLoading();
+      status.textContent='The provider may be slow or may restrict embedding.';
+    }
+  },15000);
+}
 function prepareDrivePreview(file){
+  clearTimeout(browserCloseTimer);
   activeBrowserApp={name:String(file?.name||'Drive file'),fileId:file?.id,kind:'drive-file'};
   const iframe=$('#browser-frame'),fb=$('#browser-fallback'),eb=$('#browser-embed-btn'),status=$('#browser-status');
   iframe.referrerPolicy='no-referrer';
@@ -792,7 +813,7 @@ function openBrowserStreamPreview(streamUrl,file){
     clearBrowserLoading();iframe.classList.add('loaded');
     if(status)status.textContent='The browser could not render this file type. Download it from Google Drive instead.';
   };
-  iframe.removeAttribute('src');iframe.src=streamUrl;
+  iframe.src=streamUrl;
   clearTimeout(browserStatusTimer);
   browserStatusTimer=setTimeout(()=>{
     if(status&&status.textContent.startsWith('Streaming preview')){
@@ -832,8 +853,10 @@ async function googleDrivePreviewFile(file){
     if(activeBrowserApp?.kind!=='drive-file'||activeBrowserApp.fileId!==file.id)return;
     openBrowserStreamPreview(result.url,file);
   }catch(error){
-    clearBrowserLoading();closeBrowser();
-    toast('Drive preview failed: '+String(error?.message||error).slice(0,180));
+    if(activeBrowserApp?.kind==='drive-file'&&activeBrowserApp.fileId===file.id){
+      clearBrowserLoading();closeBrowser();
+      toast('Drive preview failed: '+String(error?.message||error).slice(0,180));
+    }
   }
 }
 async function uploadGoogleDriveFiles(files){
@@ -847,12 +870,13 @@ async function uploadGoogleDriveFiles(files){
     const {data,error}=await supabaseClient.auth.getSession();
     if(error||!data.session?.access_token)throw new Error('Please sign in to LifeLink again');
     let uploaded=0;
+    const targetFolderId=googleDriveFolderId;
     for(let index=0;index<list.length;index++){
       const file=list[index];
       if(file.size>99000000)throw new Error(file.name+' is larger than the current 99 MB per-file upload limit.');
       toast('Uploading '+(index+1)+' of '+list.length+': '+file.name);
       const params=new URLSearchParams({accountId:account.id,name:file.name});
-      if(googleDriveFolderId)params.set('parentId',googleDriveFolderId);
+      if(targetFolderId)params.set('parentId',targetFolderId);
       const response=await fetch(LL_CONFIG.apiUrl+'/api/google/upload?'+params.toString(),{
         method:'POST',
         headers:{
@@ -867,7 +891,7 @@ async function uploadGoogleDriveFiles(files){
       if(!response.ok)throw new Error(result.error||('Upload failed for '+file.name));
       uploaded++;
     }
-    await refreshGoogleService();
+    if(activeGoogleService==='drive')await refreshGoogleService();
     toast(uploaded+' file'+(uploaded===1?'':'s')+' uploaded to Google Drive');
   }catch(error){
     toast('Drive upload failed: '+String(error?.message||error).slice(0,190));
@@ -883,9 +907,10 @@ function openBrowserExternal(){
   if(url&&url!=='about:blank')window.open(url,'_blank','noopener,noreferrer');
 }
 function closeBrowser(){
-  clearTimeout(browserStatusTimer);activeBrowserApp=null;
+  clearTimeout(browserStatusTimer);clearTimeout(browserCloseTimer);activeBrowserApp=null;
   $('#browser-modal').classList.remove('open');clearBrowserLoading();
-  setTimeout(()=>{
+  browserCloseTimer=setTimeout(()=>{
+    if($('#browser-modal').classList.contains('open'))return;
     const frame=$('#browser-frame');
     if(frame){frame.removeAttribute('src');frame.src='about:blank';frame.style.display='block';frame.classList.remove('loaded');frame.referrerPolicy='strict-origin-when-cross-origin';}
     $('#browser-fallback').style.display='none';
