@@ -465,7 +465,8 @@ async function refreshGoogleConnectionStatus(){
   try{await request}finally{if(googleStatusPromise===request)googleStatusPromise=null}
 }
 async function startGoogleConnect(){
-  const accountId=crypto.randomUUID();
+  const selectedAccountId=S?.googleActiveAccountId;
+  const accountId=selectedAccountId&&selectedAccountId!=='legacy'&&/^[0-9a-f-]{36}$/i.test(selectedAccountId)?selectedAccountId:crypto.randomUUID();
   if(googleConnectionBusy)return;
   if(!S?.loggedIn){toast('Sign in to LifeLink first.');return}
   if(!LL_CONFIG.googleClientId){toast('Google connection is not configured.');return}
@@ -474,7 +475,7 @@ async function startGoogleConnect(){
     if(!await loadGoogleGIS())throw new Error('Google authorization could not be loaded. Check your connection and try again.');
     const client=google.accounts.oauth2.initCodeClient({
       client_id:LL_CONFIG.googleClientId,
-      scope:'openid email profile https://www.googleapis.com/auth/gmail.readonly https://www.googleapis.com/auth/drive.metadata.readonly https://www.googleapis.com/auth/calendar.readonly',
+      scope:'openid email profile https://www.googleapis.com/auth/gmail.modify https://www.googleapis.com/auth/drive https://www.googleapis.com/auth/calendar.events',
       ux_mode:'popup',
       select_account:true,
       prompt:'consent',
