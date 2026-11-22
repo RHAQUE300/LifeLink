@@ -1523,7 +1523,7 @@ function clearAllChats(){
 function renderAI(){
   [['#ao','#ao'],['#af-col','#af-msgs']].forEach(([s,sc])=>{
     const o=$(s);if(!o)return;
-    o.innerHTML=aiHistory.map((m,idx)=>`<div class="ai-msg ${m.role}">${m.html}${m.role==='bot'&&!m.id?`<div class="ai-copy-row"><button class="ai-copy-btn" type="button" data-copy-message="${idx}" title="Copy the entire response">▢ Copy response</button>${m.text&&!m.err&&!m.feedbackGiven?`<button class="btn" data-a="aifeedback" data-i="${idx}" data-k="up" style="padding:2px 7px;font-size:11px" title="Helpful">👍</button><button class="btn" data-a="aifeedback" data-i="${idx}" data-k="down" style="padding:2px 7px;font-size:11px" title="Needs improvement">👎</button>`:''}</div>`:''}</div>`).join('');
+    o.innerHTML=aiHistory.map((m,idx)=>`<div class="ai-msg ${m.role}">${m.html===AI_GREETING?localizedAIGreeting():m.html}${m.role==='bot'&&!m.id?`<div class="ai-copy-row"><button class="ai-copy-btn" type="button" data-copy-message="${idx}" title="Copy the entire response">▢ Copy response</button>${m.text&&!m.err&&!m.feedbackGiven?`<button class="btn" data-a="aifeedback" data-i="${idx}" data-k="up" style="padding:2px 7px;font-size:11px" title="Helpful">👍</button><button class="btn" data-a="aifeedback" data-i="${idx}" data-k="down" style="padding:2px 7px;font-size:11px" title="Needs improvement">👎</button>`:''}</div>`:''}</div>`).join('');
     o.querySelectorAll('.ai-msg.bot pre').forEach(pre=>{
       if(pre.querySelector('.ai-copy-code'))return;
       const b=document.createElement('button');
@@ -2593,6 +2593,18 @@ const LL_EXTRA={
 };
 for(const [lang,entries] of Object.entries(LL_EXTRA))Object.assign(LL_LOCALES[lang],entries);
 const LL_LANGUAGE_NAMES={en:'English',es:'Spanish',fr:'French',de:'German',ar:'Arabic',hi:'Hindi'};
+function localizedAIGreeting(){
+ const lang=(S&&S.p&&S.p.language)||'en';
+ const greetings={
+ es:'¡Hola! Soy <b>LifeLink AI</b>. Puedo gestionar tus tareas, eventos y notas, y conversar con un modelo conectado. También puedo aprender tus preferencias con el tiempo a partir de tus comentarios. ¿Qué tienes en mente?',
+ fr:'Bonjour ! Je suis <b>LifeLink AI</b>. Je peux gérer vos tâches, événements et notes, et discuter avec un modèle connecté. Je peux aussi apprendre vos préférences grâce à vos retours. Que puis-je faire pour vous ?',
+ de:'Hallo! Ich bin <b>LifeLink AI</b>. Ich kann deine Aufgaben, Termine und Notizen verwalten und mit einem verbundenen Modell chatten. Außerdem kann ich mit der Zeit aus deinem Feedback deine Vorlieben lernen. Was möchtest du tun?',
+ ar:'مرحبًا! أنا <b>LifeLink AI</b>. يمكنني إدارة مهامك وأحداثك وملاحظاتك والدردشة مع نموذج متصل. ويمكنني أيضًا تعلم تفضيلاتك من ملاحظاتك بمرور الوقت. بماذا يمكنني مساعدتك؟',
+ hi:'नमस्ते! मैं <b>LifeLink AI</b> हूँ। मैं आपके कार्य, कार्यक्रम और नोट्स प्रबंधित कर सकता हूँ और जुड़े हुए मॉडल से बातचीत कर सकता हूँ। मैं समय के साथ आपकी प्रतिक्रिया से आपकी पसंद भी सीख सकता हूँ। आप क्या करना चाहेंगे?'
+ };
+ return greetings[lang]||AI_GREETING;
+}
+
 
 const llOriginalText=new WeakMap(),llOriginalAttrs=new WeakMap();
 function applyLanguage(root=document.body){
