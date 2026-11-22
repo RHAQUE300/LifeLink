@@ -534,7 +534,8 @@ export default {
             const view = ["mydrive", "shared", "recent", "starred", "trash"].includes(body.view) ? body.view : "mydrive";
             const clauses = [view === "trash" ? "trashed = true" : "trashed = false"];
             const folderId = typeof body.folderId === "string" && /^[A-Za-z0-9_-]{1,200}$/.test(body.folderId) ? body.folderId : "";
-            if (view === "mydrive") clauses.push(folderId ? "'" + folderId + "' in parents" : "'root' in parents");
+            if (view === "mydrive" && folderId) clauses.push("'" + folderId + "' in parents");
+            else if (view === "mydrive" && !query) clauses.push("'root' in parents");
             else if (view === "shared") clauses.push("sharedWithMe");
             else if (view === "starred") clauses.push("starred = true");
             if (query) clauses.push("name contains '" + query.replace(/\\/g, "\\\\").replace(/'/g, "\\'") + "'");
