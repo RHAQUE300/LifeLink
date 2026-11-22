@@ -2611,6 +2611,16 @@ hi:{
 };
 for(const [lang,entries] of Object.entries(LL_SCREEN_EXTRA))Object.assign(LL_LOCALES[lang],entries);
 
+const LL_CATEGORY_EXTRA={
+es:{"Productivity":"Productividad","Communication":"Comunicación","Email & calendars":"Correo y calendarios","Cloud storage":"Almacenamiento en la nube","Education":"Educación","Creative & media":"Creatividad y medios","Browsers & search":"Navegadores y búsqueda","Everyday Google":"Google cotidiano","Media & discovery":"Medios y descubrimiento","Work & school":"Trabajo y escuela","Connected account":"Cuenta conectada","Available":"Disponible","Add to My Apps":"Añadir a Mis aplicaciones","Added to My Apps":"Añadido a Mis aplicaciones","Open inline":"Abrir integrado","Remove":"Eliminar","Copy response":"Copiar respuesta","Copy code":"Copiar código","Helpful":"Útil","Needs improvement":"Necesita mejoras","Selected model:":"Modelo seleccionado:","Automatic model selection":"Selección automática del modelo","Open chat & choose model":"Abrir chat y elegir modelo","AI assistant":"Asistente de IA"},
+fr:{"Productivity":"Productivité","Communication":"Communication","Email & calendars":"E-mails et agendas","Cloud storage":"Stockage cloud","Education":"Éducation","Creative & media":"Création et médias","Browsers & search":"Navigateurs et recherche","Everyday Google":"Google au quotidien","Media & discovery":"Médias et découverte","Work & school":"Travail et école","Connected account":"Compte connecté","Available":"Disponible","Add to My Apps":"Ajouter à Mes applications","Added to My Apps":"Ajouté à Mes applications","Open inline":"Ouvrir intégré","Remove":"Supprimer","Copy response":"Copier la réponse","Copy code":"Copier le code","Helpful":"Utile","Needs improvement":"À améliorer","Selected model:":"Modèle sélectionné :","Automatic model selection":"Sélection automatique du modèle","Open chat & choose model":"Ouvrir le chat et choisir un modèle","AI assistant":"Assistant IA"},
+de:{"Productivity":"Produktivität","Communication":"Kommunikation","Email & calendars":"E-Mail und Kalender","Cloud storage":"Cloud-Speicher","Education":"Bildung","Creative & media":"Kreativität und Medien","Browsers & search":"Browser und Suche","Everyday Google":"Google im Alltag","Media & discovery":"Medien und Entdecken","Work & school":"Arbeit und Schule","Connected account":"Verbundenes Konto","Available":"Verfügbar","Add to My Apps":"Zu Meine Apps hinzufügen","Added to My Apps":"Zu Meine Apps hinzugefügt","Open inline":"Eingebettet öffnen","Remove":"Entfernen","Copy response":"Antwort kopieren","Copy code":"Code kopieren","Helpful":"Hilfreich","Needs improvement":"Verbesserungsbedarf","Selected model:":"Ausgewähltes Modell:","Automatic model selection":"Automatische Modellauswahl","Open chat & choose model":"Chat öffnen und Modell wählen","AI assistant":"KI-Assistent"},
+ar:{"Productivity":"الإنتاجية","Communication":"التواصل","Email & calendars":"البريد والتقويم","Cloud storage":"التخزين السحابي","Education":"التعليم","Creative & media":"الإبداع والوسائط","Browsers & search":"المتصفحات والبحث","Everyday Google":"خدمات Google اليومية","Media & discovery":"الوسائط والاستكشاف","Work & school":"العمل والمدرسة","Connected account":"حساب متصل","Available":"متاح","Add to My Apps":"إضافة إلى تطبيقاتي","Added to My Apps":"تمت الإضافة إلى تطبيقاتي","Open inline":"فتح مضمّنًا","Remove":"إزالة","Copy response":"نسخ الرد","Copy code":"نسخ الرمز","Helpful":"مفيد","Needs improvement":"يحتاج إلى تحسين","Selected model:":"النموذج المحدد:","Automatic model selection":"اختيار النموذج تلقائيًا","Open chat & choose model":"فتح المحادثة واختيار النموذج","AI assistant":"مساعد الذكاء الاصطناعي"},
+hi:{"Productivity":"उत्पादकता","Communication":"संचार","Email & calendars":"ईमेल और कैलेंडर","Cloud storage":"क्लाउड स्टोरेज","Education":"शिक्षा","Creative & media":"रचनात्मकता और मीडिया","Browsers & search":"ब्राउज़र और खोज","Everyday Google":"रोज़मर्रा के Google ऐप्स","Media & discovery":"मीडिया और खोज","Work & school":"काम और स्कूल","Connected account":"जुड़ा हुआ खाता","Available":"उपलब्ध","Add to My Apps":"मेरे ऐप्स में जोड़ें","Added to My Apps":"मेरे ऐप्स में जोड़ा गया","Open inline":"इनलाइन खोलें","Remove":"हटाएँ","Copy response":"उत्तर कॉपी करें","Copy code":"कोड कॉपी करें","Helpful":"उपयोगी","Needs improvement":"सुधार की आवश्यकता","Selected model:":"चुना गया मॉडल:","Automatic model selection":"स्वचालित मॉडल चयन","Open chat & choose model":"चैट खोलें और मॉडल चुनें","AI assistant":"AI सहायक"}
+};
+for(const [lang,entries] of Object.entries(LL_CATEGORY_EXTRA))Object.assign(LL_LOCALES[lang],entries);
+
+
 for(const [lang,entries] of Object.entries(LL_EXTRA))Object.assign(LL_LOCALES[lang],entries);
 const LL_LANGUAGE_NAMES={en:'English',es:'Spanish',fr:'French',de:'German',ar:'Arabic',hi:'Hindi'};
 function localizedAIGreeting(){
@@ -2658,8 +2668,13 @@ function applyLanguage(root=document.body){
 let llLanguageObserver=null;
 function startLanguageObserver(){
  if(llLanguageObserver)llLanguageObserver.disconnect();
- llLanguageObserver=new MutationObserver(records=>{for(const record of records)for(const node of record.addedNodes)if(node.nodeType===1)applyLanguage(node)});
- llLanguageObserver.observe(document.body,{childList:true,subtree:true});
+ llLanguageObserver=new MutationObserver(records=>{
+   for(const record of records){
+     if(record.type==='characterData'){applyLanguage(record.target.parentElement||document.body);continue}
+     for(const node of record.addedNodes)if(node.nodeType===1)applyLanguage(node);
+   }
+ });
+ llLanguageObserver.observe(document.body,{childList:true,subtree:true,characterData:true});
  applyLanguage();
 }
 document.addEventListener('change',e=>{
