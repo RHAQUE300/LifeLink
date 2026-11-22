@@ -74,7 +74,11 @@ function googleHeader(headers, name) {
 }
 
 async function googleApiFetch(path, accessToken) {
-  const response = await fetch("https://www.googleapis.com" + path, {
+  // Gmail uses its own service endpoint; Calendar and Drive use www.googleapis.com.
+  const apiHost = path.startsWith("/gmail/")
+    ? "https://gmail.googleapis.com"
+    : "https://www.googleapis.com";
+  const response = await fetch(apiHost + path, {
     headers: { Authorization: "Bearer " + accessToken },
     signal: AbortSignal.timeout(15000)
   });
