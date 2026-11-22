@@ -217,6 +217,7 @@ main.in{animation-duration:.55s}
 .google-service-toolbar{display:flex;align-items:center;gap:12px;margin:12px 0 8px}
 .google-service-toolbar input{max-width:520px;min-width:0}
 .google-service-note{font-size:12px;margin:6px 0 14px}
+.google-workspace{display:grid;gap:16px;min-width:0}.google-workspace-top{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;padding:12px 14px;border:1px solid var(--gb);border-radius:14px;background:var(--g)}.google-workspace-top p{margin:5px 0 0;font-size:12px}.google-workspace-actions{display:flex;gap:8px;flex-wrap:wrap}.google-workspace-toolbar{display:flex;gap:8px;align-items:center;flex-wrap:wrap}.google-workspace-toolbar input{flex:1;min-width:180px}.google-workspace-list{display:grid;gap:8px}.google-workspace-item{display:flex;align-items:center;gap:12px;padding:13px 14px;border:1px solid var(--gb);border-radius:13px;background:var(--g);min-width:0}.google-workspace-item button.google-workspace-open{flex:1;min-width:0;text-align:left;background:none;border:0;color:inherit;padding:0;cursor:pointer}.google-workspace-item b,.google-workspace-item span{display:block;overflow-wrap:anywhere}.google-workspace-item .sub{margin:4px 0 0;font-size:12px}.google-workspace-detail{padding:18px;border:1px solid var(--gb);border-radius:14px;background:var(--g);min-width:0}.google-workspace-detail pre{white-space:pre-wrap;overflow-wrap:anywhere;font:inherit;font-size:13px;line-height:1.6;max-height:48vh;overflow:auto;margin:16px 0 0}.google-workspace-empty{padding:28px 18px;text-align:center;border:1px dashed var(--gb);border-radius:14px}.google-workspace-loading{padding:24px;text-align:center}.google-workspace-item .tag{flex:none}.google-workspace-meta{font-size:11px;color:var(--muted);white-space:nowrap}
 .google-service-group[hidden],.google-service-card[hidden]{display:none!important}
 @media(max-width:560px){.google-service-toolbar{align-items:stretch;flex-direction:column}.google-service-toolbar input{max-width:none}}
 body.google-manager-active:after{content:"";position:fixed;inset:0;z-index:49;background:rgba(28,35,52,.32);backdrop-filter:blur(3px);-webkit-backdrop-filter:blur(3px);pointer-events:none}
@@ -335,6 +336,7 @@ const LL_CONFIG={
 let supabaseClient=null, supabaseSession=null, supabaseLoadPromise=null;
 
 let googleGISPromise=null, googleConnectionStatus=null, googleConnectionBusy=false, googleStatusPromise=null, googleConnectionError='';
+let activeGoogleService=null, googleServiceLoading=false, googleServiceError='', googleServiceData=null, googleMessageOpen=null, googleServiceQuery='';
 function loadGoogleGIS(){
   if(window.google?.accounts?.oauth2)return Promise.resolve(true);
   if(googleGISPromise)return googleGISPromise;
@@ -1231,13 +1233,74 @@ function googleManagerMarkup(){
     const cards=services.map(service=>{
       const added=selected.includes(service.id);
       const search=[service.name,service.detail,service.group].join(' ').toLowerCase();
-      return `<div class="glass card google-service-card" data-search="${esc(search)}"><b>${esc(service.name)}</b><div class="sub">${esc(service.detail)}</div><span class="tag ${added?'low':''}">${added?'Added to Apps':'Available to add'}</span><button class="btn ${added?'':'pri'}" data-a="googleservice" data-i="${service.id}" data-k="${added?'remove':'add'}">${added?'Remove from Apps':'＋ Add to Apps'}</button></div>`;
+      return `<div class="glass card google-service-card" data-search="${esc(search)}"><b>${esc(service.name)}</b><div class="sub">${esc(service.detail)}</div><span class="tag ${added?'low':''}">${added?'Added to Apps':'Available to add'}</span><button class="btn" data-a="googleopen" data-i="${service.id}">Open in LifeLink</button><button class="btn ${added?'':'pri'}" data-a="googleservice" data-i="${service.id}" data-k="${added?'remove':'add'}">${added?'Remove from Apps':'＋ Add to Apps'}</button></div>`;
     }).join('');
     return `<section class="google-service-group"><h3>${group}</h3><div class="google-services-grid">${cards}</div></section>`;
   }).join('');
-  return `<div class="google-manager-section" style="margin-bottom:28px"><div style="display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:14px;flex-wrap:wrap"><div><b style="font-size:18px">Google accounts</b><div class="sub" style="margin:4px 0 0;font-size:13px">${accounts.length} connected account${accounts.length===1?'':'s'}</div></div><div style="display:flex;gap:8px"><button class="btn" data-a="googlerefresh" style="white-space:nowrap">Refresh</button><button class="btn pri" data-a="googleconn" style="white-space:nowrap">＋ Add account</button></div></div>${accountContent}</div><div class="google-manager-section"><h2 style="margin-bottom:6px">Google services</h2><p class="sub google-service-note">Choose which Google web apps appear as tiles on your Apps page. These shortcuts open the Google service; Google data syncing inside LifeLink is configured separately.</p><div class="google-service-toolbar"><input id="google-service-search" type="search" placeholder="Find a Google service…" autocomplete="off"><span class="tag">${GOOGLE_SERVICE_CATALOG.length} services</span></div><div id="google-service-groups">${serviceGroups}</div><p id="google-service-empty" class="sub" style="display:none;margin-top:14px">No Google services match that search.</p></div>`;
+  return `<div class="google-manager-section" style="margin-bottom:28px"><div style="display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:14px;flex-wrap:wrap"><div><b style="font-size:18px">Google accounts</b><div class="sub" style="margin:4px 0 0;font-size:13px">${accounts.length} connected account${accounts.length===1?'':'s'}</div></div><div style="display:flex;gap:8px"><button class="btn" data-a="googlerefresh" style="white-space:nowrap">Refresh</button><button class="btn pri" data-a="googleconn" style="white-space:nowrap">＋ Add account</button></div></div>${accountContent}</div><div class="google-manager-section"><h2 style="margin-bottom:6px">Google services</h2><p class="sub google-service-note">Choose which Google services appear on your Apps page. Gmail, Calendar and Drive now open inside LifeLink using Google's APIs; other services will be added as native interfaces become available.</p><div class="google-service-toolbar"><input id="google-service-search" type="search" placeholder="Find a Google service…" autocomplete="off"><span class="tag">${GOOGLE_SERVICE_CATALOG.length} services</span></div><div id="google-service-groups">${serviceGroups}</div><p id="google-service-empty" class="sub" style="display:none;margin-top:14px">No Google services match that search.</p></div>`;
 }
 function renderGoogleManager(){const markup=googleManagerMarkup();const settings=$('#settings-google-manager');if(settings)settings.innerHTML=markup;if(islandMode==='google')$('#island-body').innerHTML=markup}
+async function requestGoogleService(operation,params={}){
+  const accounts=Array.isArray(googleConnectionStatus?.accounts)?googleConnectionStatus.accounts:[];
+  const accountId=accounts.some(account=>account.id===S.googleActiveAccountId)?S.googleActiveAccountId:(accounts[0]?.id||null);
+  if(!accountId)throw new Error('Connect a Google account in Settings first.');
+  return googleApi('/api/google/data','POST',{accountId,operation,...params});
+}
+function googleServiceMarkup(){
+  const id=activeGoogleService,service=GOOGLE_SERVICE_CATALOG.find(item=>item.id===id);
+  if(!service)return '<div class="google-workspace-empty">Choose a Google service.</div>';
+  const accounts=Array.isArray(googleConnectionStatus?.accounts)?googleConnectionStatus.accounts:[];
+  const hasAccount=accounts.length>0;
+  const header=`<div class="google-workspace-top"><div><b>${esc(service.name)}</b><p>${hasAccount?'Connected as '+esc((accounts.find(a=>a.id===S.googleActiveAccountId)||accounts[0]).email||'Google account'):'No Google account connected'} · Google API connection · read-only</p></div><div class="google-workspace-actions"><button class="btn" data-a="googlehome">Google apps</button><button class="btn" data-a="googlerefreshapp" ${!hasAccount?'disabled':''}>Refresh</button></div></div>`;
+  if(!hasAccount)return `<div class="google-workspace">${header}<div class="google-workspace-empty"><b>Connect a Google account</b><p class="sub">LifeLink uses Google's APIs behind this interface. It does not load Google's website inside the island.</p><button class="btn pri" data-a="googleconn">＋ Connect Google account</button></div></div>`;
+  if(!['gmail','calendar','drive'].includes(id))return `<div class="google-workspace">${header}<div class="google-workspace-empty"><b>Native LifeLink interface not available yet</b><p class="sub">This service is in the catalogue, but its LifeLink interface and API connection have not been implemented yet. It will not be opened as a blank embedded website.</p><button class="btn" data-a="googlehome">Back to Google services</button></div></div>`;
+  if(googleServiceLoading)return `<div class="google-workspace">${header}<div class="google-workspace-loading"><span class="sub">Loading from Google…</span></div></div>`;
+  if(googleServiceError)return `<div class="google-workspace">${header}<div class="google-manager-error"><div><b>Google couldn't return this data</b><div class="sub" style="margin:4px 0 0;font-size:12px">${esc(googleServiceError)}</div></div><button class="btn" data-a="googlerefreshapp">Retry</button></div></div>`;
+  const data=googleServiceData||{};
+  if(id==='gmail'){
+    if(googleMessageOpen&&data.message){
+      const m=data.message;
+      return `<div class="google-workspace">${header}<div class="google-workspace-detail"><button class="btn" data-a="googleback">← Inbox</button><h2 style="margin:16px 0 8px">${esc(m.subject||'(no subject)')}</h2><div class="sub" style="font-size:12px">From ${esc(m.from||'Unknown sender')} · ${esc(m.date||'')}</div><div class="sub" style="font-size:12px;margin-top:5px">To ${esc(m.to||'')}</div><pre>${esc(m.body||m.snippet||'No readable message text was returned.')}</pre></div></div>`;
+    }
+    const messages=Array.isArray(data.messages)?data.messages:[];
+    return `<div class="google-workspace">${header}<div class="google-workspace-toolbar"><input id="google-app-search" type="search" placeholder="Search inbox (press Enter)" value="${esc(googleServiceQuery)}"><button class="btn pri" data-a="googlesearch">Search</button></div><div class="google-workspace-list">${messages.length?messages.map(m=>`<div class="google-workspace-item"><button class="google-workspace-open" data-a="googlemsg" data-i="${esc(m.id)}"><b>${esc(m.subject||'(no subject)')}</b><span class="sub">${esc(m.from||'Unknown sender')} · ${esc(m.snippet||'')}</span></button><span class="google-workspace-meta">${esc(m.date||'')}</span></div>`).join(''):'<div class="google-workspace-empty">Your inbox is empty, or no messages match that search.</div>'}</div></div>`;
+  }
+  if(id==='calendar'){
+    const events=Array.isArray(data.events)?data.events:[];
+    return `<div class="google-workspace">${header}<div class="google-workspace-toolbar"><span class="tag low">Upcoming events</span><span class="sub" style="margin:0">Primary calendar</span></div><div class="google-workspace-list">${events.length?events.map(ev=>`<div class="google-workspace-item"><div style="flex:1;min-width:0"><b>${esc(ev.summary||'(Untitled event)')}</b><span class="sub">${esc(ev.start||'Time not set')}${ev.location?' · '+esc(ev.location):''}</span>${ev.description?`<span class="sub">${esc(ev.description)}</span>`:''}</div><span class="tag">Event</span></div>`).join(''):'<div class="google-workspace-empty">No upcoming events were found.</div>'}</div></div>`;
+  }
+  const files=Array.isArray(data.files)?data.files:[];
+  return `<div class="google-workspace">${header}<div class="google-workspace-toolbar"><input id="google-app-search" type="search" placeholder="Search Drive files (press Enter)" value="${esc(googleServiceQuery)}"><button class="btn pri" data-a="googlesearch">Search</button></div><div class="google-workspace-list">${files.length?files.map(file=>`<div class="google-workspace-item"><div style="flex:1;min-width:0"><b>${esc(file.name||'Untitled file')}</b><span class="sub">${esc(file.mimeType||'File')} · Modified ${esc(file.modifiedTime||'Unknown')}</span></div>${file.webViewLink?`<a class="btn" href="${esc(file.webViewLink)}" target="_blank" rel="noopener noreferrer">Open ↗</a>`:''}</div>`).join(''):'<div class="google-workspace-empty">No files were found.</div>'}</div></div>`;
+}
+function renderGoogleService(){const service=GOOGLE_SERVICE_CATALOG.find(item=>item.id===activeGoogleService);if(!service)return;$('#island-title').textContent=service.name;$('#island-expand').style.display='inline-block';$('#island-expand').textContent='Google apps';$('#island-expand').onclick=()=>openIsland('google');$('#island-body').innerHTML=googleServiceMarkup()}
+async function refreshGoogleService(query){
+  if(!activeGoogleService)return;
+  const id=activeGoogleService;
+  googleServiceLoading=true;googleServiceError='';googleServiceData=null;renderGoogleService();
+  try{
+    if(id==='gmail')googleServiceData=await requestGoogleService('gmail.list',{query:query||'in:inbox',maxResults:25});
+    else if(id==='calendar')googleServiceData=await requestGoogleService('calendar.list',{maxResults:50});
+    else if(id==='drive')googleServiceData=await requestGoogleService('drive.list',{query:query||'',pageSize:50});
+    else return;
+  }catch(error){googleServiceError=String(error?.message||error||'Google request failed')}
+  finally{googleServiceLoading=false;renderGoogleService()}
+}
+async function openGoogleService(serviceId){
+  const service=GOOGLE_SERVICE_CATALOG.find(item=>item.id===serviceId);
+  if(!service)return;
+  activeGoogleService=serviceId;googleServiceQuery='';googleMessageOpen=null;googleServiceData=null;googleServiceError='';googleServiceLoading=false;
+  if(islandMode==='google-service'&&$('#island').classList.contains('open')){renderGoogleService();refreshGoogleService();return}
+  openIsland('google-service');
+  if(googleConnectionStatus===null)await refreshGoogleConnectionStatus();
+  if(['gmail','calendar','drive'].includes(serviceId))await refreshGoogleService();
+  else renderGoogleService();
+}
+async function openGoogleMessage(messageId){
+  googleMessageOpen=messageId;googleServiceLoading=true;googleServiceError='';googleServiceData={};renderGoogleService();
+  try{googleServiceData=await requestGoogleService('gmail.get',{messageId})}
+  catch(error){googleServiceError=String(error?.message||error||'Could not open message')}
+  finally{googleServiceLoading=false;renderGoogleService()}
+}
 function openIsland(mode){
   const isl=$('#island'),tit=$('#island-title'),body=$('#island-body'),exp=$('#island-expand');
   clearTimeout(islandCloseTimer);islandCloseSeq++;
@@ -1245,11 +1308,16 @@ function openIsland(mode){
   exp.style.display='inline-block';
   if(isl.classList.contains('open') && islandMode === mode){closeIsland();return;}
   islandMode=mode;
-  if(mode==='google'){isl.style.left='';isl.style.top='';isl.style.right='';isl.style.bottom='';}
-  isl.classList.toggle('google-manager-open',mode==='google');document.body.classList.toggle('google-manager-active',mode==='google');isl.classList.add('open');exp.style.display='inline-block';
+  if(mode==='google'||mode==='google-service'){isl.style.left='';isl.style.top='';isl.style.right='';isl.style.bottom='';}
+  const isGoogleIsland=mode==='google'||mode==='google-service';
+  isl.classList.toggle('google-manager-open',isGoogleIsland);document.body.classList.toggle('google-manager-active',isGoogleIsland);isl.classList.add('open');exp.style.display='inline-block';
   if(mode==='google'){
     tit.textContent='Google accounts';exp.style.display='none';body.innerHTML=googleManagerMarkup();
     refreshGoogleConnectionStatus();
+  }
+  else if(mode==='google-service'){
+    renderGoogleService();
+    if(googleConnectionStatus===null)refreshGoogleConnectionStatus();
   }
   else if(mode=='ai'){
     exp.style.display='inline-block';
@@ -2348,11 +2416,11 @@ const X=(i,b)=>{const t=S.tasks.find(x=>x.id==i),delT=()=>{S.tasks=S.tasks.filte
  aiundo:()=>{const sn=aiUndo[i];if(!sn){toast('Undo is no longer available for this change.');return}delete aiUndo[i];aiRestore(sn);toast('Undone ✓')},
  openlink:()=>{const arr=b.dataset.k==='home'?S.links:((S.tasks.find(x=>x.id==U.tid)||{}).links||[]);const l=arr[+i];if(l)openBrowser(l.u)},
  nologo:()=>{S.logo='';save();applyPrefs();updateAvatar();if(islandMode=='account')refreshIsland();toast('Profile picture reset')},
- ghconn:()=>startGitHubConnect(),ghdisc:()=>disconnectGitHub(),googlepopup:()=>{closeIsland();location.hash='#/settings'},googleconn:()=>startGoogleConnect(),googleservice:()=>setGoogleService(i,b.dataset.k==='add'),googleserviceremove:()=>setGoogleService(i,false),googlerefresh:()=>{googleConnectionStatus=null;googleConnectionError='';refreshGoogleConnectionStatus()},googleuse:()=>{S.googleActiveAccountId=i;save();renderGoogleManager();if(location.hash.includes('/apps'))al()},googledisc:()=>disconnectGoogleAccount(i),
+ ghconn:()=>startGitHubConnect(),ghdisc:()=>disconnectGitHub(),googlepopup:()=>{closeIsland();location.hash='#/settings'},googleconn:()=>startGoogleConnect(),googleopen:()=>openGoogleService(i),googlehome:()=>openIsland('google'),googlerefreshapp:()=>refreshGoogleService(),googlesearch:()=>{googleServiceQuery=$('#google-app-search')?.value||'';refreshGoogleService(googleServiceQuery)},googlemsg:()=>openGoogleMessage(i),googleback:()=>{googleMessageOpen=null;refreshGoogleService()},googleservice:()=>setGoogleService(i,b.dataset.k==='add'),googleserviceremove:()=>setGoogleService(i,false),googlerefresh:()=>{googleConnectionStatus=null;googleConnectionError='';refreshGoogleConnectionStatus()},googleuse:()=>{S.googleActiveAccountId=i;save();renderGoogleManager();if(location.hash.includes('/apps'))al()},googledisc:()=>disconnectGoogleAccount(i),
  apptab:()=>{U.appTab=i==='discover'?'discover':'mine';if(U.appTab==='mine')U.aq='';al()},
  appadd:()=>addAppToShelf(i),
  appremove:()=>removeAppFromShelf(i),
- appopen:()=>{if(i==='connected:github'){openBrowser('https://github.com/');return}const app=appShelfRecords().find(item=>item.id===i);if(app)openBrowser(app.url)},
+ appopen:()=>{if(i==='connected:github'){openBrowser('https://github.com/');return}const app=appShelfRecords().find(item=>item.id===i);if(app&&String(i).startsWith('google:')){openGoogleService(String(i).slice(7));return}if(app)openBrowser(app.url)},
  appcustom:()=>ask('Add a website to My Apps',[['name','App name*','text'],['url','Website URL*','url']],{name:U.aq.trim(),url:/^https?:\/\//i.test(U.aq.trim())?U.aq.trim():''},data=>{
    const name=String(data.name||'').trim(),raw=String(data.url||'').trim();
    if(!name||!raw){toast('Enter an app name and website URL');return}
@@ -2399,11 +2467,12 @@ document.addEventListener('click',e=>{
   const f=X(b.dataset.i,b)[b.dataset.a];if(f)f();
 });
 document.addEventListener('input',e=>{if(!S.loggedIn)return;const el=e.target,id=el.id,v=el.value,t=S.tasks.find(x=>x.id==U.tid),n=S.notes.find(x=>x.id==U.nid);
- if(id==='google-service-search'){filterGoogleServices(v)}else if(id=='q'){U.q=v;tl()}else if(id=='f'){U.f=v;tl()}else if(id=='s'){U.s=v;tl()}else if(id=='aq'){U.aq=v;al()}else if(id=='nq'){U.nq=v;nl()}else if(id=='cv'){U.cv=v;render()}
+ if(id==='google-service-search'){filterGoogleServices(v)}else if(id==='google-app-search'){googleServiceQuery=v}else if(id=='q'){U.q=v;tl()}else if(id=='f'){U.f=v;tl()}else if(id=='s'){U.s=v;tl()}else if(id=='aq'){U.aq=v;al()}else if(id=='nq'){U.nq=v;nl()}else if(id=='cv'){U.cv=v;render()}
  else if((id=='nt'||id=='nb')&&n){n[id=='nt'?'title':'body']=v;n.ts=Date.now();save();$('#sv').textContent='Saved '+new Date().toLocaleTimeString();nl()}
  else if(id=='wn'&&t){t.notes=v;save()}else if(id=='wp'&&t){t.prog=+v;$('#wpv').textContent=v+'%';save()}else if(id=='pn'){S.name=v.trim()||'User';save();updateAvatar()}else if(id==='ai-learn-enabled'){S.aiLearning.enabled=el.checked;save();toast(el.checked?'Adaptive learning enabled':'Adaptive learning paused')}});
 
 addEventListener('keydown',e=>{
+  if(e.key==='Enter'&&e.target&&e.target.id==='google-app-search'){e.preventDefault();googleServiceQuery=e.target.value||'';refreshGoogleService(googleServiceQuery);return}
   if(e.key=='Escape'){
     const mo=$('#modal-backdrop').classList.contains('open'),bo=$('#browser-modal').classList.contains('open');
     if(mo||bo){closeModal();closeBrowser();return}
