@@ -643,7 +643,7 @@ export default {
             method: "PUT",
             headers: { Authorization: "Bearer " + accessToken, "Content-Type": contentType },
             body: fixedLengthBody.readable,
-            signal: AbortSignal.timeout(180000)
+            signal: AbortSignal.timeout(720000)
           });
           const [uploaded] = await Promise.all([uploadedPromise, pipeUploadBody]);
           let uploadedFile = {};
