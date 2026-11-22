@@ -859,6 +859,34 @@ async function googleDrivePreviewFile(file){
     }
   }
 }
+function setDriveUploadProgress(message){
+  const node=$('#toast');if(!node)return;
+  clearTimeout(toast.t);node.textContent=message;node.classList.add('open');
+}
+function sendDriveUpload(url,file,accessToken,onProgress){
+  return new Promise((resolve,reject)=>{
+    const xhr=new XMLHttpRequest();
+    xhr.open('POST',url,true);
+    xhr.timeout=720000;
+    xhr.setRequestHeader('Authorization','Bearer '+accessToken);
+    xhr.setRequestHeader('X-Requested-With','XMLHttpRequest');
+    xhr.setRequestHeader('Content-Type',file.type||'application/octet-stream');
+    xhr.upload.onprogress=event=>{
+      if(event.lengthComputable&&typeof onProgress==='function'){
+        onProgress(Math.min(100,Math.round(event.loaded/event.total*100)));
+      }
+    };
+    xhr.onload=()=>{
+      let result={};try{result=JSON.parse(xhr.responseText||'{}')}catch{}
+      if(xhr.status>=200&&xhr.status<300)resolve(result);
+      else reject(new Error(result.error||('Upload failed ('+xhr.status+')')));
+    };
+    xhr.onerror=()=>reject(new Error('The upload connection was interrupted.'));
+    xhr.ontimeout=()=>reject(new Error('The upload took too long. Try a smaller file or a steadier connection.'));
+    xhr.onabort=()=>reject(new Error('The upload was cancelled.'));
+    xhr.send(file);
+  });
+}
 async function uploadGoogleDriveFiles(files){
   const list=Array.from(files||[]);
   if(!list.length)return;
@@ -874,21 +902,14 @@ async function uploadGoogleDriveFiles(files){
     for(let index=0;index<list.length;index++){
       const file=list[index];
       if(file.size>99000000)throw new Error(file.name+' is larger than the current 99 MB per-file upload limit.');
-      toast('Uploading '+(index+1)+' of '+list.length+': '+file.name);
       const params=new URLSearchParams({accountId:account.id,name:file.name});
       if(targetFolderId)params.set('parentId',targetFolderId);
-      const response=await fetch(LL_CONFIG.apiUrl+'/api/google/upload?'+params.toString(),{
-        method:'POST',
-        headers:{
-          Authorization:'Bearer '+data.session.access_token,
-          'X-Requested-With':'XMLHttpRequest',
-          'Content-Type':file.type||'application/octet-stream'
-        },
-        body:file,
-        cache:'no-store'
+      const url=LL_CONFIG.apiUrl+'/api/google/upload?'+params.toString();
+      const prefix='Uploading '+(index+1)+' of '+list.length+': '+file.name;
+      setDriveUploadProgress(prefix+' · 0%');
+      await sendDriveUpload(url,file,data.session.access_token,percent=>{
+        setDriveUploadProgress(prefix+' · '+percent+'%');
       });
-      let result={};try{result=await response.json()}catch{}
-      if(!response.ok)throw new Error(result.error||('Upload failed for '+file.name));
       uploaded++;
     }
     if(activeGoogleService==='drive')await refreshGoogleService();
