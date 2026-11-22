@@ -715,15 +715,11 @@ function toast(m){
   const t=$('#toast');t.textContent=m;t.classList.add('open');
   clearTimeout(toast.t);toast.t=setTimeout(()=>t.classList.remove('open'),3200);
 }
-let browserStatusTimer=null,activeBrowserApp=null,activeBrowserBlobUrl=null;
+let browserStatusTimer=null,activeBrowserApp=null;
 function appIntegrationInfo(app){
   const name=String(app?.name||'Website');
   const host=(()=>{try{return new URL(app?.url||'').hostname.replace(/^www\./,'')}catch{return ''}})();
   return {name,host,kind:'web',description:'LifeLink is trying the provider’s normal website view. Some providers permit embedding; others require their own browser window or sign-in flow.'};
-}
-function releaseBrowserBlob(delay=1200){
-  const old=activeBrowserBlobUrl;activeBrowserBlobUrl=null;
-  if(old)setTimeout(()=>URL.revokeObjectURL(old),delay);
 }
 function setBrowserLoading(label){
   const loading=$('#browser-loading'),text=$('#browser-loading-text');
@@ -739,11 +735,11 @@ function openBrowser(u,app=null){
     if(!['http:','https:'].includes(parsed.protocol))throw new Error('Invalid protocol');
     target=parsed.href;
   }catch(e){toast('Enter a valid website URL');return}
-  releaseBrowserBlob();
   $('#browser-url').value=target;
   activeBrowserApp=app||{name:new URL(target).hostname.replace(/^www\./,'') ,url:target};
   const info=appIntegrationInfo(activeBrowserApp);
   const iframe=$('#browser-frame'),fb=$('#browser-fallback'),eb=$('#browser-embed-btn'),status=$('#browser-status');
+  iframe.referrerPolicy='strict-origin-when-cross-origin';
   fb.style.display='none';eb.style.display='inline-block';iframe.style.display='block';
   iframe.classList.remove('loaded');
   clearTimeout(browserStatusTimer);setBrowserLoading('Opening '+info.name+' inside LifeLink…');
@@ -768,44 +764,42 @@ function openBrowser(u,app=null){
     }
   },15000);
 }
-function openBrowserBlobPreview(blob,file){
-  releaseBrowserBlob();
-  const objectUrl=URL.createObjectURL(blob);activeBrowserBlobUrl=objectUrl;
-  activeBrowserApp={name:String(file?.name||'Drive file'),url:objectUrl,kind:'drive-file'};
+function prepareDrivePreview(file){
+  activeBrowserApp={name:String(file?.name||'Drive file'),fileId:file?.id,kind:'drive-file'};
   const iframe=$('#browser-frame'),fb=$('#browser-fallback'),eb=$('#browser-embed-btn'),status=$('#browser-status');
-  fb.style.display='none';eb.style.display='none';iframe.style.display='block';iframe.classList.remove('loaded');
+  iframe.referrerPolicy='no-referrer';
+  fb.style.display='none';eb.style.display='none';iframe.style.display='block';
+  iframe.classList.remove('loaded');iframe.onload=null;iframe.onerror=null;
+  iframe.removeAttribute('src');iframe.src='about:blank';
   $('#browser-url').value='Google Drive · '+String(file?.name||'Drive file');
-  if(status)status.textContent='Loading preview from Google Drive…';
-  setBrowserLoading('Preparing '+String(file?.name||'Drive file')+'…');
+  if(status)status.textContent='Connecting securely to Google Drive…';
+  setBrowserLoading('Connecting securely to Google Drive…');
   clearTimeout(browserStatusTimer);
+  $('#browser-modal').classList.add('open');
+}
+function openBrowserStreamPreview(streamUrl,file){
+  if(activeBrowserApp?.kind!=='drive-file'||activeBrowserApp.fileId!==file?.id)return;
+  const iframe=$('#browser-frame'),status=$('#browser-status');
+  iframe.referrerPolicy='no-referrer';
+  iframe.classList.remove('loaded');
+  if(status)status.textContent='Streaming preview · '+String(file?.name||'Drive file');
+  setBrowserLoading('Opening '+String(file?.name||'Drive file')+'…');
   iframe.onload=()=>{
     iframe.classList.add('loaded');clearBrowserLoading();
     if(status)status.textContent='Preview ready · '+String(file?.name||'Drive file');
   };
   iframe.onerror=()=>{
     clearBrowserLoading();iframe.classList.add('loaded');
-    if(status)status.textContent='The browser could not render this file type. Use the download control in the viewer if available.';
+    if(status)status.textContent='The browser could not render this file type. Download it from Google Drive instead.';
   };
-  iframe.removeAttribute('src');iframe.src=objectUrl;
-  $('#browser-modal').classList.add('open');
+  iframe.removeAttribute('src');iframe.src=streamUrl;
+  clearTimeout(browserStatusTimer);
   browserStatusTimer=setTimeout(()=>{
-    if(status&&status.textContent.startsWith('Loading preview')){
+    if(status&&status.textContent.startsWith('Streaming preview')){
       iframe.classList.add('loaded');clearBrowserLoading();
       status.textContent='The preview is taking longer than expected.';
     }
   },20000);
-}
-function prepareDrivePreview(file){
-  releaseBrowserBlob();
-  activeBrowserApp={name:String(file?.name||'Drive file'),url:'',kind:'drive-file'};
-  const iframe=$('#browser-frame'),fb=$('#browser-fallback'),eb=$('#browser-embed-btn'),status=$('#browser-status');
-  fb.style.display='none';eb.style.display='none';iframe.style.display='block';iframe.classList.remove('loaded');
-  iframe.onload=null;iframe.onerror=null;iframe.removeAttribute('src');
-  $('#browser-url').value='Google Drive · '+String(file?.name||'Drive file');
-  if(status)status.textContent='Connecting securely to Google Drive…';
-  setBrowserLoading('Connecting securely to Google Drive…');
-  clearTimeout(browserStatusTimer);
-  $('#browser-modal').classList.add('open');
 }
 async function googleDrivePreviewFile(file){
   if(!file||!file.id)return;
@@ -817,22 +811,26 @@ async function googleDrivePreviewFile(file){
     if(!await ensureSupabaseClient())throw new Error('LifeLink sign-in is unavailable');
     const {data,error}=await supabaseClient.auth.getSession();
     if(error||!data.session?.access_token)throw new Error('Please sign in to LifeLink again');
-    const params=new URLSearchParams({accountId:account.id,fileId:file.id,name:file.name||'Drive file'});
     const nativeGoogleFile=/^application\/vnd\.google-apps\.(document|spreadsheet|presentation)$/.test(String(file.mimeType||''));
-    if(nativeGoogleFile)params.set('export','pdf');
-    const response=await fetch(LL_CONFIG.apiUrl+'/api/google/file?'+params.toString(),{
-      method:'GET',
-      headers:{Authorization:'Bearer '+data.session.access_token,'X-Requested-With':'XMLHttpRequest'},
+    const response=await fetch(LL_CONFIG.apiUrl+'/api/google/stream-session',{
+      method:'POST',
+      headers:{
+        Authorization:'Bearer '+data.session.access_token,
+        'X-Requested-With':'XMLHttpRequest',
+        'Content-Type':'application/json'
+      },
+      body:JSON.stringify({
+        accountId:account.id,
+        fileId:file.id,
+        name:file.name||'Drive file',
+        exportPdf:nativeGoogleFile
+      }),
       cache:'no-store'
     });
-    if(!response.ok){
-      let result={};try{result=await response.json()}catch{}
-      throw new Error(result.error||'Google Drive could not load this file');
-    }
-    const blob=await response.blob();
-    if(!blob.size)throw new Error('Google Drive returned an empty file');
-    if(activeBrowserApp?.kind!=='drive-file'||activeBrowserApp.name!==String(file.name||'Drive file'))return;
-    openBrowserBlobPreview(blob,file);
+    let result={};try{result=await response.json()}catch{}
+    if(!response.ok||!result.url)throw new Error(result.error||'Google Drive could not create a secure preview link');
+    if(activeBrowserApp?.kind!=='drive-file'||activeBrowserApp.fileId!==file.id)return;
+    openBrowserStreamPreview(result.url,file);
   }catch(error){
     clearBrowserLoading();closeBrowser();
     toast('Drive preview failed: '+String(error?.message||error).slice(0,180));
@@ -877,24 +875,20 @@ async function uploadGoogleDriveFiles(files){
   }
 }
 function openBrowserPopup(){
-  const url=$('#browser-url').value;
-  if(activeBrowserBlobUrl){window.open(activeBrowserBlobUrl,'_blank','noopener');return}
-  const w=Math.min(1180, screen.width-80), h=Math.min(800, screen.height-80);
-  const left=Math.round((screen.width-w)/2), top=Math.round((screen.height-h)/2);
-  window.open(url,'lifelink_app','width='+w+',height='+h+',left='+left+',top='+top+',noopener,noreferrer');
+  const url=activeBrowserApp?.kind==='drive-file'?$('#browser-frame').src:$('#browser-url').value;
+  if(url&&url!=='about:blank')window.open(url,'lifelink_app','noopener,noreferrer');
 }
 function openBrowserExternal(){
-  const url=activeBrowserBlobUrl||$('#browser-url').value;
-  if(url)window.open(url,'_blank','noopener,noreferrer');
+  const url=activeBrowserApp?.kind==='drive-file'?$('#browser-frame').src:$('#browser-url').value;
+  if(url&&url!=='about:blank')window.open(url,'_blank','noopener,noreferrer');
 }
 function closeBrowser(){
   clearTimeout(browserStatusTimer);activeBrowserApp=null;
   $('#browser-modal').classList.remove('open');clearBrowserLoading();
   setTimeout(()=>{
     const frame=$('#browser-frame');
-    if(frame){frame.removeAttribute('src');frame.src='about:blank';frame.style.display='block';frame.classList.remove('loaded');}
+    if(frame){frame.removeAttribute('src');frame.src='about:blank';frame.style.display='block';frame.classList.remove('loaded');frame.referrerPolicy='strict-origin-when-cross-origin';}
     $('#browser-fallback').style.display='none';
-    releaseBrowserBlob(1000);
   },420);
 }
 
