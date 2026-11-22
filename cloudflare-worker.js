@@ -343,6 +343,93 @@ export default {
 
     const url = new URL(request.url);
 
+    // Short-lived capability URLs let native browser media viewers request byte ranges
+    // directly from Google Drive without exposing Google OAuth tokens to the iframe.
+    if (url.pathname === "/api/google/stream") {
+      if (!["GET", "HEAD"].includes(request.method)) return json({ error: "Method not allowed" }, 405);
+      if (!env.GOOGLE_TOKENS) return json({ error: "Google token storage is not configured" }, 500);
+      const streamToken = url.searchParams.get("token") || "";
+      if (!/^[a-f0-9]{64}$/.test(streamToken)) return json({ error: "Invalid or expired Drive preview link" }, 401);
+      const stream = await env.GOOGLE_TOKENS.get("drive-stream:" + streamToken, "json");
+      if (!stream || typeof stream !== "object" || !stream.userId || !stream.fileId || !stream.accountId) {
+        return json({ error: "This Drive preview link has expired. Reopen the file from LifeLink." }, 401);
+      }
+      const accountKey = stream.accountId === "legacy"
+        ? "google:" + stream.userId
+        : "google:" + stream.userId + ":" + stream.accountId;
+      const saved = await env.GOOGLE_TOKENS.get(accountKey, "json");
+      if (!saved || typeof saved.refresh_token !== "string" || !saved.refresh_token) {
+        return json({ error: "The Google account is disconnected. Reconnect it in LifeLink." }, 401);
+      }
+
+      let accessToken = typeof saved.access_token === "string" && Number(saved.expires_at) > Date.now() + 60000
+        ? saved.access_token : "";
+      if (!accessToken) {
+        const googleClientId = typeof env.GOOGLE_CLIENT_ID === "string" ? env.GOOGLE_CLIENT_ID.trim() : "";
+        const googleClientSecret = typeof env.GOOGLE_CLIENT_SECRET === "string" ? env.GOOGLE_CLIENT_SECRET.trim() : "";
+        if (!googleClientId || !googleClientSecret) return json({ error: "Google OAuth is not configured on the server" }, 500);
+        const tokenResponse = await fetch("https://oauth2.googleapis.com/token", {
+          method: "POST",
+          headers: { "Content-Type": "application/x-www-form-urlencoded" },
+          body: new URLSearchParams({
+            client_id: googleClientId, client_secret: googleClientSecret,
+            refresh_token: saved.refresh_token, grant_type: "refresh_token"
+          }),
+          signal: AbortSignal.timeout(15000)
+        });
+        let tokenData = {};
+        try { tokenData = await tokenResponse.json(); } catch {}
+        if (!tokenResponse.ok || !tokenData.access_token) {
+          return json({ error: "Google authorization expired or was revoked. Reconnect this account in Settings." }, 401);
+        }
+        accessToken = tokenData.access_token;
+        await env.GOOGLE_TOKENS.put(accountKey, JSON.stringify({
+          ...saved, refresh_token: saved.refresh_token, access_token: accessToken,
+          expires_at: Date.now() + Math.max(60, Number(tokenData.expires_in) || 3600) * 1000
+        }));
+      }
+
+      const apiPath = stream.exportPdf
+        ? "/drive/v3/files/" + encodeURIComponent(stream.fileId) + "/export?mimeType=application%2Fpdf"
+        : "/drive/v3/files/" + encodeURIComponent(stream.fileId) + "?alt=media";
+      const headers = { Authorization: "Bearer " + accessToken };
+      const range = request.headers.get("Range");
+      if (range && !stream.exportPdf && /^bytes=[0-9]*-[0-9]*(,[0-9]*-[0-9]*)*$/.test(range)) headers.Range = range;
+      const upstream = await fetch("https://www.googleapis.com" + apiPath, {
+        method: "GET", headers, signal: AbortSignal.timeout(60000)
+      });
+      if (!upstream.ok) {
+        let detail = {};
+        try { detail = await upstream.json(); } catch {}
+        return json({ error: String(detail?.error?.message || "Google Drive could not stream this file (" + upstream.status + ")").slice(0, 240) }, upstream.status === 404 ? 404 : 502);
+      }
+
+      let contentType = (upstream.headers.get("Content-Type") || (stream.exportPdf ? "application/pdf" : "application/octet-stream")).split(";")[0].trim().toLowerCase();
+      if (["text/html", "application/xhtml+xml", "application/javascript", "text/javascript", "image/svg+xml"].includes(contentType)) contentType = "text/plain";
+      const inline = contentType === "application/pdf" || contentType.startsWith("image/") ||
+        contentType.startsWith("video/") || contentType.startsWith("audio/") ||
+        contentType.startsWith("text/") || contentType === "application/json" ||
+        contentType === "application/xml";
+      const fileName = String(stream.name || "Drive file").replace(/[\r\n\0]/g, " ").slice(0, 240);
+      const responseHeaders = {
+        ...corsHeaders,
+        "Content-Type": contentType,
+        "Content-Disposition": (inline ? "inline" : "attachment") + "; filename*=UTF-8''" + encodeURIComponent(fileName),
+        "Cache-Control": "private, no-store",
+        "X-Content-Type-Options": "nosniff",
+        "Referrer-Policy": "no-referrer"
+      };
+      for (const header of ["Accept-Ranges", "Content-Length", "Content-Range"]) {
+        const value = upstream.headers.get(header);
+        if (value) responseHeaders[header] = value;
+      }
+      if (request.method === "HEAD") {
+        try { await upstream.body?.cancel(); } catch {}
+        return new Response(null, { status: upstream.status, headers: responseHeaders });
+      }
+      return new Response(upstream.body, { status: upstream.status, headers: responseHeaders });
+    }
+
     // Shared authenticated web search endpoint for AI and other LifeLink features.
     if (url.pathname === "/api/search") {
       if (request.method !== "POST") return json({ error: "Method not allowed" }, 405);
@@ -374,7 +461,7 @@ export default {
     }
 
     // Multiple Google accounts, isolated under the authenticated LifeLink user.
-    const googleRoute = ["/api/google/connect", "/api/google/status", "/api/google/disconnect", "/api/google/data", "/api/google/file", "/api/google/upload"].includes(url.pathname);
+    const googleRoute = ["/api/google/connect", "/api/google/status", "/api/google/disconnect", "/api/google/data", "/api/google/file", "/api/google/upload", "/api/google/stream-session"].includes(url.pathname);
     if (googleRoute) {
       if (origin !== ALLOWED_ORIGIN) return json({ error: "Origin not allowed" }, 403);
       const expectedMethod = ["/api/google/status", "/api/google/file"].includes(url.pathname) ? "GET" : "POST";
@@ -571,6 +658,36 @@ export default {
       if (contentLength > 12000) return json({ error: "Request too large" }, 413);
       let body;
       try { body = await request.json(); } catch { return json({ error: "Invalid JSON" }, 400); }
+
+      if (url.pathname === "/api/google/stream-session") {
+        if (!env.MY_RATE_LIMITER) return json({ error: "Rate limiter is not configured" }, 500);
+        const { success } = await env.MY_RATE_LIMITER.limit({ key: "google:" + user.id });
+        if (!success) return json({ error: "Google service rate limit exceeded. Try again shortly." }, 429);
+        const accountId = typeof body.accountId === "string" ? body.accountId : "";
+        const fileId = typeof body.fileId === "string" ? body.fileId : "";
+        const fileName = String(body.name || "Drive file").replace(/[\r\n\0]/g, " ").slice(0, 240);
+        if (!/^(legacy|[0-9a-f-]{36})$/i.test(accountId)) return json({ error: "Invalid Google account" }, 400);
+        if (!/^[A-Za-z0-9_-]{1,200}$/.test(fileId)) return json({ error: "Invalid Drive file identifier" }, 400);
+        const accountKey = accountId === "legacy" ? legacyKey : prefix + accountId;
+        const saved = await env.GOOGLE_TOKENS.get(accountKey, "json");
+        if (!saved || typeof saved.refresh_token !== "string" || !saved.refresh_token) {
+          return json({ error: "This Google account needs to be reconnected." }, 401);
+        }
+        const random = new Uint8Array(32);
+        crypto.getRandomValues(random);
+        const streamToken = Array.from(random, byte => byte.toString(16).padStart(2, "0")).join("");
+        await env.GOOGLE_TOKENS.put("drive-stream:" + streamToken, JSON.stringify({
+          userId: user.id,
+          accountId,
+          fileId,
+          name: fileName,
+          exportPdf: body.exportPdf === true
+        }), { expirationTtl: 600 });
+        return json({
+          url: new URL("/api/google/stream?token=" + streamToken, request.url).toString(),
+          expiresIn: 600
+        });
+      }
 
       if (url.pathname === "/api/google/data") {
         if (!env.MY_RATE_LIMITER) return json({ error: "Rate limiter is not configured" }, 500);
