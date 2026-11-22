@@ -485,6 +485,8 @@ export default {
                 subject: googleHeader(headers, "Subject"),
                 from: googleHeader(headers, "From"),
                 date: googleHeader(headers, "Date"),
+                labelIds: Array.isArray(message.labelIds) ? message.labelIds : [],
+                internalDate: message.internalDate || "",
                 snippet: message.snippet || ""
               };
             }));
@@ -497,41 +499,65 @@ export default {
             const headers = message.payload?.headers || [];
             const bodyText = findGoogleText(message.payload, "text/plain") || findGoogleText(message.payload, "text/html");
             return json({ message: {
-              id: message.id, subject: googleHeader(headers, "Subject"),
-              from: googleHeader(headers, "From"), to: googleHeader(headers, "To"),
+              id: message.id, threadId: message.threadId, labelIds: Array.isArray(message.labelIds) ? message.labelIds : [],
+              subject: googleHeader(headers, "Subject"),
+              from: googleHeader(headers, "From"), to: googleHeader(headers, "To"), cc: googleHeader(headers, "Cc"),
               date: googleHeader(headers, "Date"), snippet: message.snippet || "",
               body: bodyText.slice(0, 30000)
             }});
           }
           if (operation === "calendar.list") {
-            const maxResults = Math.min(100, Math.max(1, Number(body.maxResults) || 50));
+            const maxResults = Math.min(250, Math.max(1, Number(body.maxResults) || 100));
+            const validDate = value => typeof value === "string" && value.length <= 40 && Number.isFinite(Date.parse(value));
+            const timeMin = validDate(body.timeMin) ? new Date(body.timeMin).toISOString() : new Date().toISOString();
             const params = new URLSearchParams({
-              timeMin: new Date().toISOString(), maxResults: String(maxResults),
+              timeMin, maxResults: String(maxResults),
               singleEvents: "true", orderBy: "startTime"
             });
+            if (validDate(body.timeMax)) params.set("timeMax", new Date(body.timeMax).toISOString());
+            if (typeof body.pageToken === "string" && body.pageToken.length <= 2048) params.set("pageToken", body.pageToken);
             const result = await googleApiFetch("/calendar/v3/calendars/primary/events?" + params.toString(), accessToken);
             const events = (result.items || []).map(event => ({
               id: event.id, summary: event.summary || "", description: String(event.description || "").slice(0, 1200),
               location: event.location || "",
               start: event.start?.dateTime || event.start?.date || "",
               end: event.end?.dateTime || event.end?.date || "",
-              htmlLink: event.htmlLink || ""
+              htmlLink: event.htmlLink || "", colorId: event.colorId || "",
+              status: event.status || "", attendees: (event.attendees || []).slice(0, 20).map(person => ({
+                email: person.email || "", displayName: person.displayName || "", responseStatus: person.responseStatus || ""
+              }))
             }));
-            return json({ events });
+            return json({ events, nextPageToken: result.nextPageToken || null });
           }
           if (operation === "drive.list") {
             const query = typeof body.query === "string" ? body.query.trim().slice(0, 120) : "";
-            const q = query ? "trashed = false and name contains '" + query.replace(/\\/g, "\\\\").replace(/'/g, "\\'") + "'" : "trashed = false";
+            const view = ["mydrive", "shared", "recent", "starred", "trash"].includes(body.view) ? body.view : "mydrive";
+            const clauses = [view === "trash" ? "trashed = true" : "trashed = false"];
+            const folderId = typeof body.folderId === "string" && /^[A-Za-z0-9_-]{1,200}$/.test(body.folderId) ? body.folderId : "";
+            if (view === "mydrive") clauses.push(folderId ? "'" + folderId + "' in parents" : "'root' in parents");
+            else if (view === "shared") clauses.push("sharedWithMe");
+            else if (view === "starred") clauses.push("starred = true");
+            if (query) clauses.push("name contains '" + query.replace(/\\/g, "\\\\").replace(/'/g, "\\'") + "'");
             const params = new URLSearchParams({
-              q, pageSize: String(Math.min(100, Math.max(1, Number(body.pageSize) || 50))),
-              orderBy: "modifiedTime desc",
-              fields: "files(id,name,mimeType,modifiedTime,webViewLink),nextPageToken"
+              q: clauses.join(" and "),
+              pageSize: String(Math.min(100, Math.max(1, Number(body.pageSize) || 50))),
+              orderBy: view === "recent" ? "viewedByMeTime desc,modifiedTime desc" : "folder,modifiedTime desc,name",
+              fields: "files(id,name,mimeType,modifiedTime,webViewLink,iconLink,thumbnailLink,parents,owners(displayName,emailAddress),size,starred,description),nextPageToken"
             });
+            if (typeof body.pageToken === "string" && body.pageToken.length <= 2048) params.set("pageToken", body.pageToken);
             const result = await googleApiFetch("/drive/v3/files?" + params.toString(), accessToken);
-            return json({ files: (result.files || []).map(file => ({
-              id: file.id, name: file.name, mimeType: file.mimeType,
-              modifiedTime: file.modifiedTime || "", webViewLink: file.webViewLink || ""
-            })) });
+            return json({
+              files: (result.files || []).map(file => ({
+                id: file.id, name: file.name, mimeType: file.mimeType,
+                modifiedTime: file.modifiedTime || "", webViewLink: file.webViewLink || "",
+                iconLink: file.iconLink || "", thumbnailLink: file.thumbnailLink || "",
+                parents: Array.isArray(file.parents) ? file.parents : [],
+                owner: file.owners?.[0]?.displayName || file.owners?.[0]?.emailAddress || "",
+                size: file.size || "", starred: !!file.starred,
+                description: String(file.description || "").slice(0, 500)
+              })),
+              nextPageToken: result.nextPageToken || null
+            });
           }
         } catch (error) {
           console.error("Google API operation failed:", operation, error.message);
