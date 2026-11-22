@@ -688,10 +688,10 @@ export default {
           fileId,
           name: fileName,
           exportPdf: body.exportPdf === true
-        }), { expirationTtl: 600 });
+        }), { expirationTtl: 3600 });
         return json({
           url: new URL("/api/google/stream?token=" + streamToken, request.url).toString(),
-          expiresIn: 600
+          expiresIn: 3600
         });
       }
 
