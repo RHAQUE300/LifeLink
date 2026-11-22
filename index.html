@@ -173,6 +173,7 @@ main.in{animation:pg .45s cubic-bezier(.22,1,.36,1)}@keyframes pg{from{opacity:0
 #af-input{padding:10px 18px 22px;background:linear-gradient(to top,rgba(255,255,255,.32),transparent)}
 .af-box{max-width:780px;margin:0 auto;display:flex;gap:8px;align-items:flex-end}
 #af-q{resize:none;border-radius:20px;padding:12px 16px;max-height:180px;line-height:1.4;backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px)}
+#af-send{width:42px;height:42px;min-width:42px;padding:0;border-radius:50%;display:grid;place-items:center;flex:0 0 42px}#af-send svg{width:20px;height:20px;display:block}
 @media(max-width:760px){#af-side{position:absolute;left:0;top:0;bottom:0;z-index:3;width:82%;background:rgba(244,247,253,.92);backdrop-filter:blur(24px);box-shadow:8px 0 30px rgba(0,0,0,.12)}#af-head{padding:10px 12px;gap:6px}#af-head .btn{padding:6px 12px;font-size:14px}#af-head .lbl,#af-prov{display:none}#af-head b{font-size:15px;white-space:nowrap}}
 [data-theme=dark] #ai-full{
   background:rgba(6,6,7,.76);
@@ -385,7 +386,7 @@ pre,code{max-width:100%;overflow-wrap:anywhere;white-space:pre-wrap}
       <span class="ai-chip" onclick="sendMsg('Open my calendar')">Open my calendar</span>
       <span class="ai-chip" onclick="sendMsg('Explain photosynthesis')">Ask anything</span>
     </div>
-    <div id="af-input"><div class="af-box"><textarea id="af-q" rows="1" placeholder="Message LifeLink AI…" aria-label="Message LifeLink AI"></textarea><button class="btn pri" id="af-send">Send</button></div></div>
+    <div id="af-input"><div class="af-box"><textarea id="af-q" rows="1" placeholder="Message LifeLink AI…" aria-label="Message LifeLink AI"></textarea><button class="btn pri" id="af-send" type="button" aria-label="Send message" title="Send message"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M12 19V5M6 11l6-6 6 6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></button></div></div>
   </section>
 </div>
 
