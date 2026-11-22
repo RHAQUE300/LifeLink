@@ -345,7 +345,7 @@ pre,code{max-width:100%;overflow-wrap:anywhere;white-space:pre-wrap}
     <div class="glass card" style="max-width:440px;padding:28px">
       <div style="font-size:36px;margin-bottom:10px">↗</div>
       <h2 id="bf-title" style="font-size:20px;margin-bottom:6px">External Web App</h2>
-      <p class="sub" style="font-size:13.5px;margin-bottom:18px">Some websites block being embedded by other apps. LifeLink will always attempt the inline view, but it cannot override a site’s own security policy. Try opening it in a new tab if the embedded view stays blank.</p>
+      <p id="bf-description" class="sub" style="font-size:13.5px;margin-bottom:18px">Some websites block being embedded by other apps. LifeLink will always attempt the inline view, but it cannot override a site’s own security policy. Try opening it in a new tab if the embedded view stays blank.</p>
       <div style="display:flex;gap:10px;justify-content:center;flex-wrap:wrap">
         <button class="btn pri" onclick="openBrowserPopup()">Open App Window</button>
         <button class="btn" onclick="openBrowserExternal()">Open in New Tab ↗</button>
@@ -699,8 +699,13 @@ function toast(m){
   const t=$('#toast');t.textContent=m;t.classList.add('open');
   clearTimeout(toast.t);toast.t=setTimeout(()=>t.classList.remove('open'),3200);
 }
-let browserStatusTimer=null;
-function openBrowser(u){
+let browserStatusTimer=null,activeBrowserApp=null;
+function appIntegrationInfo(app){
+  const name=String(app?.name||'Website');
+  const host=(()=>{try{return new URL(app?.url||'').hostname.replace(/^www\./,'')}catch{return ''}})();
+  return {name,host,kind:'web',description:'LifeLink is trying the provider’s normal website view. Some providers permit embedding; others require their own browser window or sign-in flow.'};
+}
+function openBrowser(u,app=null){
   let target=String(u||'').trim();
   if(!/^https?:\/\//i.test(target))target='https://'+target;
   try{
@@ -709,10 +714,15 @@ function openBrowser(u){
     target=parsed.href;
   }catch(e){toast('Enter a valid website URL');return}
   $('#browser-url').value=target;
+  activeBrowserApp=app||{name:new URL(target).hostname.replace(/^www\./,'') ,url:target};
+  const info=appIntegrationInfo(activeBrowserApp);
   const iframe=$('#browser-frame'),fb=$('#browser-fallback'),eb=$('#browser-embed-btn'),status=$('#browser-status');
   fb.style.display='none';eb.style.display='inline-block';iframe.style.display='block';
   clearTimeout(browserStatusTimer);
-  if(status)status.textContent='Trying to open '+new URL(target).hostname+' inside LifeLink…';
+  if(status)status.textContent='Opening '+info.name+' inside LifeLink…';
+  const fallbackTitle=$('#bf-title'),fallbackDescription=$('#bf-description');
+  if(fallbackTitle)fallbackTitle.textContent=info.name;
+  if(fallbackDescription)fallbackDescription.textContent=info.description;
   iframe.onload=()=>{
     if(status&&$('#browser-url').value===target)status.textContent='The frame finished loading. If it is blank, the site may block embedding or require a separate sign-in.';
   };
@@ -720,8 +730,11 @@ function openBrowser(u){
   const title=$('#bf-title');if(title)title.textContent=new URL(target).hostname.replace(/^www\./,'');
   $('#browser-modal').classList.add('open');
   browserStatusTimer=setTimeout(()=>{
-    if(status&&$('#browser-url').value===target&&status.textContent.startsWith('Trying to open'))status.textContent='Still waiting. The site may be slow or may not allow inline embedding.';
-  },9000);
+    if(status&&$('#browser-url').value===target&&status.textContent.startsWith('Opening ')){
+      status.textContent=info.name+' has not confirmed an inline view. The provider may be slow or may restrict embedding.';
+      iframe.style.display='none';fb.style.display='grid';
+    }
+  },12000);
 }
 function forceEmbedBrowser(){
   const u=$('#browser-url').value,iframe=$('#browser-frame'),fb=$('#browser-fallback'),status=$('#browser-status');
@@ -741,7 +754,7 @@ function openBrowserExternal(){
   window.open(url,'_blank','noopener,noreferrer');
 }
 function closeBrowser(){
-  clearTimeout(browserStatusTimer);
+  clearTimeout(browserStatusTimer);activeBrowserApp=null;
   $('#browser-modal').classList.remove('open');
   setTimeout(()=>{const f=$('#browser-frame');if(f){f.removeAttribute('src');f.style.display='block';}$('#browser-fallback').style.display='none';},280);
 }
@@ -2492,7 +2505,7 @@ const X=(i,b)=>{const t=S.tasks.find(x=>x.id==i),delT=()=>{S.tasks=S.tasks.filte
  apptab:()=>{U.appTab=i==='discover'?'discover':'mine';if(U.appTab==='mine')U.aq='';al()},
  appadd:()=>addAppToShelf(i),
  appremove:()=>removeAppFromShelf(i),
- appopen:()=>{if(i==='connected:github'){openBrowser('https://github.com/');return}const app=appShelfRecords().find(item=>item.id===i);if(app&&String(i).startsWith('google:')){openGoogleService(String(i).slice(7));return}if(app)openBrowser(app.url)},
+ appopen:()=>{if(i==='connected:github'){openBrowser('https://github.com/',{id:'connected:github',name:'GitHub',url:'https://github.com/'});return}const app=appShelfRecords().find(item=>item.id===i);if(app&&String(i).startsWith('google:')){openGoogleService(String(i).slice(7));return}if(app)openBrowser(app.url,app)},
  appcustom:()=>ask('Add a website to My Apps',[['name','App name*','text'],['url','Website URL*','url']],{name:U.aq.trim(),url:/^https?:\/\//i.test(U.aq.trim())?U.aq.trim():''},data=>{
    const name=String(data.name||'').trim(),raw=String(data.url||'').trim();
    if(!name||!raw){toast('Enter an app name and website URL');return}
