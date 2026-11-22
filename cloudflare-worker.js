@@ -46,6 +46,47 @@ async function verifyUser(request, env) {
   return user && user.id ? user : null;
 }
 
+function decodeGoogleBase64Url(value) {
+  if (!value) return "";
+  try {
+    const normalized = String(value).replace(/-/g, "+").replace(/_/g, "/");
+    const binary = atob(normalized + "=".repeat((4 - normalized.length % 4) % 4));
+    const bytes = Uint8Array.from(binary, char => char.charCodeAt(0));
+    return new TextDecoder().decode(bytes);
+  } catch { return ""; }
+}
+
+function findGoogleText(payload, wantedType) {
+  if (!payload) return "";
+  if (payload.mimeType === wantedType && payload.body?.data) {
+    return decodeGoogleBase64Url(payload.body.data);
+  }
+  for (const part of Array.isArray(payload.parts) ? payload.parts : []) {
+    const found = findGoogleText(part, wantedType);
+    if (found) return found;
+  }
+  return "";
+}
+
+function googleHeader(headers, name) {
+  return (Array.isArray(headers) ? headers : [])
+    .find(header => String(header.name || "").toLowerCase() === name.toLowerCase())?.value || "";
+}
+
+async function googleApiFetch(path, accessToken) {
+  const response = await fetch("https://www.googleapis.com" + path, {
+    headers: { Authorization: "Bearer " + accessToken },
+    signal: AbortSignal.timeout(15000)
+  });
+  let data = {};
+  try { data = await response.json(); } catch {}
+  if (!response.ok) {
+    const message = data?.error?.message || "Google API request failed (" + response.status + ")";
+    throw new Error(String(message).slice(0, 240));
+  }
+  return data;
+}
+
 function availableModels(env) {
   return {
     groq: !!env.GROQ_API_KEY,
@@ -327,7 +368,7 @@ export default {
     }
 
     // Multiple Google accounts, isolated under the authenticated LifeLink user.
-    const googleRoute = ["/api/google/connect", "/api/google/status", "/api/google/disconnect"].includes(url.pathname);
+    const googleRoute = ["/api/google/connect", "/api/google/status", "/api/google/disconnect", "/api/google/data"].includes(url.pathname);
     if (googleRoute) {
       if (origin !== ALLOWED_ORIGIN) return json({ error: "Origin not allowed" }, 403);
       const expectedMethod = url.pathname === "/api/google/status" ? "GET" : "POST";
@@ -390,6 +431,109 @@ export default {
       if (contentLength > 12000) return json({ error: "Request too large" }, 413);
       let body;
       try { body = await request.json(); } catch { return json({ error: "Invalid JSON" }, 400); }
+
+      if (url.pathname === "/api/google/data") {
+        if (!env.MY_RATE_LIMITER) return json({ error: "Rate limiter is not configured" }, 500);
+        const { success } = await env.MY_RATE_LIMITER.limit({ key: "google:" + user.id });
+        if (!success) return json({ error: "Google service rate limit exceeded. Try again shortly." }, 429);
+        const accountId = body.accountId;
+        if (typeof accountId !== "string" || !/^(legacy|[0-9a-f-]{36})$/i.test(accountId)) return json({ error: "Invalid Google account" }, 400);
+        const operation = typeof body.operation === "string" ? body.operation : "";
+        const allowed = ["gmail.list", "gmail.get", "calendar.list", "drive.list"];
+        if (!allowed.includes(operation)) return json({ error: "Unsupported Google operation" }, 400);
+        const key = accountId === "legacy" ? legacyKey : prefix + accountId;
+        const saved = await env.GOOGLE_TOKENS.get(key, "json");
+        if (!saved || !saved.refresh_token) return json({ error: "This Google account needs to be reconnected." }, 401);
+        const googleClientId = typeof env.GOOGLE_CLIENT_ID === "string" ? env.GOOGLE_CLIENT_ID.trim() : "";
+        const googleClientSecret = typeof env.GOOGLE_CLIENT_SECRET === "string" ? env.GOOGLE_CLIENT_SECRET.trim() : "";
+        if (!googleClientId || !googleClientSecret) return json({ error: "Google OAuth is not configured on the server" }, 500);
+        const tokenResponse = await fetch("https://oauth2.googleapis.com/token", {
+          method: "POST",
+          headers: { "Content-Type": "application/x-www-form-urlencoded" },
+          body: new URLSearchParams({
+            client_id: googleClientId, client_secret: googleClientSecret,
+            refresh_token: saved.refresh_token, grant_type: "refresh_token"
+          }),
+          signal: AbortSignal.timeout(15000)
+        });
+        let tokenData = {};
+        try { tokenData = await tokenResponse.json(); } catch {}
+        if (!tokenResponse.ok || !tokenData.access_token) {
+          console.error("Google access-token refresh failed:", tokenResponse.status, tokenData.error || "unknown error");
+          return json({ error: "Google authorization expired or was revoked. Reconnect this account in Settings." }, 401);
+        }
+        const accessToken = tokenData.access_token;
+        await env.GOOGLE_TOKENS.put(key, JSON.stringify({
+          ...saved, refresh_token: saved.refresh_token,
+          access_token: accessToken,
+          expires_at: Date.now() + Math.max(60, Number(tokenData.expires_in) || 3600) * 1000
+        }));
+        try {
+          if (operation === "gmail.list") {
+            const query = typeof body.query === "string" ? body.query.slice(0, 300) : "in:inbox";
+            const maxResults = Math.min(50, Math.max(1, Number(body.maxResults) || 25));
+            const list = await googleApiFetch("/gmail/v1/users/me/messages?maxResults=" + maxResults + "&q=" + encodeURIComponent(query), accessToken);
+            const messages = await Promise.all((list.messages || []).slice(0, 50).map(async item => {
+              const message = await googleApiFetch("/gmail/v1/users/me/messages/" + encodeURIComponent(item.id) + "?format=metadata&metadataHeaders=From&metadataHeaders=Subject&metadataHeaders=Date", accessToken);
+              const headers = message.payload?.headers || [];
+              return {
+                id: message.id, threadId: message.threadId,
+                subject: googleHeader(headers, "Subject"),
+                from: googleHeader(headers, "From"),
+                date: googleHeader(headers, "Date"),
+                snippet: message.snippet || ""
+              };
+            }));
+            return json({ messages, resultSizeEstimate: list.resultSizeEstimate || 0 });
+          }
+          if (operation === "gmail.get") {
+            const messageId = typeof body.messageId === "string" ? body.messageId : "";
+            if (!/^[A-Za-z0-9_-]{1,200}$/.test(messageId)) return json({ error: "Invalid message identifier" }, 400);
+            const message = await googleApiFetch("/gmail/v1/users/me/messages/" + encodeURIComponent(messageId) + "?format=full", accessToken);
+            const headers = message.payload?.headers || [];
+            const bodyText = findGoogleText(message.payload, "text/plain") || findGoogleText(message.payload, "text/html");
+            return json({ message: {
+              id: message.id, subject: googleHeader(headers, "Subject"),
+              from: googleHeader(headers, "From"), to: googleHeader(headers, "To"),
+              date: googleHeader(headers, "Date"), snippet: message.snippet || "",
+              body: bodyText.slice(0, 30000)
+            }});
+          }
+          if (operation === "calendar.list") {
+            const maxResults = Math.min(100, Math.max(1, Number(body.maxResults) || 50));
+            const params = new URLSearchParams({
+              timeMin: new Date().toISOString(), maxResults: String(maxResults),
+              singleEvents: "true", orderBy: "startTime"
+            });
+            const result = await googleApiFetch("/calendar/v3/calendars/primary/events?" + params.toString(), accessToken);
+            const events = (result.items || []).map(event => ({
+              id: event.id, summary: event.summary || "", description: String(event.description || "").slice(0, 1200),
+              location: event.location || "",
+              start: event.start?.dateTime || event.start?.date || "",
+              end: event.end?.dateTime || event.end?.date || "",
+              htmlLink: event.htmlLink || ""
+            }));
+            return json({ events });
+          }
+          if (operation === "drive.list") {
+            const query = typeof body.query === "string" ? body.query.trim().slice(0, 120) : "";
+            const q = query ? "trashed = false and name contains '" + query.replace(/\\/g, "\\\\").replace(/'/g, "\\'") + "'" : "trashed = false";
+            const params = new URLSearchParams({
+              q, pageSize: String(Math.min(100, Math.max(1, Number(body.pageSize) || 50))),
+              orderBy: "modifiedTime desc",
+              fields: "files(id,name,mimeType,modifiedTime,webViewLink),nextPageToken"
+            });
+            const result = await googleApiFetch("/drive/v3/files?" + params.toString(), accessToken);
+            return json({ files: (result.files || []).map(file => ({
+              id: file.id, name: file.name, mimeType: file.mimeType,
+              modifiedTime: file.modifiedTime || "", webViewLink: file.webViewLink || ""
+            })) });
+          }
+        } catch (error) {
+          console.error("Google API operation failed:", operation, error.message);
+          return json({ error: error.message || "Google service request failed" }, 502);
+        }
+      }
 
       if (url.pathname === "/api/google/disconnect") {
         const accountId = body.accountId;
