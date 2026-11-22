@@ -2572,24 +2572,31 @@ const LL_LOCALES={
  "Settings":"सेटिंग्स","Account:":"खाता:","Language":"भाषा","Choose the language used across the LifeLink interface. Your choice is saved to this account.":"LifeLink इंटरफ़ेस की भाषा चुनें। आपकी पसंद इस खाते में सहेजी जाएगी।","Profile":"प्रोफ़ाइल","Security":"सुरक्षा","Reset password":"पासवर्ड रीसेट करें","Sign Out":"साइन आउट","Google account manager":"Google खाता प्रबंधक","AI model":"AI मॉडल","AI learning & memory":"AI सीखना और मेमोरी","Data":"डेटा","Export JSON":"JSON निर्यात करें","Import JSON":"JSON आयात करें","Remove sample data":"नमूना डेटा हटाएँ","Reset account data":"खाता डेटा रीसेट करें","To Do":"कार्य","Calendar":"कैलेंडर","Notes":"नोट्स","Apps":"ऐप्स","Start Recovery":"रिकवरी शुरू करें","Home":"होम","Save Profile":"प्रोफ़ाइल सहेजें","Display name":"प्रदर्शन नाम","Upload":"अपलोड","Reset":"रीसेट","Open chat & choose model":"चैट खोलें और मॉडल चुनें","Clear chat history":"चैट इतिहास साफ़ करें","Appearance":"दिखावट","Notifications":"सूचनाएँ","Account & Profile":"खाता और प्रोफ़ाइल","Show more":"और दिखाएँ","Close":"बंद करें","Refresh":"रीफ़्रेश","Retry":"फिर कोशिश करें","Search":"खोजें","Add":"जोड़ें","Edit":"संपादित करें","Delete":"हटाएँ","Save":"सहेजें","Cancel":"रद्द करें","Done":"हो गया","Back":"वापस","Tasks":"कार्य"
  }
 };
+const llOriginalText=new WeakMap(),llOriginalAttrs=new WeakMap();
 function applyLanguage(root=document.body){
  const lang=(S&&S.p&&S.p.language)||'en',dict=LL_LOCALES[lang]||{};
  document.documentElement.lang=lang;document.documentElement.dir=lang==='ar'?'rtl':'ltr';
- if(!root||lang==='en')return;
+ if(!root)return;
  const walker=document.createTreeWalker(root,NodeFilter.SHOW_TEXT);
  const nodes=[];while(walker.nextNode())nodes.push(walker.currentNode);
  for(const node of nodes){
-   if(!node.nodeValue||!node.nodeValue.trim())continue;
-   let value=node.nodeValue;
+   if(!llOriginalText.has(node))llOriginalText.set(node,node.nodeValue);
+   const original=llOriginalText.get(node);
+   if(!original||!original.trim())continue;
+   let value=original;
    for(const [en,tr] of Object.entries(dict)){
      if(value.trim()===en){value=value.replace(en,tr);break}
      if(value.includes(en))value=value.split(en).join(tr);
    }
-   if(value!==node.nodeValue)node.nodeValue=value;
+   if(node.nodeValue!==value)node.nodeValue=value;
  }
  root.querySelectorAll('input[placeholder],textarea[placeholder],input[aria-label],button[title]').forEach(el=>{
-   const attr=el.hasAttribute('placeholder')?'placeholder':el.hasAttribute('aria-label')?'aria-label':'title';
-   if(dict[el.getAttribute(attr)])el.setAttribute(attr,dict[el.getAttribute(attr)]);
+   ['placeholder','aria-label','title'].forEach(attr=>{
+     if(!el.hasAttribute(attr))return;
+     let originals=llOriginalAttrs.get(el);if(!originals){originals={};llOriginalAttrs.set(el,originals)}
+     if(!(attr in originals))originals[attr]=el.getAttribute(attr);
+     const original=originals[attr];el.setAttribute(attr,dict[original]||original);
+   });
  });
 }
 let llLanguageObserver=null;
