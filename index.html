@@ -86,7 +86,14 @@ input,select,textarea{border:1px solid rgba(0,0,0,.1);background:rgba(255,255,25
 }
 #browser-modal.open{opacity:1;transform:translateY(0) scale(1);pointer-events:auto;visibility:visible}
 #browser-toolbar{padding:12px 16px;background:rgba(0,0,0,.03);display:flex;align-items:center;gap:10px;border-bottom:1px solid rgba(0,0,0,.08)}
-#browser-frame{flex:1;border:0;width:100%;background:#fff}
+#browser-frame{flex:1;border:0;width:100%;background:#fff;opacity:0;transition:opacity .34s var(--motion-ease, cubic-bezier(.22,1,.36,1))}#browser-frame.loaded{opacity:1}
+#browser-loading{position:absolute;inset:58px 0 0;z-index:3;display:grid;place-items:center;background:rgba(245,248,255,.48);backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);opacity:0;visibility:hidden;pointer-events:none;transition:opacity .28s var(--motion-ease),visibility .28s}
+#browser-loading.open{opacity:1;visibility:visible}
+.browser-loading-card{display:flex;align-items:center;gap:12px;padding:15px 20px;border:1px solid var(--gb);border-radius:18px;background:var(--g);box-shadow:0 12px 36px rgba(30,40,90,.12);font-size:13px}
+.browser-spinner{width:19px;height:19px;border:2px solid rgba(79,124,255,.2);border-top-color:var(--ac);border-radius:50%;animation:browserSpin .75s linear infinite}
+@keyframes browserSpin{to{transform:rotate(360deg)}}
+[data-theme=dark] #browser-loading{background:rgba(0,0,0,.42)}
+@media(max-width:760px){#browser-modal{inset:10px;border-radius:18px}#browser-toolbar{padding:9px;gap:6px;flex-wrap:wrap}#browser-status{max-width:45vw!important;flex:1}#browser-url{min-width:100%;order:4}#browser-loading{inset:94px 0 0}}
 
 .ai-msg{padding:10px 13px;border-radius:16px;margin-bottom:8px;font-size:13.5px;line-height:1.45;word-wrap:break-word}
 .ai-msg.user{background:var(--ink);color:#fff;margin-left:28px;border-bottom-right-radius:4px}
@@ -354,7 +361,8 @@ pre,code{max-width:100%;overflow-wrap:anywhere;white-space:pre-wrap}
       </div>
     </div>
   </div>
-  <iframe id="browser-frame" sandbox="allow-downloads allow-forms allow-modals allow-popups allow-popups-to-escape-sandbox allow-same-origin allow-scripts allow-top-navigation-by-user-activation" allow="clipboard-read; clipboard-write; fullscreen; autoplay; picture-in-picture" referrerpolicy="strict-origin-when-cross-origin" loading="eager"></iframe>
+  <div id="browser-loading" aria-live="polite"><div class="browser-loading-card"><span class="browser-spinner" aria-hidden="true"></span><span id="browser-loading-text">Opening inside LifeLink…</span></div></div>
+  <iframe id="browser-frame" sandbox="allow-downloads allow-forms allow-modals allow-popups allow-popups-to-escape-sandbox allow-same-origin allow-scripts allow-storage-access-by-user-activation allow-top-navigation-by-user-activation" allow="clipboard-read; clipboard-write; fullscreen; autoplay; picture-in-picture; encrypted-media; camera; microphone" referrerpolicy="strict-origin-when-cross-origin" loading="eager"></iframe>
 </div>
 
 <div id="ai-full" role="dialog" aria-modal="true" aria-label="LifeLink AI">
@@ -707,12 +715,22 @@ function toast(m){
   const t=$('#toast');t.textContent=m;t.classList.add('open');
   clearTimeout(toast.t);toast.t=setTimeout(()=>t.classList.remove('open'),3200);
 }
-let browserStatusTimer=null,activeBrowserApp=null;
+let browserStatusTimer=null,activeBrowserApp=null,activeBrowserBlobUrl=null;
 function appIntegrationInfo(app){
   const name=String(app?.name||'Website');
   const host=(()=>{try{return new URL(app?.url||'').hostname.replace(/^www\./,'')}catch{return ''}})();
   return {name,host,kind:'web',description:'LifeLink is trying the provider’s normal website view. Some providers permit embedding; others require their own browser window or sign-in flow.'};
 }
+function releaseBrowserBlob(delay=1200){
+  const old=activeBrowserBlobUrl;activeBrowserBlobUrl=null;
+  if(old)setTimeout(()=>URL.revokeObjectURL(old),delay);
+}
+function setBrowserLoading(label){
+  const loading=$('#browser-loading'),text=$('#browser-loading-text');
+  if(text)text.textContent=label||'Opening inside LifeLink…';
+  if(loading)loading.classList.add('open');
+}
+function clearBrowserLoading(){const loading=$('#browser-loading');if(loading)loading.classList.remove('open')}
 function openBrowser(u,app=null){
   let target=String(u||'').trim();
   if(!/^https?:\/\//i.test(target))target='https://'+target;
@@ -721,50 +739,163 @@ function openBrowser(u,app=null){
     if(!['http:','https:'].includes(parsed.protocol))throw new Error('Invalid protocol');
     target=parsed.href;
   }catch(e){toast('Enter a valid website URL');return}
+  releaseBrowserBlob();
   $('#browser-url').value=target;
   activeBrowserApp=app||{name:new URL(target).hostname.replace(/^www\./,'') ,url:target};
   const info=appIntegrationInfo(activeBrowserApp);
   const iframe=$('#browser-frame'),fb=$('#browser-fallback'),eb=$('#browser-embed-btn'),status=$('#browser-status');
   fb.style.display='none';eb.style.display='inline-block';iframe.style.display='block';
-  clearTimeout(browserStatusTimer);
+  iframe.classList.remove('loaded');
+  clearTimeout(browserStatusTimer);setBrowserLoading('Opening '+info.name+' inside LifeLink…');
   if(status)status.textContent='Opening '+info.name+' inside LifeLink…';
   const fallbackTitle=$('#bf-title'),fallbackDescription=$('#bf-description');
   if(fallbackTitle)fallbackTitle.textContent=info.name;
   if(fallbackDescription)fallbackDescription.textContent=info.description;
   iframe.onload=()=>{
-    if(status&&$('#browser-url').value===target)status.textContent='The frame finished loading. If it is blank, the site may block embedding or require a separate sign-in.';
+    iframe.classList.add('loaded');clearBrowserLoading();
+    if(status&&$('#browser-url').value===target)status.textContent='Frame loaded · provider content is running inside LifeLink';
+  };
+  iframe.onerror=()=>{
+    clearBrowserLoading();
+    if(status)status.textContent='This page could not be loaded in the inline viewer.';
   };
   iframe.removeAttribute('src');iframe.src=target;
-  const title=$('#bf-title');if(title)title.textContent=info.name;
   $('#browser-modal').classList.add('open');
   browserStatusTimer=setTimeout(()=>{
     if(status&&$('#browser-url').value===target&&status.textContent.startsWith('Opening ')){
-      status.textContent=info.name+' has not confirmed an inline view. The provider may be slow or may restrict embedding.';
-      iframe.style.display='none';fb.style.display='grid';
+      status.textContent=info.name+' is taking longer than expected. The page may be slow or may restrict embedding.';
+      iframe.classList.add('loaded');clearBrowserLoading();
     }
-  },12000);
+  },15000);
 }
-function forceEmbedBrowser(){
-  const u=$('#browser-url').value,iframe=$('#browser-frame'),fb=$('#browser-fallback'),status=$('#browser-status');
-  fb.style.display='none';iframe.style.display='block';clearTimeout(browserStatusTimer);
-  if(status)status.textContent='Retrying the inline embed…';
-  iframe.removeAttribute('src');iframe.src=u;
-  browserStatusTimer=setTimeout(()=>{if(status&&status.textContent==='Retrying the inline embed…')status.textContent='Still waiting. The site may block inline embedding.'},9000);
+function openBrowserBlobPreview(blob,file){
+  releaseBrowserBlob();
+  const objectUrl=URL.createObjectURL(blob);activeBrowserBlobUrl=objectUrl;
+  activeBrowserApp={name:String(file?.name||'Drive file'),url:objectUrl,kind:'drive-file'};
+  const iframe=$('#browser-frame'),fb=$('#browser-fallback'),eb=$('#browser-embed-btn'),status=$('#browser-status');
+  fb.style.display='none';eb.style.display='none';iframe.style.display='block';iframe.classList.remove('loaded');
+  $('#browser-url').value='Google Drive · '+String(file?.name||'Drive file');
+  if(status)status.textContent='Loading preview from Google Drive…';
+  setBrowserLoading('Preparing '+String(file?.name||'Drive file')+'…');
+  clearTimeout(browserStatusTimer);
+  iframe.onload=()=>{
+    iframe.classList.add('loaded');clearBrowserLoading();
+    if(status)status.textContent='Preview ready · '+String(file?.name||'Drive file');
+  };
+  iframe.onerror=()=>{
+    clearBrowserLoading();iframe.classList.add('loaded');
+    if(status)status.textContent='The browser could not render this file type. Use the download control in the viewer if available.';
+  };
+  iframe.removeAttribute('src');iframe.src=objectUrl;
+  $('#browser-modal').classList.add('open');
+  browserStatusTimer=setTimeout(()=>{
+    if(status&&status.textContent.startsWith('Loading preview')){
+      iframe.classList.add('loaded');clearBrowserLoading();
+      status.textContent='The preview is taking longer than expected.';
+    }
+  },20000);
+}
+function prepareDrivePreview(file){
+  releaseBrowserBlob();
+  activeBrowserApp={name:String(file?.name||'Drive file'),url:'',kind:'drive-file'};
+  const iframe=$('#browser-frame'),fb=$('#browser-fallback'),eb=$('#browser-embed-btn'),status=$('#browser-status');
+  fb.style.display='none';eb.style.display='none';iframe.style.display='block';iframe.classList.remove('loaded');
+  iframe.onload=null;iframe.onerror=null;iframe.removeAttribute('src');
+  $('#browser-url').value='Google Drive · '+String(file?.name||'Drive file');
+  if(status)status.textContent='Connecting securely to Google Drive…';
+  setBrowserLoading('Connecting securely to Google Drive…');
+  clearTimeout(browserStatusTimer);
+  $('#browser-modal').classList.add('open');
+}
+async function googleDrivePreviewFile(file){
+  if(!file||!file.id)return;
+  const accounts=Array.isArray(googleConnectionStatus?.accounts)?googleConnectionStatus.accounts:[];
+  const account=accounts.find(item=>item.id===S.googleActiveAccountId)||accounts[0];
+  if(!account){toast('Connect a Google account first.');return}
+  prepareDrivePreview(file);
+  try{
+    if(!await ensureSupabaseClient())throw new Error('LifeLink sign-in is unavailable');
+    const {data,error}=await supabaseClient.auth.getSession();
+    if(error||!data.session?.access_token)throw new Error('Please sign in to LifeLink again');
+    const params=new URLSearchParams({accountId:account.id,fileId:file.id,name:file.name||'Drive file'});
+    const nativeGoogleFile=/^application\/vnd\.google-apps\.(document|spreadsheet|presentation)$/.test(String(file.mimeType||''));
+    if(nativeGoogleFile)params.set('export','pdf');
+    const response=await fetch(LL_CONFIG.apiUrl+'/api/google/file?'+params.toString(),{
+      method:'GET',
+      headers:{Authorization:'Bearer '+data.session.access_token,'X-Requested-With':'XMLHttpRequest'},
+      cache:'no-store'
+    });
+    if(!response.ok){
+      let result={};try{result=await response.json()}catch{}
+      throw new Error(result.error||'Google Drive could not load this file');
+    }
+    const blob=await response.blob();
+    if(!blob.size)throw new Error('Google Drive returned an empty file');
+    if(activeBrowserApp?.kind!=='drive-file'||activeBrowserApp.name!==String(file.name||'Drive file'))return;
+    openBrowserBlobPreview(blob,file);
+  }catch(error){
+    clearBrowserLoading();closeBrowser();
+    toast('Drive preview failed: '+String(error?.message||error).slice(0,180));
+  }
+}
+async function uploadGoogleDriveFiles(files){
+  const list=Array.from(files||[]);
+  if(!list.length)return;
+  const accounts=Array.isArray(googleConnectionStatus?.accounts)?googleConnectionStatus.accounts:[];
+  const account=accounts.find(item=>item.id===S.googleActiveAccountId)||accounts[0];
+  if(!account){toast('Connect a Google account first.');return}
+  try{
+    if(!await ensureSupabaseClient())throw new Error('LifeLink sign-in is unavailable');
+    const {data,error}=await supabaseClient.auth.getSession();
+    if(error||!data.session?.access_token)throw new Error('Please sign in to LifeLink again');
+    let uploaded=0;
+    for(let index=0;index<list.length;index++){
+      const file=list[index];
+      if(file.size>99000000)throw new Error(file.name+' is larger than the current 99 MB per-file upload limit.');
+      toast('Uploading '+(index+1)+' of '+list.length+': '+file.name);
+      const params=new URLSearchParams({accountId:account.id,name:file.name});
+      if(googleDriveFolderId)params.set('parentId',googleDriveFolderId);
+      const response=await fetch(LL_CONFIG.apiUrl+'/api/google/upload?'+params.toString(),{
+        method:'POST',
+        headers:{
+          Authorization:'Bearer '+data.session.access_token,
+          'X-Requested-With':'XMLHttpRequest',
+          'Content-Type':file.type||'application/octet-stream'
+        },
+        body:file,
+        cache:'no-store'
+      });
+      let result={};try{result=await response.json()}catch{}
+      if(!response.ok)throw new Error(result.error||('Upload failed for '+file.name));
+      uploaded++;
+    }
+    await refreshGoogleService();
+    toast(uploaded+' file'+(uploaded===1?'':'s')+' uploaded to Google Drive');
+  }catch(error){
+    toast('Drive upload failed: '+String(error?.message||error).slice(0,190));
+    if(activeGoogleService==='drive')refreshGoogleService();
+  }
 }
 function openBrowserPopup(){
   const url=$('#browser-url').value;
+  if(activeBrowserBlobUrl){window.open(activeBrowserBlobUrl,'_blank','noopener');return}
   const w=Math.min(1180, screen.width-80), h=Math.min(800, screen.height-80);
   const left=Math.round((screen.width-w)/2), top=Math.round((screen.height-h)/2);
-  window.open(url,'lifelink_app',`width=${w},height=${h},left=${left},top=${top},noopener,noreferrer`);
+  window.open(url,'lifelink_app','width='+w+',height='+h+',left='+left+',top='+top+',noopener,noreferrer');
 }
 function openBrowserExternal(){
-  const url=$('#browser-url').value;
-  window.open(url,'_blank','noopener,noreferrer');
+  const url=activeBrowserBlobUrl||$('#browser-url').value;
+  if(url)window.open(url,'_blank','noopener,noreferrer');
 }
 function closeBrowser(){
   clearTimeout(browserStatusTimer);activeBrowserApp=null;
-  $('#browser-modal').classList.remove('open');
-  setTimeout(()=>{const f=$('#browser-frame');if(f){f.removeAttribute('src');f.style.display='block';}$('#browser-fallback').style.display='none';},280);
+  $('#browser-modal').classList.remove('open');clearBrowserLoading();
+  setTimeout(()=>{
+    const frame=$('#browser-frame');
+    if(frame){frame.removeAttribute('src');frame.src='about:blank';frame.style.display='block';frame.classList.remove('loaded');}
+    $('#browser-fallback').style.display='none';
+    releaseBrowserBlob(1000);
+  },420);
 }
 
 function addTask(o){
@@ -1450,8 +1581,8 @@ function googleServiceMarkup(){
   const driveNav=views.map(([label,view,icon])=>`<button class="google-nav-item ${googleDriveView===view?'active':''}" data-a="driveview" data-i="${view}" data-k="${label}"><span>${icon}</span><b>${label}</b></button>`).join('');
   const title=googleDriveFolderId?googleDriveFolderName:(views.find(v=>v[1]===googleDriveView)?.[0]||'My Drive');
   const folderBack=googleDriveFolderId?'<button class="btn" data-a="driveview" data-i="mydrive">← My Drive</button>':'';
-  const fileRows=files.map(file=>{const isFolder=file.mimeType==='application/vnd.google-apps.folder';const icon=isFolder?'📁':file.mimeType?.includes('spreadsheet')?'▦':file.mimeType?.includes('presentation')?'▤':file.mimeType?.includes('document')?'▧':file.mimeType?.includes('pdf')?'▤':'📄';return `<div class="drive-file-row"><span class="drive-file-icon">${icon}</span>${isFolder?`<button class="drive-file-name" data-a="drivefolder" data-i="${esc(file.id)}" data-k="${esc(file.name)}"><b>${esc(file.name)}</b><small>Folder</small></button>`:`<div class="drive-file-name"><b>${esc(file.name||'Untitled file')}</b><small>${esc(file.owner||file.mimeType||'Google Drive file')}</small></div>`}<span class="drive-file-modified">${esc(googleFormatDate(file.modifiedTime))}</span><span class="drive-file-actions"><button class="btn" data-a="drivestar" data-i="${esc(file.id)}" data-k="${file.starred?'unstar':'star'}">${file.starred?'★ Starred':'☆ Star'}</button><button class="btn" data-a="driverename" data-i="${esc(file.id)}">Rename</button><button class="btn" data-a="drivetrash" data-i="${esc(file.id)}">Trash</button>${file.webViewLink?`<a class="btn" href="${esc(file.webViewLink)}" target="_blank" rel="noopener noreferrer">Open ↗</a>`:''}</span></div>`}).join('');
-  return `<div class="google-workspace drive-workspace">${header}<div class="google-app-layout"><aside class="google-app-sidebar">${driveNav}<div class="google-sidebar-foot">Changes to folders and file names, starring and moving items to Trash are saved directly to Google Drive. Uploads, move-between-folders and in-app previews are still being added.</div></aside><section class="google-app-content"><div class="google-toolbar">${folderBack}<button class="btn" data-a="drivecreatefolder">＋ New folder</button><input id="google-app-search" type="search" placeholder="Search in Drive" value="${esc(googleServiceQuery)}"><button class="btn pri" data-a="googlesearch">Search</button></div><div class="google-section-heading"><div><h2>${esc(title)}</h2><span>${files.length} items shown · synced with Google Drive</span></div><button class="btn" data-a="googlerefreshapp">↻</button></div><div class="drive-files-head"><span>Name</span><span>Last modified</span><span></span></div><div class="drive-file-list">${files.length?fileRows:'<div class="google-workspace-empty">This location is empty, or no files match your search.</div>'}</div></section></div></div>`;
+  const fileRows=files.map(file=>{const isFolder=file.mimeType==='application/vnd.google-apps.folder';const icon=isFolder?'📁':file.mimeType?.includes('spreadsheet')?'▦':file.mimeType?.includes('presentation')?'▤':file.mimeType?.includes('document')?'▧':file.mimeType?.includes('pdf')?'▤':file.mimeType?.includes('image')?'▧':file.mimeType?.includes('video')?'▶':'📄';return `<div class="drive-file-row"><span class="drive-file-icon">${icon}</span>${isFolder?`<button class="drive-file-name" data-a="drivefolder" data-i="${esc(file.id)}" data-k="${esc(file.name)}"><b>${esc(file.name)}</b><small>Folder</small></button>`:`<div class="drive-file-name"><b>${esc(file.name||'Untitled file')}</b><small>${esc(file.owner||file.mimeType||'Google Drive file')}</small></div>`}<span class="drive-file-modified">${esc(googleFormatDate(file.modifiedTime))}</span><span class="drive-file-actions">${!isFolder?`<button class="btn pri" data-a="drivepreview" data-i="${esc(file.id)}">Preview</button>`:''}<button class="btn" data-a="drivestar" data-i="${esc(file.id)}" data-k="${file.starred?'unstar':'star'}">${file.starred?'★ Starred':'☆ Star'}</button><button class="btn" data-a="driverename" data-i="${esc(file.id)}">Rename</button><button class="btn" data-a="drivetrash" data-i="${esc(file.id)}">Trash</button>${file.webViewLink?`<a class="btn" href="${esc(file.webViewLink)}" target="_blank" rel="noopener noreferrer">Open in Drive ↗</a>`:''}</span></div>`}).join('');
+  return `<div class="google-workspace drive-workspace">${header}<div class="google-app-layout"><aside class="google-app-sidebar">${driveNav}<div class="google-sidebar-foot">Files stay in your Google Drive. Upload images, videos and other files, and preview supported documents and media inside LifeLink.</div></aside><section class="google-app-content"><div class="google-toolbar">${folderBack}<button class="btn" data-a="drivecreatefolder">＋ New folder</button><label class="btn" for="google-drive-upload">↑ Upload files</label><input id="google-drive-upload" type="file" multiple hidden><input id="google-app-search" type="search" placeholder="Search in Drive" value="${esc(googleServiceQuery)}"><button class="btn pri" data-a="googlesearch">Search</button></div><div class="google-section-heading"><div><h2>${esc(title)}</h2><span>${files.length} items shown · synced with Google Drive</span></div><button class="btn" data-a="googlerefreshapp">↻</button></div><div class="drive-files-head"><span>Name</span><span>Last modified</span><span></span></div><div class="drive-file-list">${files.length?fileRows:'<div class="google-workspace-empty">This location is empty, or no files match your search.</div>'}</div></section></div></div>`;
 }
 function renderGoogleService(){const service=GOOGLE_SERVICE_CATALOG.find(item=>item.id===activeGoogleService);if(!service)return;$('#island-title').textContent=service.name;$('#island-expand').style.display='inline-block';$('#island-expand').textContent='Google apps';$('#island-expand').onclick=()=>openIsland('google');$('#island-body').innerHTML=googleServiceMarkup()}
 function googleEventDay(e){return String(e?.start||'').slice(0,10)}
@@ -2650,7 +2781,7 @@ const X=(i,b)=>{const t=S.tasks.find(x=>x.id==i),delT=()=>{S.tasks=S.tasks.filte
  aiundo:()=>{const sn=aiUndo[i];if(!sn){toast('Undo is no longer available for this change.');return}delete aiUndo[i];aiRestore(sn);toast('Undone ✓')},
  openlink:()=>{const arr=b.dataset.k==='home'?S.links:((S.tasks.find(x=>x.id==U.tid)||{}).links||[]);const l=arr[+i];if(l)openBrowser(l.u)},
  nologo:()=>{S.logo='';save();applyPrefs();updateAvatar();if(islandMode=='account')refreshIsland();toast('Profile picture reset')},
- ghconn:()=>startGitHubConnect(),ghdisc:()=>disconnectGitHub(),googlepopup:()=>{closeIsland();location.hash='#/settings'},googleconn:()=>startGoogleConnect(),googleswitch:()=>showGoogleAccountSwitcher(),googleaccountselect:()=>{S.googleActiveAccountId=i;save();closeModal();googleServiceData=null;refreshGoogleService();},googleaccountadd:()=>{closeModal();startGoogleConnect(true)},gmailcompose:()=>googleCompose(),gmailtrash:()=>googleMessageAction(i,'trash'),gmailarchive:()=>googleMessageAction(i,'archive'),gmailread:()=>googleMessageAction(i,b.dataset.k||'unread'),gmailstar:()=>googleMessageAction(i,b.dataset.k||'star'),gmailreply:()=>{const m=googleServiceData?.message;if(m)ask('Reply to email',[['to','To','email'],['subject','Subject','text'],['message','Message*','text']],{to:m.from,subject:'Re: '+(m.subject||''),message:''},d=>googleWrite('gmail.send',d).catch(e=>toast(e.message)))},gcalcreate:()=>googleCalendarCreate(null),gcaledit:()=>{const ev=(googleServiceData?.events||[]).find(x=>x.id===i);if(ev)googleCalendarCreate(ev)},drivecreatefolder:()=>googleDriveCreateFolder(),driverename:()=>{const f=(googleServiceData?.files||[]).find(x=>x.id===i);if(f)googleDriveRename(f)},drivestar:()=>{const f=(googleServiceData?.files||[]).find(x=>x.id===i);if(f)googleDriveAction(f,b.dataset.k==='star'?'star':'unstar')},drivetrash:()=>{const f=(googleServiceData?.files||[]).find(x=>x.id===i);if(f)googleDriveAction(f,'trash')},googleopen:()=>openGoogleService(i),googlehome:()=>openIsland('google'),googlerefreshapp:()=>refreshGoogleService(),googlesearch:()=>{googleServiceQuery=$('#google-app-search')?.value?.trim()||'';refreshGoogleService(googleServiceQuery)},googlemsg:()=>openGoogleMessage(i),gmailto:()=>{activeGoogleService='gmail';googleMailFolder='in:inbox';googleMailFolderName='Inbox';googleServiceQuery='';googleMessageOpen=i;openIsland('google-service');openGoogleMessage(i)},gmailfolder:()=>{googleMailFolder=i;googleMailFolderName=b.dataset.k||'Inbox';googleServiceQuery='';googleMessageOpen=null;refreshGoogleService('')},driveview:()=>{googleDriveView=i;googleDriveFolderId='';googleDriveFolderName='';googleServiceQuery='';refreshGoogleService('')},drivefolder:()=>{googleDriveFolderId=i;googleDriveFolderName=b.dataset.k||'Folder';googleServiceQuery='';refreshGoogleService('')},gcalprev:()=>{googleCalendarViewDate=new Date(googleCalendarViewDate.getFullYear(),googleCalendarViewDate.getMonth()-1,1);googleCalendarSelectedEventId='';refreshGoogleService()},gcalnext:()=>{googleCalendarViewDate=new Date(googleCalendarViewDate.getFullYear(),googleCalendarViewDate.getMonth()+1,1);googleCalendarSelectedEventId='';refreshGoogleService()},gcalnow:()=>{googleCalendarViewDate=new Date();googleCalendarSelectedEventId='';refreshGoogleService()},gcalview:()=>{googleCalendarView=i;renderGoogleService()},gcalevent:()=>{googleCalendarSelectedEventId=i;renderGoogleService()},gcaleventclose:()=>{googleCalendarSelectedEventId='';renderGoogleService()},gcalrefresh:()=>refreshGoogleCalendar(),gcalopen:()=>{const ev=googleCalendarEvents.find(e=>e.id===i);if(ev?.htmlLink)window.open(ev.htmlLink,'_blank','noopener');else openGoogleService('calendar')},googleback:()=>{googleMessageOpen=null;refreshGoogleService('')},googleservice:()=>setGoogleService(i,b.dataset.k==='add'),googleserviceremove:()=>setGoogleService(i,false),googlerefresh:()=>{googleConnectionStatus=null;googleConnectionError='';refreshGoogleConnectionStatus()},googleuse:()=>{S.googleActiveAccountId=i;save();renderGoogleManager();if(location.hash.includes('/apps'))al()},googledisc:()=>disconnectGoogleAccount(i),
+ ghconn:()=>startGitHubConnect(),ghdisc:()=>disconnectGitHub(),googlepopup:()=>{closeIsland();location.hash='#/settings'},googleconn:()=>startGoogleConnect(),googleswitch:()=>showGoogleAccountSwitcher(),googleaccountselect:()=>{S.googleActiveAccountId=i;save();closeModal();googleServiceData=null;refreshGoogleService();},googleaccountadd:()=>{closeModal();startGoogleConnect(true)},gmailcompose:()=>googleCompose(),gmailtrash:()=>googleMessageAction(i,'trash'),gmailarchive:()=>googleMessageAction(i,'archive'),gmailread:()=>googleMessageAction(i,b.dataset.k||'unread'),gmailstar:()=>googleMessageAction(i,b.dataset.k||'star'),gmailreply:()=>{const m=googleServiceData?.message;if(m)ask('Reply to email',[['to','To','email'],['subject','Subject','text'],['message','Message*','text']],{to:m.from,subject:'Re: '+(m.subject||''),message:''},d=>googleWrite('gmail.send',d).catch(e=>toast(e.message)))},gcalcreate:()=>googleCalendarCreate(null),gcaledit:()=>{const ev=(googleServiceData?.events||[]).find(x=>x.id===i);if(ev)googleCalendarCreate(ev)},drivecreatefolder:()=>googleDriveCreateFolder(),drivepreview:()=>{const f=(googleServiceData?.files||[]).find(x=>x.id===i);if(f)googleDrivePreviewFile(f)},driverename:()=>{const f=(googleServiceData?.files||[]).find(x=>x.id===i);if(f)googleDriveRename(f)},drivestar:()=>{const f=(googleServiceData?.files||[]).find(x=>x.id===i);if(f)googleDriveAction(f,b.dataset.k==='star'?'star':'unstar')},drivetrash:()=>{const f=(googleServiceData?.files||[]).find(x=>x.id===i);if(f)googleDriveAction(f,'trash')},googleopen:()=>openGoogleService(i),googlehome:()=>openIsland('google'),googlerefreshapp:()=>refreshGoogleService(),googlesearch:()=>{googleServiceQuery=$('#google-app-search')?.value?.trim()||'';refreshGoogleService(googleServiceQuery)},googlemsg:()=>openGoogleMessage(i),gmailto:()=>{activeGoogleService='gmail';googleMailFolder='in:inbox';googleMailFolderName='Inbox';googleServiceQuery='';googleMessageOpen=i;openIsland('google-service');openGoogleMessage(i)},gmailfolder:()=>{googleMailFolder=i;googleMailFolderName=b.dataset.k||'Inbox';googleServiceQuery='';googleMessageOpen=null;refreshGoogleService('')},driveview:()=>{googleDriveView=i;googleDriveFolderId='';googleDriveFolderName='';googleServiceQuery='';refreshGoogleService('')},drivefolder:()=>{googleDriveFolderId=i;googleDriveFolderName=b.dataset.k||'Folder';googleServiceQuery='';refreshGoogleService('')},gcalprev:()=>{googleCalendarViewDate=new Date(googleCalendarViewDate.getFullYear(),googleCalendarViewDate.getMonth()-1,1);googleCalendarSelectedEventId='';refreshGoogleService()},gcalnext:()=>{googleCalendarViewDate=new Date(googleCalendarViewDate.getFullYear(),googleCalendarViewDate.getMonth()+1,1);googleCalendarSelectedEventId='';refreshGoogleService()},gcalnow:()=>{googleCalendarViewDate=new Date();googleCalendarSelectedEventId='';refreshGoogleService()},gcalview:()=>{googleCalendarView=i;renderGoogleService()},gcalevent:()=>{googleCalendarSelectedEventId=i;renderGoogleService()},gcaleventclose:()=>{googleCalendarSelectedEventId='';renderGoogleService()},gcalrefresh:()=>refreshGoogleCalendar(),gcalopen:()=>{const ev=googleCalendarEvents.find(e=>e.id===i);if(ev?.htmlLink)window.open(ev.htmlLink,'_blank','noopener');else openGoogleService('calendar')},googleback:()=>{googleMessageOpen=null;refreshGoogleService('')},googleservice:()=>setGoogleService(i,b.dataset.k==='add'),googleserviceremove:()=>setGoogleService(i,false),googlerefresh:()=>{googleConnectionStatus=null;googleConnectionError='';refreshGoogleConnectionStatus()},googleuse:()=>{S.googleActiveAccountId=i;save();renderGoogleManager();if(location.hash.includes('/apps'))al()},googledisc:()=>disconnectGoogleAccount(i),
  apptab:()=>{U.appTab=i==='discover'?'discover':'mine';if(U.appTab==='mine')U.aq='';al()},
  appadd:()=>addAppToShelf(i),
  appremove:()=>removeAppFromShelf(i),
@@ -2694,6 +2825,13 @@ const X=(i,b)=>{const t=S.tasks.find(x=>x.id==i),delT=()=>{S.tasks=S.tasks.filte
    enterApp('Account data reset');
  })}};
 
+document.addEventListener('change',e=>{
+  if(e.target&&e.target.id==='google-drive-upload'){
+    const files=Array.from(e.target.files||[]);
+    e.target.value='';
+    uploadGoogleDriveFiles(files);
+  }
+});
 document.addEventListener('click',e=>{
   const b=e.target.closest('[data-a]');if(!b||!S||!S.loggedIn)return;
   const a=e.target.closest('a[href]');if(a&&a!==b)return;   // a real link inside a clickable card: let the link win
