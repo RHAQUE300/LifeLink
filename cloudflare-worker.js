@@ -480,11 +480,11 @@ export default {
             const subject = typeof body.subject === "string" ? body.subject.slice(0, 998) : "";
             const messageText = typeof body.message === "string" ? body.message.slice(0, 20000) : "";
             if (!to || !/^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$/.test(to) || !messageText) return json({ error: "A valid recipient and message are required" }, 400);
-            const rawMessage = "To: " + to + "\\r\\nSubject: " + subject.replace(/[\\r\\n]/g, " ") + "\\r\\nMIME-Version: 1.0\\r\\nContent-Type: text/plain; charset=UTF-8\\r\\n\\r\\n" + messageText;
+            const rawMessage = "To: " + to + "\r\nSubject: " + subject.replace(/[\r\n]/g, " ") + "\r\nMIME-Version: 1.0\r\nContent-Type: text/plain; charset=UTF-8\r\n\r\n" + messageText;
             const bytes = new TextEncoder().encode(rawMessage);
             let binary = "";
             for (const byte of bytes) binary += String.fromCharCode(byte);
-            const raw = btoa(binary).replace(/\\+/g, "-").replace(/\\//g, "_").replace(/=+$/g, "");
+            const raw = btoa(binary).replaceAll("+", "-").replaceAll("/", "_").replace(/=+$/g, "");
             const sent = await googleApiFetch("/gmail/v1/users/me/messages/send", accessToken, "POST", { raw });
             return json({ sent: true, id: sent.id || "", threadId: sent.threadId || "" });
           }
