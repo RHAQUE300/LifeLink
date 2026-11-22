@@ -432,6 +432,143 @@ export default {
         return json({ connected: accounts.length > 0, accounts });
       }
 
+      // Binary Drive access is kept behind the same LifeLink session and per-user
+      // Google token storage as the JSON service endpoints.
+      if (url.pathname === "/api/google/file" || url.pathname === "/api/google/upload") {
+        if (request.headers.get("X-Requested-With") !== "XMLHttpRequest") return json({ error: "Invalid request" }, 400);
+        if (!env.MY_RATE_LIMITER) return json({ error: "Rate limiter is not configured" }, 500);
+        const { success } = await env.MY_RATE_LIMITER.limit({ key: "google:" + user.id });
+        if (!success) return json({ error: "Google service rate limit exceeded. Try again shortly." }, 429);
+
+        const accountId = url.searchParams.get("accountId") || "";
+        if (!/^(legacy|[0-9a-f-]{36})$/i.test(accountId)) return json({ error: "Invalid Google account" }, 400);
+        const key = accountId === "legacy" ? legacyKey : prefix + accountId;
+        const saved = await env.GOOGLE_TOKENS.get(key, "json");
+        if (!saved || typeof saved.refresh_token !== "string" || !saved.refresh_token) return json({ error: "This Google account needs to be reconnected." }, 401);
+        const googleClientId = typeof env.GOOGLE_CLIENT_ID === "string" ? env.GOOGLE_CLIENT_ID.trim() : "";
+        const googleClientSecret = typeof env.GOOGLE_CLIENT_SECRET === "string" ? env.GOOGLE_CLIENT_SECRET.trim() : "";
+        if (!googleClientId || !googleClientSecret) return json({ error: "Google OAuth is not configured on the server" }, 500);
+
+        const tokenResponse = await fetch("https://oauth2.googleapis.com/token", {
+          method: "POST",
+          headers: { "Content-Type": "application/x-www-form-urlencoded" },
+          body: new URLSearchParams({
+            client_id: googleClientId, client_secret: googleClientSecret,
+            refresh_token: saved.refresh_token, grant_type: "refresh_token"
+          }),
+          signal: AbortSignal.timeout(15000)
+        });
+        let tokenData = {};
+        try { tokenData = await tokenResponse.json(); } catch {}
+        if (!tokenResponse.ok || !tokenData.access_token) {
+          console.error("Google binary-operation token refresh failed:", tokenResponse.status, tokenData.error || "unknown error");
+          return json({ error: "Google authorization expired or was revoked. Reconnect this account in Settings." }, 401);
+        }
+        const accessToken = tokenData.access_token;
+        await env.GOOGLE_TOKENS.put(key, JSON.stringify({
+          ...saved, refresh_token: saved.refresh_token,
+          access_token: accessToken,
+          expires_at: Date.now() + Math.max(60, Number(tokenData.expires_in) || 3600) * 1000
+        }));
+
+        if (url.pathname === "/api/google/file") {
+          const fileId = url.searchParams.get("fileId") || "";
+          if (!/^[A-Za-z0-9_-]{1,200}$/.test(fileId)) return json({ error: "Invalid Drive file identifier" }, 400);
+          const exportPdf = url.searchParams.get("export") === "pdf";
+          const fileName = String(url.searchParams.get("name") || "Drive file").replace(/[\\r\\n\\0]/g, " ").slice(0, 240);
+          const apiPath = exportPdf
+            ? "/drive/v3/files/" + encodeURIComponent(fileId) + "/export?mimeType=application%2Fpdf"
+            : "/drive/v3/files/" + encodeURIComponent(fileId) + "?alt=media";
+          const headers = { Authorization: "Bearer " + accessToken };
+          const range = request.headers.get("Range");
+          if (range && !exportPdf && /^bytes=\\d*-\\d*(,\\d*-\\d*)*$/.test(range)) headers.Range = range;
+          const upstream = await fetch("https://www.googleapis.com" + apiPath, {
+            method: "GET", headers, signal: AbortSignal.timeout(60000)
+          });
+          if (!upstream.ok) {
+            let detail = {};
+            try { detail = await upstream.json(); } catch {}
+            return json({ error: String(detail?.error?.message || "Google Drive could not provide this file (" + upstream.status + ")").slice(0, 240) }, upstream.status === 404 ? 404 : 502);
+          }
+          let contentType = (upstream.headers.get("Content-Type") || (exportPdf ? "application/pdf" : "application/octet-stream")).split(";")[0].trim().toLowerCase();
+          // Never execute HTML or script files from a Drive blob inside the LifeLink origin.
+          if (["text/html", "application/xhtml+xml", "application/javascript", "text/javascript", "image/svg+xml"].includes(contentType)) contentType = "text/plain";
+          const inline = contentType === "application/pdf" || contentType.startsWith("image/") ||
+            contentType.startsWith("video/") || contentType.startsWith("audio/") ||
+            contentType.startsWith("text/") || contentType === "application/json" ||
+            contentType === "application/xml";
+          const responseHeaders = {
+            ...corsHeaders,
+            "Content-Type": contentType,
+            "Content-Disposition": (inline ? "inline" : "attachment") + "; filename*=UTF-8''" + encodeURIComponent(fileName),
+            "Cache-Control": "private, no-store",
+            "X-Content-Type-Options": "nosniff"
+          };
+          for (const header of ["Accept-Ranges", "Content-Length", "Content-Range"]) {
+            const value = upstream.headers.get(header);
+            if (value) responseHeaders[header] = value;
+          }
+          return new Response(upstream.body, { status: upstream.status, headers: responseHeaders });
+        }
+
+        const contentLength = Number(request.headers.get("Content-Length") || 0);
+        if (contentLength > 99000000) return json({ error: "This file is larger than the current 99 MB per-request upload limit." }, 413);
+        const fileName = String(url.searchParams.get("name") || "").trim().replace(/[\\r\\n\\0]/g, " ").slice(0, 240);
+        const parentId = url.searchParams.get("parentId") || "";
+        if (!fileName) return json({ error: "A file name is required" }, 400);
+        if (parentId && !/^[A-Za-z0-9_-]{1,200}$/.test(parentId)) return json({ error: "Invalid Drive folder identifier" }, 400);
+        if (!request.body) return json({ error: "The upload does not contain a file" }, 400);
+        const contentType = String(request.headers.get("Content-Type") || "application/octet-stream").split(";")[0].trim().slice(0, 160);
+        if (!/^[A-Za-z0-9!#        return json({ connected: accounts.length > 0, accounts });
+      }
+
+      if (request.headers.get("X-Requested-With") !== "XMLHttpRequest") return json({ error: "Invalid request" }, 400);^_.+-]+\\/[A-Za-z0-9!#        return json({ connected: accounts.length > 0, accounts });
+      }
+
+      if (request.headers.get("X-Requested-With") !== "XMLHttpRequest") return json({ error: "Invalid request" }, 400);^_.+-]+$/.test(contentType)) return json({ error: "Invalid file content type" }, 400);
+
+        try {
+          const metadata = { name: fileName, ...(parentId ? { parents: [parentId] } : {}) };
+          const startHeaders = {
+            Authorization: "Bearer " + accessToken,
+            "Content-Type": "application/json; charset=UTF-8",
+            "X-Upload-Content-Type": contentType
+          };
+          if (contentLength > 0) startHeaders["X-Upload-Content-Length"] = String(contentLength);
+          const session = await fetch("https://www.googleapis.com/upload/drive/v3/files?uploadType=resumable&fields=id,name,mimeType,modifiedTime,webViewLink,parents,size,starred,description", {
+            method: "POST", headers: startHeaders, body: JSON.stringify(metadata),
+            signal: AbortSignal.timeout(20000)
+          });
+          if (!session.ok) {
+            let detail = {};
+            try { detail = await session.json(); } catch {}
+            return json({ error: String(detail?.error?.message || "Google Drive could not start the upload (" + session.status + ")").slice(0, 240) }, 502);
+          }
+          const sessionUri = session.headers.get("Location") || "";
+          let sessionUrl;
+          try { sessionUrl = new URL(sessionUri); } catch { return json({ error: "Google Drive did not return a valid upload session" }, 502); }
+          if (sessionUrl.protocol !== "https:" || !["www.googleapis.com", "content.googleapis.com"].includes(sessionUrl.hostname)) {
+            return json({ error: "Google Drive returned an unexpected upload destination" }, 502);
+          }
+          const uploadHeaders = { Authorization: "Bearer " + accessToken, "Content-Type": contentType };
+          if (contentLength > 0) uploadHeaders["Content-Length"] = String(contentLength);
+          const uploaded = await fetch(sessionUrl.href, {
+            method: "PUT", headers: uploadHeaders, body: request.body,
+            signal: AbortSignal.timeout(180000)
+          });
+          let uploadedFile = {};
+          try { uploadedFile = await uploaded.json(); } catch {}
+          if (!uploaded.ok || !uploadedFile.id) {
+            const detail = uploadedFile?.error?.message || "Google Drive upload did not complete (" + uploaded.status + ")";
+            return json({ error: String(detail).slice(0, 240) }, 502);
+          }
+          return json({ uploaded: true, file: uploadedFile });
+        } catch (error) {
+          console.error("Google Drive upload failed:", error.message);
+          return json({ error: String(error.message || "Google Drive upload failed").slice(0, 240) }, 502);
+        }
+      }
+
       if (request.headers.get("X-Requested-With") !== "XMLHttpRequest") return json({ error: "Invalid request" }, 400);
       const contentLength = Number(request.headers.get("Content-Length") || 0);
       if (contentLength > 12000) return json({ error: "Request too large" }, 413);
