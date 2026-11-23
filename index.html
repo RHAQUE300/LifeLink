@@ -2918,7 +2918,7 @@ function syncDockContentWidth(){
     return total+rect.width+(parseFloat(style.marginLeft)||0)+(parseFloat(style.marginRight)||0);
   },0)+itemGap*Math.max(0,children.length-1);
   const probe=document.createElement('span');
-  probe.style.cssText='position:absolute;visibility:hidden;pointer-events:none;width:var(--dock-open-gap);height:var(--dock-open-padding)';
+  probe.style.cssText='display:block;position:absolute;visibility:hidden;pointer-events:none;width:var(--dock-open-gap);height:var(--dock-open-padding)';
   dock.appendChild(probe);
   const probeRect=probe.getBoundingClientRect();
   probe.remove();
