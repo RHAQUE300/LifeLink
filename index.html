@@ -333,6 +333,63 @@ pre,code{max-width:100%;overflow-wrap:anywhere;white-space:pre-wrap}
 #dock.hide,#dock.c1.hide{transform:translate(-50%,calc(100% + 24px));}
 @media(max-width:620px){#dock.c1{width:52px}#dock .it{flex-wrap:nowrap}}
 @media(prefers-reduced-motion:reduce){#dock .it{transition:none!important}}
+
+/* Dock track: navigation links travel horizontally behind the circular launcher. */
+#dock{
+  position:fixed;left:50%;right:auto;transform:translateX(-50%);
+  display:flex;flex-flow:row nowrap;align-items:center;justify-content:flex-start;gap:0;
+  width:max-content;max-width:calc(100vw - 16px);height:56px;min-height:56px;
+  padding:5px;overflow:hidden;isolation:isolate;interpolate-size:allow-keywords;
+  border-radius:999px;
+  transition:width .62s cubic-bezier(.16,1,.3,1),border-radius .5s cubic-bezier(.16,1,.3,1),transform .62s cubic-bezier(.16,1,.3,1);
+}
+#dock:not(.c1){width:max-content;border-radius:999px}
+#dock #dt{
+  position:relative;z-index:5;flex:0 0 44px;width:44px;height:44px;min-width:44px;
+  padding:0;border-radius:50%;background:rgba(255,255,255,.92);
+  -webkit-backdrop-filter:blur(16px);backdrop-filter:blur(16px);
+  transition:background .2s,border-color .2s,transform .2s;
+}
+#dock .it-window{
+  position:relative;z-index:1;display:block;flex:0 1 auto;min-width:0;
+  width:max-content;max-width:calc(100vw - 72px);height:44px;overflow:visible;
+  transition:max-width .62s cubic-bezier(.16,1,.3,1);
+}
+#dock .it{
+  display:flex;flex-flow:row nowrap;align-items:center;justify-content:flex-start;gap:4px;
+  width:max-content;min-width:max-content;max-width:none!important;height:44px;
+  overflow:visible!important;opacity:1!important;visibility:visible!important;
+  transform:translateX(0);white-space:nowrap;will-change:transform;
+  transition:transform .62s cubic-bezier(.16,1,.3,1);
+}
+#dock .dk{display:inline-flex;flex:0 0 auto;align-items:center;white-space:nowrap;max-width:none;padding:9px 12px}
+#dock .dk span{display:inline;white-space:nowrap}
+#dock.c1{
+  width:56px;height:56px;min-width:56px;max-width:56px;min-height:56px;
+  padding:5px;border-radius:50%;justify-content:flex-start;
+}
+#dock.c1 #dt{position:relative;z-index:5;transform:none}
+#dock.c1 .it-window{width:0;max-width:0;flex:0 0 0}
+#dock.c1 .it{
+  width:max-content!important;min-width:max-content!important;max-width:none!important;height:44px!important;
+  opacity:1!important;visibility:visible!important;overflow:visible!important;
+  transform:translateX(calc(-100% - 44px));pointer-events:none;
+}
+#dock #dt:hover{transform:scale(1.045)}
+#dock #dt:active{transform:scale(.96)}
+#dock.c1 #dt:hover{transform:scale(1.045)}
+#dock.c1 #dt:active{transform:scale(.96)}
+#dock.hide,#dock.c1.hide{transform:translate(-50%,calc(100% + 24px))}
+[data-theme=dark] #dock #dt{background:rgba(18,18,20,.94);border-color:rgba(255,255,255,.2)}
+@media(max-width:620px){
+  #dock{max-width:calc(100vw - 12px)}
+  #dock .it-window{max-width:calc(100vw - 68px)}
+  #dock.c1{width:56px;min-width:56px;max-width:56px}
+}
+@media(prefers-reduced-motion:reduce){
+  #dock,#dock .it-window,#dock .it,#dock #dt{transition:none!important}
+}
+
 </style>
 </head><body>
 
@@ -353,7 +410,7 @@ pre,code{max-width:100%;overflow-wrap:anywhere;white-space:pre-wrap}
   <button class="ib" id="av" onclick="openIsland('account')" title="Account" aria-label="Account"></button>
 </header>
 <main></main>
-<nav id="dock" class="glass" aria-label="Dock" style="display:none"><button class="ib" id="dt" aria-label="Hide dock" aria-expanded="true"></button><div class="it"><span class="vd"></span><a class="dk" data-r="todo" href="#/todo">☑ <span>To Do</span></a><a class="dk" data-r="calendar" href="#/calendar">▦ <span>Calendar</span></a><a class="dk" data-r="notes" href="#/notes">✎ <span>Notes</span></a><a class="dk" data-r="apps" href="#/apps">⊞ <span>Apps</span></a><a class="dk go" href="#/recovery">▶ <span>Start Recovery</span></a></div></nav>
+<nav id="dock" class="glass" aria-label="Dock" style="display:none"><button class="ib" id="dt" aria-label="Hide dock" aria-expanded="true"></button><div class="it-window"><div class="it"><span class="vd"></span><a class="dk" data-r="todo" href="#/todo">☑ <span>To Do</span></a><a class="dk" data-r="calendar" href="#/calendar">▦ <span>Calendar</span></a><a class="dk" data-r="notes" href="#/notes">✎ <span>Notes</span></a><a class="dk" data-r="apps" href="#/apps">⊞ <span>Apps</span></a><a class="dk go" href="#/recovery">▶ <span>Start Recovery</span></a></div></div></nav>
 
 <div id="modal-backdrop" onclick="if(event.target===this)closeModal()">
   <div id="modal-card" role="dialog" aria-modal="true"></div>
