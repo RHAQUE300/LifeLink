@@ -309,6 +309,20 @@ pre,code{max-width:100%;overflow-wrap:anywhere;white-space:pre-wrap}
 @media(prefers-reduced-motion:reduce){#dock,.it{transition:none!important}}
 
 .ev.gcal{background:rgba(66,133,244,.13);border-left:2px solid #4285f4;cursor:pointer}.ev.gcal:hover{filter:brightness(.96)}
+
+/* Dock refinement: clean pill when open, true circular launcher when collapsed. */
+#dock{isolation:isolate;overflow:hidden;will-change:transform,width,height,border-radius;padding:7px;gap:0;transition:transform .62s cubic-bezier(.16,1,.3,1),width .58s cubic-bezier(.16,1,.3,1),height .58s cubic-bezier(.16,1,.3,1),padding .58s cubic-bezier(.16,1,.3,1),border-radius .58s cubic-bezier(.16,1,.3,1),box-shadow .4s cubic-bezier(.16,1,.3,1);interpolate-size:allow-keywords}
+#dock:not(.c1){width:max-content;height:auto;min-height:54px;border-radius:999px}
+#dock .it{opacity:1;transform:translateX(0) scale(1);visibility:visible;transition:max-width .5s cubic-bezier(.16,1,.3,1),opacity .32s ease,transform .5s cubic-bezier(.16,1,.3,1),visibility .25s;}
+#dock.c1{width:54px;height:54px;min-height:54px;padding:5px;border-radius:50%;display:flex;align-items:center;justify-content:center;box-shadow:0 10px 32px rgba(45,65,115,.18),inset 0 1px 0 rgba(255,255,255,.85)}
+#dock.c1 .it{width:0;max-width:0;opacity:0;transform:translateX(-8px) scale(.88);visibility:hidden;overflow:hidden;pointer-events:none}
+#dock #dt{width:40px;height:40px;min-width:40px;padding:0;border-radius:50%;display:grid;place-items:center;flex:none;transition:width .35s cubic-bezier(.16,1,.3,1),height .35s cubic-bezier(.16,1,.3,1),transform .32s cubic-bezier(.16,1,.3,1),background .32s,border-color .32s}
+#dock.c1 #dt{width:44px;height:44px;min-width:44px;transform:scale(1)}
+#dock #dt:hover{transform:scale(1.06)}#dock #dt:active{transform:scale(.92)}
+#dock.hide{transform:translate(-50%,calc(100% + 24px));transition-duration:.7s}
+#dock.c1.hide{transform:translate(-50%,calc(100% + 24px)) scale(.82)}
+@media(max-width:620px){#dock:not(.c1){border-radius:999px}#dock.c1{width:52px;height:52px;min-height:52px}#dock.c1 #dt{width:42px;height:42px;min-width:42px}}
+@media(prefers-reduced-motion:reduce){#dock,#dock .it,#dock #dt{transition:none!important}}
 </style>
 </head><body>
 
@@ -2905,7 +2919,7 @@ addEventListener('keydown',e=>{
 });
 
 const IC=a=>`<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${a}</svg>`,EYE=IC('<path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/>'),OFF=IC('<path d="M17.9 17.9A10.1 10.1 0 0 1 12 20C5 20 1 12 1 12a18.5 18.5 0 0 1 5.1-5.9M9.9 4.2A9 9 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.2 3.2M14.1 14.1a3 3 0 1 1-4.2-4.2M1 1l22 22"/>');
-const dtBtn=$('#dt');if(dtBtn){dtBtn.innerHTML=OFF;dtBtn.onclick=function(){const c=$('#dock').classList.toggle('c1');this.innerHTML=c?EYE:OFF;this.setAttribute('aria-expanded',!c)}};
+const dtBtn=$('#dt');if(dtBtn){dtBtn.innerHTML=OFF;dtBtn.onclick=function(){const dock=$('#dock'),c=dock.classList.toggle('c1');this.innerHTML=c?EYE:OFF;this.setAttribute('aria-expanded',String(!c));this.setAttribute('aria-label',c?'Show dock':'Hide dock');this.setAttribute('title',c?'Show dock':'Hide dock')}};
 let ly=0;addEventListener('scroll',()=>{$('#dock').classList.toggle('hide',scrollY>ly&&scrollY>140);ly=scrollY},{passive:true});
 addEventListener('hashchange',()=>{
   if(!S.loggedIn){location.hash='#/login';return;}
