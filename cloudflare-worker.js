@@ -73,11 +73,35 @@ function googleHeader(headers, name) {
     .find(header => String(header.name || "").toLowerCase() === name.toLowerCase())?.value || "";
 }
 
-async function googleApiFetch(path, accessToken, method = "GET", body) {
-  // Gmail uses its own service endpoint; Calendar and Drive use www.googleapis.com.
-  const apiHost = path.startsWith("/gmail/")
+
+const GOOGLE_API_SERVICE_REGISTRY = Object.freeze({
+  docs: { name: "Google Docs", host: "https://docs.googleapis.com", prefixes: ["/v1/documents"], scopes: ["https://www.googleapis.com/auth/documents"] },
+  sheets: { name: "Google Sheets", host: "https://sheets.googleapis.com", prefixes: ["/v4/spreadsheets"], scopes: ["https://www.googleapis.com/auth/spreadsheets"] },
+  slides: { name: "Google Slides", host: "https://slides.googleapis.com", prefixes: ["/v1/presentations"], scopes: ["https://www.googleapis.com/auth/presentations"] },
+  forms: { name: "Google Forms", host: "https://forms.googleapis.com", prefixes: ["/v1/forms"], scopes: ["https://www.googleapis.com/auth/forms.body", "https://www.googleapis.com/auth/forms.responses.readonly"] },
+  tasks: { name: "Google Tasks", host: "https://tasks.googleapis.com", prefixes: ["/tasks/v1/users", "/tasks/v1/lists"], scopes: ["https://www.googleapis.com/auth/tasks"] },
+  contacts: { name: "Google Contacts", host: "https://people.googleapis.com", prefixes: ["/v1/people"], scopes: ["https://www.googleapis.com/auth/contacts"] },
+  classroom: { name: "Google Classroom", host: "https://classroom.googleapis.com", prefixes: ["/v1/courses"], scopes: ["https://www.googleapis.com/auth/classroom.courses"] },
+  chat: { name: "Google Chat", host: "https://chat.googleapis.com", prefixes: ["/v1/spaces"], scopes: ["https://www.googleapis.com/auth/chat.spaces", "https://www.googleapis.com/auth/chat.messages"] },
+  meet: { name: "Google Meet", host: "https://meet.googleapis.com", prefixes: ["/v2/spaces"], scopes: ["https://www.googleapis.com/auth/meetings.space.created", "https://www.googleapis.com/auth/meetings.space.readonly"] },
+  keep: { name: "Google Keep", host: "https://keep.googleapis.com", prefixes: ["/v1/notes"], scopes: ["https://www.googleapis.com/auth/keep"] },
+  appsscript: { name: "Google Apps Script", host: "https://script.googleapis.com", prefixes: ["/v1/projects"], scopes: ["https://www.googleapis.com/auth/script.projects"] },
+  youtube: { name: "YouTube Data API", host: "https://youtube.googleapis.com", prefixes: ["/youtube/v3"], scopes: ["https://www.googleapis.com/auth/youtube"] },
+  analytics: { name: "Google Analytics Data", host: "https://analyticsdata.googleapis.com", prefixes: ["/v1beta/properties"], scopes: ["https://www.googleapis.com/auth/analytics.readonly"] },
+  searchconsole: { name: "Google Search Console", host: "https://searchconsole.googleapis.com", prefixes: ["/webmasters/v3/sites"], scopes: ["https://www.googleapis.com/auth/webmasters.readonly"] },
+  tagmanager: { name: "Google Tag Manager", host: "https://tagmanager.googleapis.com", prefixes: ["/tagmanager/v2/accounts"], scopes: ["https://www.googleapis.com/auth/tagmanager.readonly"] },
+  blogger: { name: "Blogger", host: "https://blogger.googleapis.com", prefixes: ["/v3/blogs"], scopes: ["https://www.googleapis.com/auth/blogger"] },
+  books: { name: "Google Books", host: "https://books.googleapis.com", prefixes: ["/books/v1/volumes"], scopes: [] },
+  adsense: { name: "Google AdSense", host: "https://adsense.googleapis.com", prefixes: ["/v2/accounts"], scopes: ["https://www.googleapis.com/auth/adsense.readonly"] },
+  admin: { name: "Google Admin SDK", host: "https://admin.googleapis.com", prefixes: ["/admin/directory/v1/users"], scopes: ["https://www.googleapis.com/auth/admin.directory.user.readonly"] },
+  groups: { name: "Google Groups Settings", host: "https://www.googleapis.com", prefixes: ["/groups/v1/groups"], scopes: ["https://www.googleapis.com/auth/apps.groups.settings"] }
+});
+
+async function googleApiFetch(path, accessToken, method = "GET", body, hostOverride) {
+  // Dedicated Google API hosts are supplied only by the fixed service registry.
+  const apiHost = hostOverride || (path.startsWith("/gmail/")
     ? "https://gmail.googleapis.com"
-    : "https://www.googleapis.com";
+    : "https://www.googleapis.com");
   const headers = { Authorization: "Bearer " + accessToken };
   if (body !== undefined) headers["Content-Type"] = "application/json";
   const response = await fetch(apiHost + path, {
@@ -461,10 +485,10 @@ export default {
     }
 
     // Multiple Google accounts, isolated under the authenticated LifeLink user.
-    const googleRoute = ["/api/google/connect", "/api/google/status", "/api/google/disconnect", "/api/google/data", "/api/google/file", "/api/google/upload", "/api/google/stream-session"].includes(url.pathname);
+    const googleRoute = ["/api/google/connect", "/api/google/status", "/api/google/capabilities", "/api/google/disconnect", "/api/google/data", "/api/google/file", "/api/google/upload", "/api/google/stream-session"].includes(url.pathname);
     if (googleRoute) {
       if (origin !== ALLOWED_ORIGIN) return json({ error: "Origin not allowed" }, 403);
-      const expectedMethod = ["/api/google/status", "/api/google/file"].includes(url.pathname) ? "GET" : "POST";
+      const expectedMethod = ["/api/google/status", "/api/google/capabilities", "/api/google/file"].includes(url.pathname) ? "GET" : "POST";
       if (request.method !== expectedMethod) return json({ error: "Method not allowed" }, 405);
       if (!env.GOOGLE_TOKENS) return json({ error: "Google token storage is not configured" }, 500);
       const user = await verifyUser(request, env);
@@ -517,6 +541,22 @@ export default {
 
         const accounts = [...accountsById.values()];
         return json({ connected: accounts.length > 0, accounts });
+      }
+
+      if (url.pathname === "/api/google/capabilities") {
+        const accountId = url.searchParams.get("accountId") || "";
+        if (!/^(legacy|[0-9a-f-]{36})$/i.test(accountId)) return json({ error: "Invalid Google account" }, 400);
+        const key = accountId === "legacy" ? legacyKey : prefix + accountId;
+        const saved = await env.GOOGLE_TOKENS.get(key, "json");
+        if (!saved || !saved.refresh_token) return json({ error: "This Google account needs to be reconnected." }, 401);
+        const granted = new Set(String(saved.scope || "").split(/\\s+/).filter(Boolean));
+        const services = Object.entries(GOOGLE_API_SERVICE_REGISTRY).map(([id, service]) => ({
+          id, name: service.name,
+          available: service.scopes.length === 0 || service.scopes.every(scope => granted.has(scope)),
+          requiredScopes: service.scopes,
+          missingScopes: service.scopes.filter(scope => !granted.has(scope))
+        }));
+        return json({ services });
       }
 
       // Binary Drive access is kept behind the same LifeLink session and per-user
@@ -661,9 +701,11 @@ export default {
 
       if (request.headers.get("X-Requested-With") !== "XMLHttpRequest") return json({ error: "Invalid request" }, 400);
       const contentLength = Number(request.headers.get("Content-Length") || 0);
-      if (contentLength > 12000) return json({ error: "Request too large" }, 413);
+      if (contentLength > 100000) return json({ error: "Request too large" }, 413);
       let body;
-      try { body = await request.json(); } catch { return json({ error: "Invalid JSON" }, 400); }
+      const rawGoogleBody = await request.text();
+      if (new TextEncoder().encode(rawGoogleBody).length > 100000) return json({ error: "Request too large" }, 413);
+      try { body = JSON.parse(rawGoogleBody); } catch { return json({ error: "Invalid JSON" }, 400); }
 
       if (url.pathname === "/api/google/stream-session") {
         if (!env.MY_RATE_LIMITER) return json({ error: "Rate limiter is not configured" }, 500);
@@ -702,7 +744,7 @@ export default {
         const accountId = body.accountId;
         if (typeof accountId !== "string" || !/^(legacy|[0-9a-f-]{36})$/i.test(accountId)) return json({ error: "Invalid Google account" }, 400);
         const operation = typeof body.operation === "string" ? body.operation : "";
-        const allowed = ["gmail.list", "gmail.get", "gmail.send", "gmail.modify", "gmail.trash", "calendar.list", "calendar.create", "calendar.update", "calendar.delete", "drive.list", "drive.createFolder", "drive.rename", "drive.trash", "drive.star"];
+        const allowed = ["gmail.list", "gmail.get", "gmail.send", "gmail.modify", "gmail.trash", "calendar.list", "calendar.create", "calendar.update", "calendar.delete", "drive.list", "drive.createFolder", "drive.rename", "drive.trash", "drive.star", "google.api"];
         if (!allowed.includes(operation)) return json({ error: "Unsupported Google operation" }, 400);
         const key = accountId === "legacy" ? legacyKey : prefix + accountId;
         const saved = await env.GOOGLE_TOKENS.get(key, "json");
@@ -732,6 +774,53 @@ export default {
           expires_at: Date.now() + Math.max(60, Number(tokenData.expires_in) || 3600) * 1000
         }));
         try {
+          if (operation === "google.api") {
+            const serviceId = typeof body.serviceId === "string" ? body.serviceId : "";
+            const service = GOOGLE_API_SERVICE_REGISTRY[serviceId];
+            if (!service) return json({ error: "Unsupported Google API service" }, 400);
+            const apiMethod = typeof body.method === "string" ? body.method.toUpperCase() : "GET";
+            if (!["GET", "POST", "PUT", "PATCH", "DELETE"].includes(apiMethod)) return json({ error: "Unsupported Google API method" }, 400);
+            const resourcePath = typeof body.path === "string" ? body.path : "";
+            if (!resourcePath || resourcePath.length > 2048 || !resourcePath.startsWith("/") ||
+                resourcePath.startsWith("//") || resourcePath.includes("?") || resourcePath.includes("#") ||
+                resourcePath.includes("\\") || /%(?:2f|5c)/i.test(resourcePath)) {
+              return json({ error: "Invalid Google API resource path" }, 400);
+            }
+            let decodedPath = resourcePath;
+            try { decodedPath = decodeURIComponent(resourcePath); } catch { return json({ error: "Invalid Google API resource path" }, 400); }
+            if (decodedPath.split("/").some(part => part === "." || part === "..")) return json({ error: "Invalid Google API resource path" }, 400);
+            const allowedPrefix = service.prefixes.some(prefix =>
+              resourcePath === prefix || resourcePath.startsWith(prefix + "/") || resourcePath.startsWith(prefix + ":")
+            );
+            if (!allowedPrefix) return json({ error: "This Google API resource is not allowed for the selected service" }, 403);
+            const grantedScopes = new Set(String(saved.scope || "").split(/\\s+/).filter(Boolean));
+            const missingScopes = service.scopes.filter(scope => !grantedScopes.has(scope));
+            if (missingScopes.length) return json({
+              error: "Additional Google permissions are required for this service.",
+              code: "GOOGLE_SCOPE_REQUIRED", serviceId, requiredScopes: missingScopes
+            }, 403);
+            const query = body.query && typeof body.query === "object" && !Array.isArray(body.query) ? body.query : {};
+            const queryString = new URLSearchParams();
+            for (const [name, value] of Object.entries(query).slice(0, 40)) {
+              if (!/^[A-Za-z][A-Za-z0-9_-]{0,63}$/.test(name)) continue;
+              const values = Array.isArray(value) ? value.slice(0, 20) : [value];
+              for (const item of values) {
+                if (typeof item === "string" || typeof item === "number" || typeof item === "boolean") {
+                  queryString.append(name, String(item).slice(0, 2048));
+                }
+              }
+            }
+            const querySuffix = queryString.toString();
+            const apiData = body.data && typeof body.data === "object" && !Array.isArray(body.data) ? body.data : undefined;
+            if (["POST", "PUT", "PATCH"].includes(apiMethod) && apiData === undefined) {
+              return json({ error: "A JSON object is required for this Google API write" }, 400);
+            }
+            const apiResult = await googleApiFetch(
+              resourcePath + (querySuffix ? "?" + querySuffix : ""),
+              accessToken, apiMethod, apiData, service.host
+            );
+            return json({ data: apiResult });
+          }
           if (operation === "gmail.send") {
             const to = typeof body.to === "string" ? body.to.trim().slice(0, 1000) : "";
             const subject = typeof body.subject === "string" ? body.subject.slice(0, 998) : "";
@@ -951,9 +1040,13 @@ export default {
         }
       } catch (error) { console.error("Google profile lookup failed:", error.message); }
 
+      const grantedScopes = new Set([
+        ...String(existing?.scope || "").split(/\\s+/).filter(Boolean),
+        ...String(tokens.scope || "").split(/\\s+/).filter(Boolean)
+      ]);
       await env.GOOGLE_TOKENS.put(key, JSON.stringify({
         account_id: accountId, refresh_token: refreshToken, email: googleEmail,
-        scope: tokens.scope || (existing && existing.scope) || "", connected_at: new Date().toISOString()
+        scope: [...grantedScopes].join(" "), connected_at: new Date().toISOString()
       }));
       return json({ connected: true, accountId: accountId, email: googleEmail });
     }
