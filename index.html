@@ -1558,7 +1558,7 @@ async function googleServiceApiCall(serviceId,path,method='GET',query={},data){
 }
 function openGoogleOfficialApp(){
   const service=GOOGLE_SERVICE_CATALOG.find(item=>item.id===activeGoogleService);
-  if(service?.url)window.open(service.url,'_blank','noopener,noreferrer');
+  if(service?.url)openBrowser(service.url,{id:'google:'+service.id,name:service.name,url:service.url,kind:'google-service'});
 }
 function googleFormatDate(value,options={month:'short',day:'numeric',year:undefined}){
   if(!value)return '';
