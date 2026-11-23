@@ -421,6 +421,7 @@ let googleMailFolder='in:inbox',googleMailFolderName='Inbox';
 let googleDriveView='mydrive',googleDriveFolderId='',googleDriveFolderName='';
 let googleCalendarViewDate=new Date(),googleCalendarView='month',googleCalendarSelectedEventId='';
 let googleCalendarEvents=[],googleCalendarSyncing=false,googleCalendarError='',googleCalendarLastSync=0,googleCalendarLastAttempt=0,googleCalendarLoaded=false,googleMailPollTimer=null,googleCalendarPollTimer=null,googleMailBaselineDone=false;
+let googleTaskLists=[],googleSelectedTaskListId='';
 function loadGoogleGIS(){
   if(window.google?.accounts?.oauth2)return Promise.resolve(true);
   if(googleGISPromise)return googleGISPromise;
@@ -474,7 +475,7 @@ async function refreshGoogleConnectionStatus(){
   googleStatusPromise=request;
   try{await request}finally{if(googleStatusPromise===request)googleStatusPromise=null}
 }
-async function startGoogleConnect(forceNewAccount=false){
+async function startGoogleConnect(forceNewAccount=false,additionalScopes=[]){
   const selectedAccountId=S?.googleActiveAccountId;
   const accountId=!forceNewAccount&&selectedAccountId&&selectedAccountId!=='legacy'&&/^[0-9a-f-]{36}$/i.test(selectedAccountId)?selectedAccountId:crypto.randomUUID();
   if(googleConnectionBusy)return;
@@ -485,7 +486,7 @@ async function startGoogleConnect(forceNewAccount=false){
     if(!await loadGoogleGIS())throw new Error('Google authorization could not be loaded. Check your connection and try again.');
     const client=google.accounts.oauth2.initCodeClient({
       client_id:LL_CONFIG.googleClientId,
-      scope:'openid email profile https://www.googleapis.com/auth/gmail.modify https://www.googleapis.com/auth/gmail.send https://www.googleapis.com/auth/drive https://www.googleapis.com/auth/calendar.events',
+      scope:[...new Set(['openid','email','profile','https://www.googleapis.com/auth/gmail.modify','https://www.googleapis.com/auth/gmail.send','https://www.googleapis.com/auth/drive','https://www.googleapis.com/auth/calendar.events',...(Array.isArray(additionalScopes)?additionalScopes:[])])].join(' '),
       ux_mode:'popup',
       select_account:true,
       prompt:'consent',
@@ -1338,6 +1339,28 @@ const GOOGLE_SERVICE_CATALOG=[
   {id:'blogger',name:'Blogger',group:'Business & developer',detail:'Create and manage blogs',url:'https://www.blogger.com/'}
 ];
 const GOOGLE_SERVICE_GROUPS=['Work & school','Everyday Google','Media & discovery','Business & developer'];
+const GOOGLE_API_SERVICE_SCOPES=Object.freeze({
+  docs:['https://www.googleapis.com/auth/documents'],
+  sheets:['https://www.googleapis.com/auth/spreadsheets'],
+  slides:['https://www.googleapis.com/auth/presentations'],
+  forms:['https://www.googleapis.com/auth/forms.body','https://www.googleapis.com/auth/forms.responses.readonly'],
+  tasks:['https://www.googleapis.com/auth/tasks'],
+  contacts:['https://www.googleapis.com/auth/contacts'],
+  classroom:['https://www.googleapis.com/auth/classroom.courses'],
+  chat:['https://www.googleapis.com/auth/chat.spaces','https://www.googleapis.com/auth/chat.messages'],
+  meet:['https://www.googleapis.com/auth/meetings.space.created','https://www.googleapis.com/auth/meetings.space.readonly'],
+  keep:['https://www.googleapis.com/auth/keep'],
+  appsscript:['https://www.googleapis.com/auth/script.projects'],
+  youtube:['https://www.googleapis.com/auth/youtube'],
+  analytics:['https://www.googleapis.com/auth/analytics.readonly'],
+  searchconsole:['https://www.googleapis.com/auth/webmasters.readonly'],
+  tagmanager:['https://www.googleapis.com/auth/tagmanager.readonly'],
+  blogger:['https://www.googleapis.com/auth/blogger'],
+  books:[],
+  adsense:['https://www.googleapis.com/auth/adsense.readonly'],
+  admin:['https://www.googleapis.com/auth/admin.directory.user.readonly'],
+  groups:['https://www.googleapis.com/auth/apps.groups.settings']
+});
 
 const EXTRA_APP_CATALOG=[
 {id:'outlook',name:'Outlook',category:'Email & calendars',detail:'Email, calendar and contacts',url:'https://outlook.office.com/'},
@@ -1511,6 +1534,32 @@ async function requestGoogleService(operation,params={}){
   if(!accountId)throw new Error('Connect a Google account in Settings first.');
   return googleApi('/api/google/data','POST',{accountId,operation,...params});
 }
+function googleServiceScopeState(serviceId){
+  const accounts=Array.isArray(googleConnectionStatus?.accounts)?googleConnectionStatus.accounts:[];
+  const account=accounts.find(item=>item.id===S.googleActiveAccountId)||accounts[0]||null;
+  const required=GOOGLE_API_SERVICE_SCOPES[serviceId];
+  const granted=new Set(String(account?.scopes||'').split(/\s+/).filter(Boolean));
+  const scopes=Array.isArray(required)?required:[];
+  return {account,required:scopes,missing:scopes.filter(scope=>!granted.has(scope))};
+}
+async function requestGoogleServiceAccess(serviceId){
+  const service=GOOGLE_SERVICE_CATALOG.find(item=>item.id===serviceId);
+  const required=GOOGLE_API_SERVICE_SCOPES[serviceId];
+  if(!service||!Array.isArray(required)){toast('This Google product does not have a supported LifeLink API connector yet.');return}
+  if(googleConnectionStatus===null)await refreshGoogleConnectionStatus();
+  const state=googleServiceScopeState(serviceId);
+  if(!state.account){startGoogleConnect(false,required);return}
+  if(!state.missing.length){toast(service.name+' API permissions are already connected.');return}
+  askConfirm('Connect '+service.name+' to LifeLink','Google will ask you to approve the additional permissions required for '+service.name+'. Only this selected Google account is affected.',()=>startGoogleConnect(false,state.missing));
+}
+async function googleServiceApiCall(serviceId,path,method='GET',query={},data){
+  const result=await requestGoogleService('google.api',{serviceId,path,method,query,data});
+  return result.data||{};
+}
+function openGoogleOfficialApp(){
+  const service=GOOGLE_SERVICE_CATALOG.find(item=>item.id===activeGoogleService);
+  if(service?.url)window.open(service.url,'_blank','noopener,noreferrer');
+}
 function googleFormatDate(value,options={month:'short',day:'numeric',year:undefined}){
   if(!value)return '';
   const date=new Date(value);
@@ -1585,8 +1634,14 @@ function googleServiceMarkup(){
   const account=accounts.find(a=>a.id===S.googleActiveAccountId)||accounts[0];
   const hasAccount=!!account;
   const header=`<div class="google-app-topbar"><div class="google-app-brand"><span class="google-app-mark">G</span><div><b>${esc(service.name)}</b><small>${hasAccount?'Connected as '+esc(account.email||'Google account'):'No Google account connected'}</small></div></div><div class="google-app-top-actions"><button class="btn" data-a="googleswitch" ${!hasAccount?'disabled':''}>Switch Google account</button><button class="btn" data-a="googlehome">Google apps</button><button class="btn" data-a="googlerefreshapp" ${!hasAccount?'disabled':''}>↻ Refresh</button></div></div>`;
-  if(!hasAccount)return `<div class="google-workspace">${header}<div class="google-workspace-empty"><b>Connect a Google account</b><p class="sub">LifeLink displays your Google data using the connected account and Google's APIs.</p><button class="btn pri" data-a="googleconn">＋ Connect Google account</button></div></div>`;
-  if(!['gmail','calendar','drive'].includes(id))return `<div class="google-workspace">${header}<div class="google-workspace-empty"><b>Native LifeLink interface not available yet</b><p class="sub">This Google service needs its own interface and API integration.</p><button class="btn" data-a="googlehome">Back to Google services</button></div></div>`;
+  if(!hasAccount)return `<div class="google-workspace">${header}<div class="google-workspace-empty"><b>Connect a Google account</b><p class="sub">Connect an account to use LifeLink's Google API features for this service.</p><div class="google-workspace-actions"><button class="btn pri" data-a="googleauthservice">Connect service permissions</button><button class="btn" data-a="googleexternal">Open official Google app ↗</button></div></div></div>`;
+  if(!['gmail','calendar','drive','tasks','contacts'].includes(id)){
+    const apiScopes=GOOGLE_API_SERVICE_SCOPES[id];
+    if(!Array.isArray(apiScopes))return `<div class="google-workspace">${header}<div class="google-workspace-empty"><b>Official Google app</b><p class="sub">This product does not have a supported user-data API connector in this LifeLink build. Its full native experience is available from Google's own app.</p><div class="google-workspace-actions"><button class="btn pri" data-a="googleexternal">Open full Google app ↗</button><button class="btn" data-a="googlehome">Back to Google services</button></div></div></div>`;
+    const access=googleServiceScopeState(id);
+    const permission=access.missing.length?`<p class="sub">LifeLink needs ${access.missing.length} additional Google permission${access.missing.length===1?'':'s'} before it can call this service's API.</p><button class="btn pri" data-a="googleauthservice">＋ Grant ${esc(service.name)} API access</button>`:`<span class="tag low">API permissions connected</span><p class="sub">This account has granted the registered API scopes. A full native LifeLink interface for this service is not implemented yet.</p>`;
+    return `<div class="google-workspace">${header}<div class="google-workspace-empty"><b>Google API connection</b>${permission}<div class="google-workspace-actions"><button class="btn" data-a="googleexternal">Open full Google app ↗</button><button class="btn" data-a="googlehome">Back to Google services</button></div></div></div>`;
+  }
   if(googleServiceLoading)return `<div class="google-workspace">${header}<div class="google-workspace-loading"><span class="sub">Syncing with Google…</span></div></div>`;
   if(googleServiceError)return `<div class="google-workspace">${header}<div class="google-manager-error"><div><b>Google couldn't return this data</b><div class="sub" style="margin:4px 0 0;font-size:12px">${esc(googleServiceError)}</div></div><button class="btn" data-a="googlerefreshapp">Retry</button></div></div>`;
   const data=googleServiceData||{};
@@ -1617,6 +1672,47 @@ function googleServiceMarkup(){
     const detail=selected?`<div class="google-calendar-detail"><button class="btn" data-a="gcaleventclose">×</button><button class="btn" data-a="gcaledit" data-i="${esc(selected.id)}">Edit</button><h3>${esc(selected.summary||'(Untitled event)')}</h3><p>${esc(googleFormatDate(selected.start,{weekday:'long',month:'long',day:'numeric',year:'numeric'}))} · ${esc(googleCalendarTime(selected.start))}</p>${selected.location?'<p>'+esc(selected.location)+'</p>':''}${selected.description?'<p>'+esc(selected.description)+'</p>':''}${selected.htmlLink?'<a class="btn" href="'+esc(selected.htmlLink)+'" target="_blank" rel="noopener noreferrer">Open in Google Calendar ↗</a>':''}</div>`:'';
     return `<div class="google-workspace calendar-workspace">${header}<div class="google-app-content google-calendar-content">${toolbar}<div style="display:flex;justify-content:flex-end;margin:8px 0"><button class="btn pri" data-a="gcalcreate">＋ Create event</button></div>${content}${detail}<p class="google-sync-footnote">Events sync directly with your primary Google Calendar.</p></div></div>`;
   }
+function googleTaskCreate(){
+  if(!googleSelectedTaskListId){toast('Create or select a task list first.');return}
+  ask('Create Google task',[['title','Task title*','text'],['notes','Notes','text']],{},async data=>{
+    try{await googleServiceApiCall('tasks','/tasks/v1/lists/'+encodeURIComponent(googleSelectedTaskListId)+'/tasks','POST',{}, {title:data.title,notes:data.notes||''});await refreshGoogleService()}
+    catch(error){toast('Task could not be created: '+error.message)}
+  });
+}
+function googleTaskCreateList(){
+  ask('Create Google task list',[['title','List name*','text']],{},async data=>{
+    try{const result=await googleServiceApiCall('tasks','/tasks/v1/users/@me/lists','POST',{}, {title:data.title});googleSelectedTaskListId=result.id||'';await refreshGoogleService()}
+    catch(error){toast('Task list could not be created: '+error.message)}
+  });
+}
+function googleTaskToggle(task){
+  const status=task.status==='completed'?'needsAction':'completed';
+  googleServiceApiCall('tasks','/tasks/v1/lists/'+encodeURIComponent(googleSelectedTaskListId)+'/tasks/'+encodeURIComponent(task.id),'PATCH',{}, {status})
+    .then(()=>refreshGoogleService()).catch(error=>toast('Task update failed: '+error.message));
+}
+function googleTaskDelete(task){
+  askConfirm('Delete Google task','Delete “'+String(task.title||'this task')+'” from Google Tasks?',()=>{
+    googleServiceApiCall('tasks','/tasks/v1/lists/'+encodeURIComponent(googleSelectedTaskListId)+'/tasks/'+encodeURIComponent(task.id),'DELETE')
+      .then(()=>refreshGoogleService()).catch(error=>toast('Task could not be deleted: '+error.message));
+  });
+}
+function googleContactCreate(){
+  ask('Create Google contact',[['givenName','First name*','text'],['familyName','Last name','text'],['email','Email','email'],['phone','Phone','tel']],{},async data=>{
+    const person={names:[{givenName:data.givenName||'',familyName:data.familyName||''}]};
+    if(data.email)person.emailAddresses=[{value:data.email}];
+    if(data.phone)person.phoneNumbers=[{value:data.phone}];
+    try{await googleServiceApiCall('contacts','/v1/people:createContact','POST',{},person);await refreshGoogleService()}
+    catch(error){toast('Contact could not be created: '+error.message)}
+  });
+}
+function googleContactDelete(person){
+  const name=person?.names?.[0]?.displayName||person?.emailAddresses?.[0]?.value||'this contact';
+  if(!/^people\/[A-Za-z0-9_-]+$/.test(person?.resourceName||'')){toast('Google returned an invalid contact identifier.');return}
+  askConfirm('Delete Google contact','Delete '+name+' from Google Contacts?',()=>{
+    googleServiceApiCall('contacts','/v1/'+person.resourceName+':deleteContact','DELETE')
+      .then(()=>refreshGoogleService()).catch(error=>toast('Contact could not be deleted: '+error.message));
+  });
+}
   const files=Array.isArray(data.files)?data.files:[];
   const views=[['My Drive','mydrive','▣'],['Shared with me','shared','♧'],['Recent','recent','◷'],['Starred','starred','☆'],['Trash','trash','♲']];
   const driveNav=views.map(([label,view,icon])=>`<button class="google-nav-item ${googleDriveView===view?'active':''}" data-a="driveview" data-i="${view}" data-k="${label}"><span>${icon}</span><b>${label}</b></button>`).join('');
@@ -1683,6 +1779,17 @@ async function refreshGoogleService(query){
     }else if(id==='drive'){
       const q=typeof query==='string'?query:googleServiceQuery;
       googleServiceData=await requestGoogleService('drive.list',{query:q||'',view:googleDriveView,folderId:googleDriveFolderId||undefined,pageSize:100});
+    }else if(id==='tasks'){
+      const listed=await googleServiceApiCall('tasks','/tasks/v1/users/@me/lists','GET',{maxResults:100});
+      googleTaskLists=Array.isArray(listed.items)?listed.items:[];
+      if(!googleTaskLists.some(item=>item.id===googleSelectedTaskListId))googleSelectedTaskListId=googleTaskLists[0]?.id||'';
+      let tasks={items:[]};
+      if(googleSelectedTaskListId)tasks=await googleServiceApiCall('tasks','/tasks/v1/lists/'+encodeURIComponent(googleSelectedTaskListId)+'/tasks','GET',{maxResults:100,showCompleted:true,showHidden:true});
+      googleServiceData={lists:googleTaskLists,tasks:Array.isArray(tasks.items)?tasks.items:[]};
+    }else if(id==='contacts'){
+      const q=(typeof query==='string'?query:googleServiceQuery).trim();
+      const people=q?await googleServiceApiCall('contacts','/v1/people:searchContacts','GET',{query:q,readMask:'names,emailAddresses,phoneNumbers'}):await googleServiceApiCall('contacts','/v1/people/me/connections','GET',{personFields:'names,emailAddresses,phoneNumbers,organizations',pageSize:100,sortOrder:'LAST_MODIFIED_DESCENDING'});
+      googleServiceData={people:q?(people.results||[]).map(item=>item.person).filter(Boolean):(people.connections||[])};
     }else return;
   }catch(error){googleServiceError=String(error?.message||error||'Google request failed')}
   finally{googleServiceLoading=false;renderGoogleService()}
@@ -1694,6 +1801,7 @@ async function openGoogleService(serviceId){
   if(serviceId==='gmail'){googleMailFolder='in:inbox';googleMailFolderName='Inbox'}
   if(serviceId==='drive'){googleDriveView='mydrive';googleDriveFolderId='';googleDriveFolderName=''}
   if(serviceId==='calendar'){googleCalendarViewDate=new Date();googleCalendarView='month'}
+  if(serviceId==='tasks'){googleSelectedTaskListId=''}
   if(islandMode==='google-service'&&$('#island').classList.contains('open')){renderGoogleService();refreshGoogleService();return}
   openIsland('google-service');
   if(googleConnectionStatus===null)await refreshGoogleConnectionStatus();
@@ -2822,7 +2930,7 @@ const X=(i,b)=>{const t=S.tasks.find(x=>x.id==i),delT=()=>{S.tasks=S.tasks.filte
  aiundo:()=>{const sn=aiUndo[i];if(!sn){toast('Undo is no longer available for this change.');return}delete aiUndo[i];aiRestore(sn);toast('Undone ✓')},
  openlink:()=>{const arr=b.dataset.k==='home'?S.links:((S.tasks.find(x=>x.id==U.tid)||{}).links||[]);const l=arr[+i];if(l)openBrowser(l.u)},
  nologo:()=>{S.logo='';save();applyPrefs();updateAvatar();if(islandMode=='account')refreshIsland();toast('Profile picture reset')},
- ghconn:()=>startGitHubConnect(),ghdisc:()=>disconnectGitHub(),googlepopup:()=>{closeIsland();location.hash='#/settings'},googleconn:()=>startGoogleConnect(),googleswitch:()=>showGoogleAccountSwitcher(),googleaccountselect:()=>{S.googleActiveAccountId=i;save();closeModal();googleServiceData=null;refreshGoogleService();},googleaccountadd:()=>{closeModal();startGoogleConnect(true)},gmailcompose:()=>googleCompose(),gmailtrash:()=>googleMessageAction(i,'trash'),gmailarchive:()=>googleMessageAction(i,'archive'),gmailread:()=>googleMessageAction(i,b.dataset.k||'unread'),gmailstar:()=>googleMessageAction(i,b.dataset.k||'star'),gmailreply:()=>{const m=googleServiceData?.message;if(m)ask('Reply to email',[['to','To','email'],['subject','Subject','text'],['message','Message*','text']],{to:m.from,subject:'Re: '+(m.subject||''),message:''},d=>googleWrite('gmail.send',d).catch(e=>toast(e.message)))},gcalcreate:()=>googleCalendarCreate(null),gcaledit:()=>{const ev=(googleServiceData?.events||[]).find(x=>x.id===i);if(ev)googleCalendarCreate(ev)},drivecreatefolder:()=>googleDriveCreateFolder(),drivepreview:()=>{const f=(googleServiceData?.files||[]).find(x=>x.id===i);if(f)googleDrivePreviewFile(f)},driverename:()=>{const f=(googleServiceData?.files||[]).find(x=>x.id===i);if(f)googleDriveRename(f)},drivestar:()=>{const f=(googleServiceData?.files||[]).find(x=>x.id===i);if(f)googleDriveAction(f,b.dataset.k==='star'?'star':'unstar')},drivetrash:()=>{const f=(googleServiceData?.files||[]).find(x=>x.id===i);if(f)googleDriveAction(f,'trash')},googleopen:()=>openGoogleService(i),googlehome:()=>openIsland('google'),googlerefreshapp:()=>refreshGoogleService(),googlesearch:()=>{googleServiceQuery=$('#google-app-search')?.value?.trim()||'';refreshGoogleService(googleServiceQuery)},googlemsg:()=>openGoogleMessage(i),gmailto:()=>{activeGoogleService='gmail';googleMailFolder='in:inbox';googleMailFolderName='Inbox';googleServiceQuery='';googleMessageOpen=i;openIsland('google-service');openGoogleMessage(i)},gmailfolder:()=>{googleMailFolder=i;googleMailFolderName=b.dataset.k||'Inbox';googleServiceQuery='';googleMessageOpen=null;refreshGoogleService('')},driveview:()=>{googleDriveView=i;googleDriveFolderId='';googleDriveFolderName='';googleServiceQuery='';refreshGoogleService('')},drivefolder:()=>{googleDriveFolderId=i;googleDriveFolderName=b.dataset.k||'Folder';googleServiceQuery='';refreshGoogleService('')},gcalprev:()=>{googleCalendarViewDate=new Date(googleCalendarViewDate.getFullYear(),googleCalendarViewDate.getMonth()-1,1);googleCalendarSelectedEventId='';refreshGoogleService()},gcalnext:()=>{googleCalendarViewDate=new Date(googleCalendarViewDate.getFullYear(),googleCalendarViewDate.getMonth()+1,1);googleCalendarSelectedEventId='';refreshGoogleService()},gcalnow:()=>{googleCalendarViewDate=new Date();googleCalendarSelectedEventId='';refreshGoogleService()},gcalview:()=>{googleCalendarView=i;renderGoogleService()},gcalevent:()=>{googleCalendarSelectedEventId=i;renderGoogleService()},gcaleventclose:()=>{googleCalendarSelectedEventId='';renderGoogleService()},gcalrefresh:()=>refreshGoogleCalendar(),gcalopen:()=>{const ev=googleCalendarEvents.find(e=>e.id===i);if(ev?.htmlLink)window.open(ev.htmlLink,'_blank','noopener');else openGoogleService('calendar')},googleback:()=>{googleMessageOpen=null;refreshGoogleService('')},googleservice:()=>setGoogleService(i,b.dataset.k==='add'),googleserviceremove:()=>setGoogleService(i,false),googlerefresh:()=>{googleConnectionStatus=null;googleConnectionError='';refreshGoogleConnectionStatus()},googleuse:()=>{S.googleActiveAccountId=i;save();renderGoogleManager();if(location.hash.includes('/apps'))al()},googledisc:()=>disconnectGoogleAccount(i),
+ ghconn:()=>startGitHubConnect(),ghdisc:()=>disconnectGitHub(),googlepopup:()=>{closeIsland();location.hash='#/settings'},googleconn:()=>startGoogleConnect(),googleswitch:()=>showGoogleAccountSwitcher(),googleaccountselect:()=>{S.googleActiveAccountId=i;save();closeModal();googleServiceData=null;refreshGoogleService();},googleaccountadd:()=>{closeModal();startGoogleConnect(true)},gmailcompose:()=>googleCompose(),gmailtrash:()=>googleMessageAction(i,'trash'),gmailarchive:()=>googleMessageAction(i,'archive'),gmailread:()=>googleMessageAction(i,b.dataset.k||'unread'),gmailstar:()=>googleMessageAction(i,b.dataset.k||'star'),gmailreply:()=>{const m=googleServiceData?.message;if(m)ask('Reply to email',[['to','To','email'],['subject','Subject','text'],['message','Message*','text']],{to:m.from,subject:'Re: '+(m.subject||''),message:''},d=>googleWrite('gmail.send',d).catch(e=>toast(e.message)))},gcalcreate:()=>googleCalendarCreate(null),gcaledit:()=>{const ev=(googleServiceData?.events||[]).find(x=>x.id===i);if(ev)googleCalendarCreate(ev)},drivecreatefolder:()=>googleDriveCreateFolder(),drivepreview:()=>{const f=(googleServiceData?.files||[]).find(x=>x.id===i);if(f)googleDrivePreviewFile(f)},driverename:()=>{const f=(googleServiceData?.files||[]).find(x=>x.id===i);if(f)googleDriveRename(f)},drivestar:()=>{const f=(googleServiceData?.files||[]).find(x=>x.id===i);if(f)googleDriveAction(f,b.dataset.k==='star'?'star':'unstar')},drivetrash:()=>{const f=(googleServiceData?.files||[]).find(x=>x.id===i);if(f)googleDriveAction(f,'trash')},googleopen:()=>openGoogleService(i),googlehome:()=>openIsland('google'),googleexternal:()=>openGoogleOfficialApp(),googleauthservice:()=>requestGoogleServiceAccess(activeGoogleService),googletasknewlist:()=>googleTaskCreateList(),googletaskcreate:()=>googleTaskCreate(),googletasklist:()=>{googleSelectedTaskListId=i;refreshGoogleService()},googletasktoggle:()=>{const task=(googleServiceData?.tasks||[]).find(item=>item.id===i);if(task)googleTaskToggle(task)},googletaskdelete:()=>{const task=(googleServiceData?.tasks||[]).find(item=>item.id===i);if(task)googleTaskDelete(task)},googlecontactcreate:()=>googleContactCreate(),googlecontactdelete:()=>{const person=(googleServiceData?.people||[]).find(item=>item.resourceName===i);if(person)googleContactDelete(person)},googlerefreshapp:()=>refreshGoogleService(),googlesearch:()=>{googleServiceQuery=$('#google-app-search')?.value?.trim()||'';refreshGoogleService(googleServiceQuery)},googlemsg:()=>openGoogleMessage(i),gmailto:()=>{activeGoogleService='gmail';googleMailFolder='in:inbox';googleMailFolderName='Inbox';googleServiceQuery='';googleMessageOpen=i;openIsland('google-service');openGoogleMessage(i)},gmailfolder:()=>{googleMailFolder=i;googleMailFolderName=b.dataset.k||'Inbox';googleServiceQuery='';googleMessageOpen=null;refreshGoogleService('')},driveview:()=>{googleDriveView=i;googleDriveFolderId='';googleDriveFolderName='';googleServiceQuery='';refreshGoogleService('')},drivefolder:()=>{googleDriveFolderId=i;googleDriveFolderName=b.dataset.k||'Folder';googleServiceQuery='';refreshGoogleService('')},gcalprev:()=>{googleCalendarViewDate=new Date(googleCalendarViewDate.getFullYear(),googleCalendarViewDate.getMonth()-1,1);googleCalendarSelectedEventId='';refreshGoogleService()},gcalnext:()=>{googleCalendarViewDate=new Date(googleCalendarViewDate.getFullYear(),googleCalendarViewDate.getMonth()+1,1);googleCalendarSelectedEventId='';refreshGoogleService()},gcalnow:()=>{googleCalendarViewDate=new Date();googleCalendarSelectedEventId='';refreshGoogleService()},gcalview:()=>{googleCalendarView=i;renderGoogleService()},gcalevent:()=>{googleCalendarSelectedEventId=i;renderGoogleService()},gcaleventclose:()=>{googleCalendarSelectedEventId='';renderGoogleService()},gcalrefresh:()=>refreshGoogleCalendar(),gcalopen:()=>{const ev=googleCalendarEvents.find(e=>e.id===i);if(ev?.htmlLink)window.open(ev.htmlLink,'_blank','noopener');else openGoogleService('calendar')},googleback:()=>{googleMessageOpen=null;refreshGoogleService('')},googleservice:()=>setGoogleService(i,b.dataset.k==='add'),googleserviceremove:()=>setGoogleService(i,false),googlerefresh:()=>{googleConnectionStatus=null;googleConnectionError='';refreshGoogleConnectionStatus()},googleuse:()=>{S.googleActiveAccountId=i;save();renderGoogleManager();if(location.hash.includes('/apps'))al()},googledisc:()=>disconnectGoogleAccount(i),
  apptab:()=>{U.appTab=i==='discover'?'discover':'mine';if(U.appTab==='mine')U.aq='';al()},
  appadd:()=>addAppToShelf(i),
  appremove:()=>removeAppFromShelf(i),
