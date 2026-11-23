@@ -1805,7 +1805,7 @@ async function openGoogleService(serviceId){
   if(islandMode==='google-service'&&$('#island').classList.contains('open')){renderGoogleService();refreshGoogleService();return}
   openIsland('google-service');
   if(googleConnectionStatus===null)await refreshGoogleConnectionStatus();
-  if(['gmail','calendar','drive'].includes(serviceId))await refreshGoogleService();
+  if(['gmail','calendar','drive','tasks','contacts'].includes(serviceId))await refreshGoogleService();
   else renderGoogleService();
 }
 async function openGoogleMessage(messageId){
