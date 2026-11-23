@@ -265,15 +265,15 @@ pre,code{max-width:100%;overflow-wrap:anywhere;white-space:pre-wrap}
 .tag{max-width:100%;white-space:normal;overflow-wrap:anywhere}
 .cal{grid-template-columns:repeat(7,minmax(0,1fr));gap:clamp(2px,.6vw,6px)}
 .cd{min-width:0;padding:clamp(3px,.7vw,7px);font-size:clamp(10px,.8vw,12px)}
-/* The dock grows to fit its contents, stays centred, and wraps rather than clipping. */
+/* Dock: preserve the original scroll-hide and toggle-bar layout, with content-sized horizontal collapse. */
 #dock{left:50%;right:auto;transform:translateX(-50%);width:max-content;max-width:calc(100vw - 16px);height:auto;min-height:0;flex:0 1 auto;flex-wrap:nowrap;align-items:center;justify-content:center;gap:clamp(3px,.6vw,7px);padding:clamp(5px,.8vw,8px);border-radius:clamp(18px,3vw,30px)}
 #dock.hide{transform:translate(-50%,120px)}
-#dock .it{width:auto;max-width:calc(100vw - 68px);min-width:0;flex:0 1 auto;display:flex;flex-wrap:wrap;justify-content:center;align-items:center;gap:clamp(2px,.5vw,5px);overflow:visible}
-#dock .dk{display:inline-flex;align-items:center;justify-content:center;gap:5px;flex:0 1 auto;max-width:100%;min-width:0;padding:clamp(7px,.9vw,10px) clamp(8px,1.1vw,14px);font-size:clamp(11px,.9vw,14px);line-height:1.25;white-space:normal;text-align:center;overflow-wrap:anywhere}
-#dock .dk span{display:inline;min-width:0;white-space:normal}
+#dock .it{width:var(--dock-items-width,0px);max-width:calc(100vw - 68px);min-width:0;flex:0 1 auto;display:flex;flex-wrap:nowrap;justify-content:flex-start;align-items:center;gap:clamp(2px,.5vw,5px);overflow:hidden;white-space:nowrap;transition:width .45s cubic-bezier(.22,1,.36,1),opacity .25s}
+#dock .dk{display:inline-flex;align-items:center;justify-content:center;gap:5px;flex:0 0 auto;min-width:max-content;padding:clamp(7px,.9vw,10px) clamp(8px,1.1vw,14px);font-size:clamp(11px,.9vw,14px);line-height:1.25;white-space:nowrap;text-align:center;overflow-wrap:normal}
+#dock .dk span{display:inline;white-space:nowrap}
 #dock .vd{flex:0 0 1px;margin-inline:clamp(2px,.5vw,6px)}
-#dock.c1{min-height:48px;height:auto}
-#dock.c1 .it{max-width:0}
+#dock.c1{min-height:56px;height:56px}
+#dock.c1 .it{width:0;opacity:0;height:0;pointer-events:none}
 #dt{flex:0 0 auto}
 #toast{right:var(--page-gutter);left:auto;width:auto;max-width:min(420px,calc(100vw - 2 * var(--page-gutter)))}
 @media(max-width:900px){
@@ -2907,6 +2907,26 @@ addEventListener('keydown',e=>{
 
 const IC=a=>`<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${a}</svg>`,EYE=IC('<path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/>'),OFF=IC('<path d="M17.9 17.9A10.1 10.1 0 0 1 12 20C5 20 1 12 1 12a18.5 18.5 0 0 1 5.1-5.9M9.9 4.2A9 9 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.2 3.2M14.1 14.1a3 3 0 1 1-4.2-4.2M1 1l22 22"/>');
 const dtBtn=$('#dt');if(dtBtn){dtBtn.innerHTML=OFF;dtBtn.onclick=function(){const dock=$('#dock'),c=dock.classList.toggle('c1');this.innerHTML=c?EYE:OFF;this.setAttribute('aria-expanded',String(!c));this.setAttribute('aria-label',c?'Show dock':'Hide dock');this.setAttribute('title',c?'Show dock':'Hide dock')}};
+const dockContent=$('#dock .it');
+function syncDockContentWidth(){
+  if(!dockContent)return;
+  const children=Array.from(dockContent.children);
+  const gap=parseFloat(getComputedStyle(dockContent).columnGap)||0;
+  const contentWidth=children.reduce((total,child)=>{
+    const style=getComputedStyle(child);
+    return total+child.getBoundingClientRect().width+(parseFloat(style.marginLeft)||0)+(parseFloat(style.marginRight)||0);
+  },0)+gap*Math.max(0,children.length-1);
+  $('#dock').style.setProperty('--dock-items-width',Math.ceil(contentWidth)+'px');
+}
+if(dockContent){
+  syncDockContentWidth();
+  if(typeof ResizeObserver==='function'){
+    const dockContentObserver=new ResizeObserver(syncDockContentWidth);
+    Array.from(dockContent.children).forEach(child=>dockContentObserver.observe(child));
+  }
+  addEventListener('resize',syncDockContentWidth,{passive:true});
+  if(document.fonts?.ready)document.fonts.ready.then(syncDockContentWidth);
+}
 let ly=0;addEventListener('scroll',()=>{$('#dock').classList.toggle('hide',scrollY>ly&&scrollY>140);ly=scrollY},{passive:true});
 addEventListener('hashchange',()=>{
   if(!S.loggedIn){location.hash='#/login';return;}
