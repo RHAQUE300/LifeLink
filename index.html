@@ -268,7 +268,7 @@ pre,code{max-width:100%;overflow-wrap:anywhere;white-space:pre-wrap}
 /* Dock: content-measured width with a smooth 56px circular collapsed state. */
 #dock{--dock-open-gap:clamp(3px,.6vw,7px);--dock-open-padding:clamp(5px,.8vw,8px);left:50%;right:auto;transform:translateX(-50%);width:var(--dock-open-width,max-content);max-width:calc(100vw - 16px);height:auto;min-height:56px;flex:0 1 auto;flex-wrap:nowrap;align-items:center;justify-content:center;gap:var(--dock-open-gap);padding:var(--dock-open-padding);border-radius:clamp(18px,3vw,30px);transition:width .5s cubic-bezier(.22,1,.36,1),min-width .5s cubic-bezier(.22,1,.36,1),border-radius .5s cubic-bezier(.22,1,.36,1),transform .3s}
 #dock.hide{transform:translate(-50%,120px)}
-#dock .it{width:var(--dock-items-width,0px);max-width:calc(100vw - 68px);min-width:0;flex:0 0 var(--dock-items-width,0px);display:flex;flex-wrap:nowrap;justify-content:flex-start;align-items:center;gap:clamp(2px,.5vw,5px);overflow:hidden;white-space:nowrap;transition:width .5s cubic-bezier(.22,1,.36,1),flex-basis .5s cubic-bezier(.22,1,.36,1),opacity .22s ease}
+#dock .it{width:var(--dock-items-width,0px);max-width:calc(100vw - 68px);min-width:0;flex:0 0 var(--dock-items-width,0px);display:flex;flex-wrap:nowrap;justify-content:flex-start;align-items:center;gap:clamp(2px,.5vw,5px);padding-block:2px;overflow:hidden;white-space:nowrap;transition:width .5s cubic-bezier(.22,1,.36,1),flex-basis .5s cubic-bezier(.22,1,.36,1),opacity .22s ease}
 #dock .dk{display:inline-flex;align-items:center;justify-content:center;gap:5px;flex:0 0 auto;min-width:max-content;max-width:none;padding:clamp(7px,.9vw,10px) clamp(8px,1.1vw,14px);font-size:clamp(11px,.9vw,14px);line-height:1.25;white-space:nowrap;text-align:center;overflow-wrap:normal}
 #dock .dk span{display:inline;white-space:nowrap}
 #dock .vd{flex:0 0 1px;margin-inline:clamp(2px,.5vw,6px)}
@@ -330,7 +330,7 @@ pre,code{max-width:100%;overflow-wrap:anywhere;white-space:pre-wrap}
   <button class="ib" id="av" onclick="openIsland('account')" title="Account" aria-label="Account"></button>
 </header>
 <main></main>
-<nav id="dock" class="glass" aria-label="Dock" style="display:none"><button class="ib" id="dt" aria-label="Hide dock" aria-expanded="true"></button><div class="it"><span class="vd"></span><a class="dk" data-r="todo" href="#/todo">☑ <span>To Do</span></a><a class="dk" data-r="calendar" href="#/calendar">▦ <span>Calendar</span></a><a class="dk" data-r="notes" href="#/notes">✎ <span>Notes</span></a><a class="dk" data-r="apps" href="#/apps">⊞ <span>Apps</span></a><a class="dk go" href="#/recovery">▶ <span>Start Recovery</span></a></div></div></nav>
+<nav id="dock" class="glass" aria-label="Dock" style="display:none"><button class="ib" id="dt" aria-label="Hide dock" aria-expanded="true"></button><div class="it"><span class="vd"></span><a class="dk" data-r="todo" href="#/todo">☑ <span>To Do</span></a><a class="dk" data-r="calendar" href="#/calendar">▦ <span>Calendar</span></a><a class="dk" data-r="notes" href="#/notes">✎ <span>Notes</span></a><a class="dk" data-r="apps" href="#/apps">⊞ <span>Apps</span></a><a class="dk go" href="#/recovery">▶ <span>Start Recovery</span></a></div></nav>
 
 <div id="modal-backdrop" onclick="if(event.target===this)closeModal()">
   <div id="modal-card" role="dialog" aria-modal="true"></div>
