@@ -310,86 +310,6 @@ pre,code{max-width:100%;overflow-wrap:anywhere;white-space:pre-wrap}
 
 .ev.gcal{background:rgba(66,133,244,.13);border-left:2px solid #4285f4;cursor:pointer}.ev.gcal:hover{filter:brightness(.96)}
 
-/* Dock refinement: clean pill when open, true circular launcher when collapsed. */
-#dock{isolation:isolate;overflow:hidden;will-change:transform,width,height,border-radius;padding:7px;gap:0;transition:transform .62s cubic-bezier(.16,1,.3,1),width .58s cubic-bezier(.16,1,.3,1),height .58s cubic-bezier(.16,1,.3,1),padding .58s cubic-bezier(.16,1,.3,1),border-radius .58s cubic-bezier(.16,1,.3,1),box-shadow .4s cubic-bezier(.16,1,.3,1);interpolate-size:allow-keywords}
-#dock:not(.c1){width:max-content;height:auto;min-height:54px;border-radius:999px}
-#dock .it{opacity:1;transform:translateX(0) scale(1);visibility:visible;transition:max-width .5s cubic-bezier(.16,1,.3,1),opacity .32s ease,transform .5s cubic-bezier(.16,1,.3,1),visibility .25s;}
-#dock.c1{width:54px;height:54px;min-height:54px;padding:5px;border-radius:50%;display:flex;align-items:center;justify-content:center;box-shadow:0 10px 32px rgba(45,65,115,.18),inset 0 1px 0 rgba(255,255,255,.85)}
-#dock.c1 .it{width:0;max-width:0;opacity:0;transform:translateX(-8px) scale(.88);visibility:hidden;overflow:hidden;pointer-events:none}
-#dock #dt{width:40px;height:40px;min-width:40px;padding:0;border-radius:50%;display:grid;place-items:center;flex:none;transition:width .35s cubic-bezier(.16,1,.3,1),height .35s cubic-bezier(.16,1,.3,1),transform .32s cubic-bezier(.16,1,.3,1),background .32s,border-color .32s}
-#dock.c1 #dt{width:44px;height:44px;min-width:44px;transform:scale(1)}
-#dock #dt:hover{transform:scale(1.06)}#dock #dt:active{transform:scale(.92)}
-#dock.hide{transform:translate(-50%,calc(100% + 24px));transition-duration:.7s}
-#dock.c1.hide{transform:translate(-50%,calc(100% + 24px)) scale(.82)}
-@media(max-width:620px){#dock:not(.c1){border-radius:999px}#dock.c1{width:52px;height:52px;min-height:52px}#dock.c1 #dt{width:42px;height:42px;min-width:42px}}
-@media(prefers-reduced-motion:reduce){#dock,#dock .it,#dock #dt{transition:none!important}}
-
-/* Horizontal-only dock reveal: no vertical/scale ghosting. */
-#dock{transition:transform .62s cubic-bezier(.16,1,.3,1),width .58s cubic-bezier(.16,1,.3,1),height .58s cubic-bezier(.16,1,.3,1),padding .58s cubic-bezier(.16,1,.3,1),border-radius .58s cubic-bezier(.16,1,.3,1);}
-#dock .it{flex-wrap:nowrap;height:auto;transform:translateX(0);transition:max-width .52s cubic-bezier(.16,1,.3,1),opacity .28s ease,transform .52s cubic-bezier(.16,1,.3,1),visibility .2s;}
-#dock.c1 .it{height:auto;transform:translateX(-24px);}
-#dock:not(.c1){width:max-content;}
-#dock.c1{width:54px;}
-#dock.hide,#dock.c1.hide{transform:translate(-50%,calc(100% + 24px));}
-@media(max-width:620px){#dock.c1{width:52px}#dock .it{flex-wrap:nowrap}}
-@media(prefers-reduced-motion:reduce){#dock .it{transition:none!important}}
-
-/* Dock track: navigation links travel horizontally behind the circular launcher. */
-#dock{
-  position:fixed;left:50%;right:auto;transform:translateX(-50%);
-  display:flex;flex-flow:row nowrap;align-items:center;justify-content:flex-start;gap:0;
-  width:max-content;max-width:calc(100vw - 16px);height:56px;min-height:56px;
-  padding:5px;overflow:hidden;isolation:isolate;interpolate-size:allow-keywords;
-  border-radius:999px;
-  transition:width .62s cubic-bezier(.16,1,.3,1),border-radius .5s cubic-bezier(.16,1,.3,1),transform .62s cubic-bezier(.16,1,.3,1);
-}
-#dock:not(.c1){width:max-content;border-radius:999px}
-#dock #dt{
-  position:relative;z-index:5;flex:0 0 44px;width:44px;height:44px;min-width:44px;
-  padding:0;border-radius:50%;background:rgba(255,255,255,.92);
-  -webkit-backdrop-filter:blur(16px);backdrop-filter:blur(16px);
-  transition:background .2s,border-color .2s,transform .2s;
-}
-#dock .it-window{
-  position:relative;z-index:1;display:block;flex:0 1 auto;min-width:0;
-  width:max-content;max-width:calc(100vw - 72px);height:44px;overflow:visible;
-  transition:max-width .62s cubic-bezier(.16,1,.3,1);
-}
-#dock .it{
-  display:flex;flex-flow:row nowrap;align-items:center;justify-content:flex-start;gap:4px;
-  width:max-content;min-width:max-content;max-width:none!important;height:44px;
-  overflow:visible!important;opacity:1!important;visibility:visible!important;
-  transform:translateX(0);white-space:nowrap;will-change:transform;
-  transition:transform .62s cubic-bezier(.16,1,.3,1);
-}
-#dock .dk{display:inline-flex;flex:0 0 auto;align-items:center;white-space:nowrap;max-width:none;padding:9px 12px}
-#dock .dk span{display:inline;white-space:nowrap}
-#dock.c1{
-  width:56px;height:56px;min-width:56px;max-width:56px;min-height:56px;
-  padding:5px;border-radius:50%;justify-content:flex-start;
-}
-#dock.c1 #dt{position:relative;z-index:5;transform:none}
-#dock.c1 .it-window{width:max-content;max-width:0;flex:0 1 auto}
-#dock.c1 .it{
-  width:max-content!important;min-width:max-content!important;max-width:none!important;height:44px!important;
-  opacity:1!important;visibility:visible!important;overflow:visible!important;
-  transform:translateX(calc(-100% - 44px));pointer-events:none;
-}
-#dock #dt:hover{transform:scale(1.045)}
-#dock #dt:active{transform:scale(.96)}
-#dock.c1 #dt:hover{transform:scale(1.045)}
-#dock.c1 #dt:active{transform:scale(.96)}
-#dock.hide,#dock.c1.hide{transform:translate(-50%,calc(100% + 24px))}
-[data-theme=dark] #dock #dt{background:rgba(18,18,20,.94);border-color:rgba(255,255,255,.2)}
-@media(max-width:620px){
-  #dock{max-width:calc(100vw - 12px)}
-  #dock .it-window{max-width:calc(100vw - 68px)}
-  #dock.c1{width:56px;min-width:56px;max-width:56px}
-}
-@media(prefers-reduced-motion:reduce){
-  #dock,#dock .it-window,#dock .it,#dock #dt{transition:none!important}
-}
-
 </style>
 </head><body>
 
@@ -410,7 +330,7 @@ pre,code{max-width:100%;overflow-wrap:anywhere;white-space:pre-wrap}
   <button class="ib" id="av" onclick="openIsland('account')" title="Account" aria-label="Account"></button>
 </header>
 <main></main>
-<nav id="dock" class="glass" aria-label="Dock" style="display:none"><button class="ib" id="dt" aria-label="Hide dock" aria-expanded="true"></button><div class="it-window"><div class="it"><span class="vd"></span><a class="dk" data-r="todo" href="#/todo">☑ <span>To Do</span></a><a class="dk" data-r="calendar" href="#/calendar">▦ <span>Calendar</span></a><a class="dk" data-r="notes" href="#/notes">✎ <span>Notes</span></a><a class="dk" data-r="apps" href="#/apps">⊞ <span>Apps</span></a><a class="dk go" href="#/recovery">▶ <span>Start Recovery</span></a></div></div></nav>
+<nav id="dock" class="glass" aria-label="Dock" style="display:none"><button class="ib" id="dt" aria-label="Hide dock" aria-expanded="true"></button><div class="it"><span class="vd"></span><a class="dk" data-r="todo" href="#/todo">☑ <span>To Do</span></a><a class="dk" data-r="calendar" href="#/calendar">▦ <span>Calendar</span></a><a class="dk" data-r="notes" href="#/notes">✎ <span>Notes</span></a><a class="dk" data-r="apps" href="#/apps">⊞ <span>Apps</span></a><a class="dk go" href="#/recovery">▶ <span>Start Recovery</span></a></div></div></nav>
 
 <div id="modal-backdrop" onclick="if(event.target===this)closeModal()">
   <div id="modal-card" role="dialog" aria-modal="true"></div>
