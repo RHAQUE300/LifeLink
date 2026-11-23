@@ -475,7 +475,7 @@ async function refreshGoogleConnectionStatus(){
   googleStatusPromise=request;
   try{await request}finally{if(googleStatusPromise===request)googleStatusPromise=null}
 }
-async function startGoogleConnect(forceNewAccount=false,additionalScopes=[]){
+async function startGoogleConnect(forceNewAccount=false,additionalScopes=[],loginHint=''){
   const selectedAccountId=S?.googleActiveAccountId;
   const accountId=!forceNewAccount&&selectedAccountId&&selectedAccountId!=='legacy'&&/^[0-9a-f-]{36}$/i.test(selectedAccountId)?selectedAccountId:crypto.randomUUID();
   if(googleConnectionBusy)return;
@@ -488,7 +488,8 @@ async function startGoogleConnect(forceNewAccount=false,additionalScopes=[]){
       client_id:LL_CONFIG.googleClientId,
       scope:[...new Set(['openid','email','profile','https://www.googleapis.com/auth/gmail.modify','https://www.googleapis.com/auth/gmail.send','https://www.googleapis.com/auth/drive','https://www.googleapis.com/auth/calendar.events',...(Array.isArray(additionalScopes)?additionalScopes:[])])].join(' '),
       ux_mode:'popup',
-      select_account:true,
+      ...(loginHint?{login_hint:loginHint}:{}),
+      select_account:!loginHint,
       prompt:'consent',
       include_granted_scopes:true,
       callback:async response=>{
@@ -1550,7 +1551,8 @@ async function requestGoogleServiceAccess(serviceId){
   const state=googleServiceScopeState(serviceId);
   if(!state.account){startGoogleConnect(false,required);return}
   if(!state.missing.length){toast(service.name+' API permissions are already connected.');return}
-  askConfirm('Connect '+service.name+' to LifeLink','Google will ask you to approve the additional permissions required for '+service.name+'. Only this selected Google account is affected.',()=>startGoogleConnect(false,state.missing));
+  S.googleActiveAccountId=state.account.id;save();
+  askConfirm('Connect '+service.name+' to LifeLink','Google will ask you to approve the additional permissions required for '+service.name+' on '+(state.account.email||'the selected account')+'.',()=>startGoogleConnect(false,state.missing,state.account.email||''));
 }
 async function googleServiceApiCall(serviceId,path,method='GET',query={},data){
   const result=await requestGoogleService('google.api',{serviceId,path,method,query,data});
