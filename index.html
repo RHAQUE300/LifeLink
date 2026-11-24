@@ -310,6 +310,43 @@ pre,code{max-width:100%;overflow-wrap:anywhere;white-space:pre-wrap}
 
 .ev.gcal{background:rgba(66,133,244,.13);border-left:2px solid #4285f4;cursor:pointer}.ev.gcal:hover{filter:brightness(.96)}
 
+
+/* AI file workflows, verification trail and exports */
+#af-input{padding-top:8px}
+#af-file-tools{max-width:780px;margin:0 auto 7px;display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap}
+#af-file-list{display:flex;gap:6px;flex-wrap:wrap;min-width:0}
+.af-file-actions{display:flex;gap:6px;align-items:center}
+#af-attach{cursor:pointer;display:inline-block;padding:7px 13px;font-size:12px;white-space:nowrap}
+.ai-file-pill{display:inline-flex;align-items:center;gap:6px;border:1px solid var(--gb);border-radius:10px;background:var(--g);padding:5px 8px;font-size:11px;max-width:240px}
+.ai-file-pill span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.ai-file-pill button{border:0;background:transparent;cursor:pointer;color:var(--mut);padding:0 2px}
+.af-file-note{max-width:780px;margin:5px auto 0;font-size:10px;color:var(--mut);line-height:1.4}
+.ai-attachment-line{display:flex;gap:5px;flex-wrap:wrap;margin-top:7px}
+.ai-attachment-tag{font-size:10px;padding:3px 8px;border:1px solid currentColor;border-radius:9px;opacity:.8}
+.ai-process{max-width:780px;margin:-2px auto 12px 0;font-size:11px;color:var(--mut);width:min(92%,780px)}
+.ai-process summary{cursor:pointer;list-style:none;display:inline-flex;align-items:center;gap:7px;padding:5px 9px;border:1px solid var(--gb);border-radius:10px;background:var(--g);user-select:none}
+.ai-process summary::-webkit-details-marker{display:none}
+.ai-process summary:before{content:"⌄";font-size:13px}
+.ai-process[open] summary:before{content:"⌃"}
+.ai-process-body{margin-top:7px;padding:10px 12px;border:1px solid var(--gb);border-radius:12px;background:var(--g);display:grid;gap:8px}
+.ai-process-step{display:grid;grid-template-columns:12px minmax(0,1fr);gap:8px;align-items:start}
+.ai-process-dot{width:8px;height:8px;border-radius:50%;background:#39a879;margin-top:4px}
+.ai-process-step.warning .ai-process-dot{background:#d89a38}
+.ai-process-step.blocked .ai-process-dot{background:#d34b5b}
+.ai-process-step b{display:block;color:var(--ink);font-size:11px}
+.ai-process-step small{display:block;margin-top:2px;line-height:1.45;color:var(--mut)}
+.ai-process-note{font-size:10px;line-height:1.4;padding-top:6px;border-top:1px solid var(--gb)}
+.ai-export{max-width:780px;margin:-5px auto 12px 0;width:min(92%,780px);font-size:11px;color:var(--mut)}
+.ai-export summary{cursor:pointer;display:inline-block;padding:5px 9px;border:1px solid var(--gb);border-radius:9px;background:var(--g)}
+.ai-export-menu{display:flex;flex-wrap:wrap;gap:5px;margin-top:6px;padding:7px;border:1px solid var(--gb);border-radius:11px;background:var(--g)}
+.ai-export-menu button{border:1px solid var(--gb);border-radius:8px;background:rgba(255,255,255,.3);padding:5px 8px;font-size:10px;cursor:pointer;color:var(--ink)}
+.ai-export-menu button:hover{background:rgba(79,124,255,.12)}
+#af-process-live{max-width:780px;margin:4px auto 12px;padding:0 5px;font-size:11px;color:var(--mut)}
+#af-process-live:empty{display:none}
+.ai-live-pulse{display:inline-block;width:7px;height:7px;border-radius:50%;background:var(--ac);margin-right:7px;animation:aiPulse 1s ease-in-out infinite alternate}
+@keyframes aiPulse{to{opacity:.25;transform:scale(.7)}}
+@media(max-width:760px){.ai-process,.ai-export{margin-left:0;width:100%}#af-file-tools,.af-file-note{margin-left:0;margin-right:0}.ai-file-pill{max-width:190px}}
+[data-theme=dark] .ai-export-menu button{background:rgba(255,255,255,.06);border-color:rgba(255,255,255,.16)}
 </style>
 </head><body>
 
@@ -375,19 +412,13 @@ pre,code{max-width:100%;overflow-wrap:anywhere;white-space:pre-wrap}
     <div id="af-head">
       <button class="ib" id="af-toggle" onclick="toggleAISide()" aria-label="Show or hide chat history" aria-expanded="true">☰</button>
       <b style="font-size:17px">✦ LifeLink AI</b><span class="tag" id="af-prov">Auto</span>
-      <select id="af-model" aria-label="Choose AI model" onchange="selectAIModel(this.value)" style="max-width:220px;padding:7px 9px;border-radius:10px;background:var(--glass);color:var(--text);border:1px solid var(--line)">
-        <option value="auto">Auto · Groq → Gemini → fallback</option>
-        <option value="groq" data-label="GPT-OSS 120B">GPT-OSS 120B · checking</option>
-        <option value="gemini" data-label="Gemini 3.8 Flash">Gemini 3.8 Flash · checking</option>
-        <option value="openai" data-label="GPT-4o mini">GPT-4o mini · checking</option>
-        <option value="anthropic" data-label="Claude Sonnet">Claude Sonnet · checking</option>
-      </select>
+      <span class="tag" id="af-prov" title="LifeLink automatically routes across connected models">Auto</span>
       <span class="sp"></span>
       <button class="btn" id="af-new" onclick="clearAI()" aria-label="New chat">＋<span class="lbl"> New chat</span></button>
       
       <button class="btn" onclick="closeAIFull()" aria-label="Close">✕<span class="lbl"> Close</span></button>
     </div>
-    <div id="af-msgs"><div id="af-col"></div></div>
+    <div id="af-msgs"><div id="af-col"></div><div id="af-process-live" aria-live="polite"></div></div>
     <div id="af-chips">
       <span class="ai-chip" onclick="sendMsg('Summarize my day')">Summarize my day</span>
       <span class="ai-chip" onclick="sendMsg('What’s due this week?')">What’s due this week?</span>
@@ -395,7 +426,13 @@ pre,code{max-width:100%;overflow-wrap:anywhere;white-space:pre-wrap}
       <span class="ai-chip" onclick="sendMsg('Open my calendar')">Open my calendar</span>
       <span class="ai-chip" onclick="sendMsg('Explain photosynthesis')">Ask anything</span>
     </div>
-    <div id="af-input"><div class="af-box"><textarea id="af-q" rows="1" placeholder="Message LifeLink AI…" aria-label="Message LifeLink AI"></textarea><button class="btn pri" id="af-send" type="button" aria-label="Send message" title="Send message"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M12 19V5M6 11l6-6 6 6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></button></div></div>
+    <div id="af-input">
+      <div id="af-file-tools"><div id="af-file-list" aria-live="polite"></div>
+        <div class="af-file-actions"><label class="btn" for="af-file-input" id="af-attach">＋ Attach files</label><input id="af-file-input" type="file" multiple hidden accept=".txt,.md,.markdown,.rtf,.html,.htm,.css,.js,.mjs,.ts,.tsx,.jsx,.json,.xml,.yaml,.yml,.toml,.ini,.csv,.tsv,.log,.py,.ipynb,.sql,.sh,.ps1,.java,.c,.h,.cpp,.cs,.go,.rs,.php,.rb,.tex,.pdf,.docx,.doc,.pptx,.ppt,.xlsx,.xls,.ods,.odt,.odp,.epub,.png,.jpg,.jpeg,.webp,.gif,.bmp,.mp3,.wav,.m4a,.aac,.ogg,.flac,.mp4,.mov,.webm,.mkv,image/*,audio/*,video/*"></div>
+      </div>
+      <div class="af-box"><textarea id="af-q" rows="1" placeholder="Message LifeLink AI…" aria-label="Message LifeLink AI"></textarea><button class="btn pri" id="af-send" type="button" aria-label="Send message" title="Send message"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M12 19V5M6 11l6-6 6 6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></button></div>
+      <p class="af-file-note">Files are read in your browser where possible. Images, audio and video are sent to the connected Gemini API for analysis. Free-tier data may be used by Google to improve its products.</p>
+    </div>
   </section>
 </div>
 
@@ -667,7 +704,7 @@ function loadUserSession(){
   if(!Array.isArray(S.customApps))S.customApps=[];
   S.googleServices.forEach(id=>{const key='google:'+id;if(!S.apps.includes(key))S.apps.push(key)});
   S.aiCfg = {provider:'LifeLink Built-in AI',apiKey:'',model:'',customUrl:''};
-   if(!S.aiModel)S.aiModel='auto';
+   S.aiModel='auto';
   if(!S.aiLearning||typeof S.aiLearning!=='object')S.aiLearning={enabled:true,memories:[],feedback:[]};
   S.aiLearning.enabled=S.aiLearning.enabled!==false;
   if(!Array.isArray(S.aiLearning.memories))S.aiLearning.memories=[];if(!Array.isArray(S.aiLearning.feedback))S.aiLearning.feedback=[];
@@ -1974,7 +2011,7 @@ function htmlToText(h){return new DOMParser().parseFromString(String(h||'').repl
 /* ---------- chats (per account) ---------- */
 let aiChatId=null,aiPending=0;
 const aiBlank=()=>[{role:'bot',html:AI_GREETING}];
-const aiClone=m=>({role:m.role==='user'?'user':'bot',html:String(m.html||''),text:m.text,err:!!m.err});
+const aiClone=m=>({role:m.role==='user'?'user':'bot',html:String(m.html||''),text:m.text,err:!!m.err,attachments:Array.isArray(m.attachments)?m.attachments.slice(0,6).map(x=>String(x).slice(0,180)):[],process:Array.isArray(m.process)?m.process.slice(0,8).map(x=>({name:String(x.name||''),model:String(x.model||''),status:String(x.status||'complete'),detail:String(x.detail||'')})):[]});
 function chatTitle(msgs){const u=msgs.find(m=>m.role==='user');const t=u?String(u.text||htmlToText(u.html)).replace(/\s+/g,' ').trim():'';return t?(t.length>46?t.slice(0,46)+'…':t):'New chat'}
 function aiBusy(){if(aiPending>0){toast('Wait for the current reply to finish first.');return true}return false}
 
@@ -2086,8 +2123,8 @@ function refreshAIFull(){
   f.classList.toggle('nohist',!hist);
   f.classList.toggle('collapsed',hist&&S.p.aiSidebar===false);
   const t=$('#af-toggle');if(t)t.setAttribute('aria-expanded',String(hist&&S.p.aiSidebar!==false));
-  const p=$('#af-prov');if(p)p.textContent=S.aiLastProvider?('Using '+S.aiLastProvider):'Auto';
-  const sel=$('#af-model');if(sel)sel.value=S.aiModel||'auto';
+  const p=$('#af-prov');if(p)p.textContent='Auto';
+  const sel=$('#af-model');if(sel)sel.value='auto';
   renderAI();renderAIChatList();
 }
 let lastAIOriginRect=null;
@@ -2519,6 +2556,9 @@ function aiSystemPrompt(){
 How to be excellent:
 - Be a capable general-purpose assistant: explain, reason, write and edit, help with code and maths, plan, brainstorm, summarise, compare and recommend. Do not limit yourself to the app's built-in command examples.
 - Be accurate, useful and direct. Think through multi-step problems carefully, but show the user a clear answer rather than private chain-of-thought. State assumptions, uncertainty and missing information instead of inventing facts.
+- Verify before answering: check every calculation independently, track units and scale, distinguish per-serving from per-day and total quantities, re-read the user's numeric constraints, and resolve contradictions rather than guessing.
+- For health, nutrition and diabetes-related requests, never make up a clinical plan or medication/insulin dose. Distinguish food mass from grams of protein/carbohydrate, do not assume a safe universal amount, ask for missing essentials, and recommend checking individualized plans with an appropriately qualified clinician or dietitian.
+- If a numeric or safety check fails, say so and withhold the conflicting figures. Never fill gaps with invented patient details, doses, serving sizes, sources or certainty.
 - Use the workspace snapshot when relevant. Ground claims about tasks, events, notes, settings and timer state in that snapshot; never invent workspace records or claim an action succeeded unless its operation is confirmed below.
 - For plans the user asks you to set up, turn the plan into sensible tasks/events. Preserve their wording and constraints, use the user's local date and timezone, and avoid creating duplicate items.
 - Ask one concise clarification when the target is ambiguous, a required detail is missing, or an action could have materially different outcomes. Never guess which similarly named task, event or note the user means.
@@ -2601,12 +2641,12 @@ async function callLLM(msgs,opts={}){
   const fullMsgs=[{role:'system',text:opts.sys!=null?opts.sys:aiSystemPrompt()},...msgs].slice(-20);
   const latestUser=[...fullMsgs].reverse().find(m=>m.role==='user');
   const webSearch=opts.webSearch===true||shouldUseWebSearch(latestUser&&latestUser.text);
-  const status=$('#af-prov');if(webSearch&&status)status.textContent='Searching the web…';
+  const status=$('#af-prov');if(status)status.textContent='Auto';
   const res=await fetch(LL_CONFIG.apiUrl+'/api/chat',{
     method:'POST',
     headers:{'Content-Type':'application/json','Authorization':'Bearer '+session.access_token},
-    body:JSON.stringify({messages:fullMsgs.map(m=>({role:m.role,content:m.text})),model:S.aiModel||'auto',webSearch}),
-    signal:AbortSignal.timeout(opts.timeout||60000)
+    body:JSON.stringify({messages:fullMsgs.map(m=>({role:m.role,content:m.text})),attachments:Array.isArray(opts.attachments)?opts.attachments:[],model:'auto',webSearch}),
+    signal:AbortSignal.timeout(opts.timeout||90000)
   });
   let data={};try{data=await res.json()}catch{}
   if(!res.ok)throw new Error(data.error||('AI backend HTTP '+res.status));
@@ -2617,8 +2657,9 @@ async function callLLM(msgs,opts={}){
     out+='\n\n**Web sources**\n'+refs;
   }
   S.aiLastProvider=data.provider||'';
-  const providerNames={groq:'GPT-OSS 120B',gemini:'Gemini 3.8 Flash',openai:'GPT-4o mini',anthropic:'Claude Sonnet'};
-  if(status)status.textContent='Using '+(providerNames[S.aiLastProvider]||'Auto')+(data.webSearch?' · Web':'');
+  aiLastProcess=Array.isArray(data.process)?data.process:[];
+  if(Array.isArray(data.warnings)&&data.warnings.length)aiLastProcess.push({name:'Reviewer notes',model:data.reviewer||'',status:'warning',detail:data.warnings.join(' · ')});
+  if(status)status.textContent='Auto';
   return out;
 }
 async function lifeLinkWebSearch(query){
