@@ -3453,7 +3453,7 @@ async function aiRasterizeImage(file){
   }
 }
 async function aiPrepareFiles(files){
-  const textParts=[],media=[],names=[];let binarySize=0,totalText=0;
+  const textParts=[],media=[],names=[];let binarySize=0,totalText=0,audioCount=0;
   for(const file of files){
     const ext=(file.name.split(".").pop()||"").toLowerCase();names.push(file.name);
     if(/^image\//i.test(file.type)&&ext!=="svg"){
@@ -3462,11 +3462,12 @@ async function aiPrepareFiles(files){
       media.push({name:file.name,mimeType:image.mimeType,data:image.data});
       continue;
     }
-    if(/^audio\//i.test(file.type)||/^video\//i.test(file.type)||["mp3","wav","m4a","aac","ogg","flac","mp4","mov","webm","mkv"].includes(ext)){
+    if(/^audio\//i.test(file.type)||/^video\//i.test(file.type)||["mp3","wav","m4a","aac","ogg","flac","aiff","aif","opus","mpga","mp4","mov","webm","mkv","avi","flv","wmv","3gp"].includes(ext)){
+      if(/^audio\//i.test(file.type)||["mp3","wav","m4a","aac","ogg","flac","aiff","aif","opus","mpga"].includes(ext)){audioCount++;if(audioCount>1)throw new Error("Attach one audio recording per message. Send additional recordings in separate messages.");}
       if(file.size>10*1024*1024)throw new Error(file.name+" is too large for direct media analysis. Keep each audio/video file under 10 MB.");
-      const mimeMap={mp3:"audio/mpeg",wav:"audio/wav",m4a:"audio/mp4",aac:"audio/aac",ogg:"audio/ogg",flac:"audio/flac",mp4:"video/mp4",mov:"video/quicktime",webm:file.type||"video/webm",mkv:"video/mp4"};
+      const mimeMap={mp3:"audio/mpeg",wav:"audio/wav",m4a:"audio/mp4",aac:"audio/aac",ogg:"audio/ogg",flac:"audio/flac",aiff:"audio/aiff",aif:"audio/aiff",opus:"audio/opus",mpga:"audio/mpga",mp4:"video/mp4",mov:"video/quicktime",webm:file.type||"video/webm",mkv:"video/mp4",avi:"video/x-msvideo",flv:"video/x-flv",wmv:"video/x-ms-wmv","3gp":"video/3gpp"};
       const mime=file.type||mimeMap[ext]||"";
-      if(!/^(audio\/(mpeg|wav|webm|ogg|flac|mp4|aac)|video\/(mp4|webm|quicktime|mpeg))$/i.test(mime))throw new Error("Unsupported media type: "+file.name);
+      if(!/^(audio\/(mpeg|mp3|wav|webm|ogg|flac|mp4|aac|aiff|opus|mpga)|video\/(mp4|webm|quicktime|mpeg|mpg|avi|x-msvideo|x-flv|x-ms-wmv|3gpp|mpegps))$/i.test(mime))throw new Error("Unsupported media type: "+file.name);
       const data=aiDataUrlBase64(await aiReadDataUrl(file));binarySize+=Math.floor(data.length*.75);
       if(binarySize>12*1024*1024)throw new Error("Compressed image/audio/video attachments exceed 12 MB in total.");
       media.push({name:file.name,mimeType:mime,data});continue;
