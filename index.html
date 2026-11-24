@@ -3644,7 +3644,7 @@ async function aiCompressMediaLocally(file,isVideo){
     media.pause();media.removeAttribute("src");media.load();media.remove();URL.revokeObjectURL(url);
   }
 }
-async function aiPrepareFiles(files){async function aiPrepareFiles(files){
+async function aiPrepareFiles(files){
   const textParts=[],media=[],names=[];let binarySize=0,totalText=0,audioCount=0;
   for(const file of files){
     const ext=(file.name.split(".").pop()||"").toLowerCase();names.push(file.name);if(file.size>AI_MAX_BROWSER_BINARY&&!AI_TEXT_EXT.has(ext)&&!AI_MEDIA_EXT.has(ext))throw new Error(file.name+' is too large for browser extraction. LifeLink cannot safely shrink this PDF, Office file or archive without risking its contents. FreeConvert can be tried manually, but its free tier has conversion and file-size limits; see the file-handling details below.');
