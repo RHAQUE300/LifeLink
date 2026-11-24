@@ -572,7 +572,7 @@ let googleMailFolder='in:inbox',googleMailFolderName='Inbox';
 let googleDriveView='mydrive',googleDriveFolderId='',googleDriveFolderName='';
 let googleCalendarViewDate=new Date(),googleCalendarView='month',googleCalendarSelectedEventId='';
 let googleCalendarEvents=[],googleCalendarSyncing=false,googleCalendarError='',googleCalendarLastSync=0,googleCalendarLastAttempt=0,googleCalendarLoaded=false,googleMailPollTimer=null,googleCalendarPollTimer=null,googleMailBaselineDone=false;
-let googleTaskLists=[],googleSelectedTaskListId='';
+let googleTaskLists=[],googleSelectedTaskListId='',googleServicePollTimer=null,googleServiceLastSync=0,googleServiceSyncing=false;
 function loadGoogleGIS(){
   if(window.google?.accounts?.oauth2)return Promise.resolve(true);
   if(googleGISPromise)return googleGISPromise;
@@ -1731,8 +1731,7 @@ function showGoogleAccountSwitcher(){
 }
 async function googleWrite(operation,params={}){
   const result=await requestGoogleService(operation,params);
-  toast('Synced with Google successfully');
-  await refreshGoogleService();
+  await refreshGoogleService(undefined,{silent:true});
   return result;
 }
 function googleCompose(){
@@ -1795,7 +1794,7 @@ function googleServiceMarkup(){
     const permission=access.missing.length?`<p class="sub">LifeLink needs ${access.missing.length} additional Google permission${access.missing.length===1?'':'s'} before it can call this service's API.</p><button class="btn pri" data-a="googleauthservice">＋ Grant ${esc(service.name)} API access</button>`:`<span class="tag low">API permissions connected</span><p class="sub">This account has granted the registered API scopes. A full native LifeLink interface for this service is not implemented yet.</p>`;
     return `<div class="google-workspace">${header}<div class="google-workspace-empty"><b>Google API connection</b>${permission}<div class="google-workspace-actions"><button class="btn" data-a="googleexternal">Open full Google app ↗</button><button class="btn" data-a="googlehome">Back to Google services</button></div></div></div>`;
   }
-  if(googleServiceLoading)return `<div class="google-workspace">${header}<div class="google-workspace-loading"><span class="sub">Syncing with Google…</span></div></div>`;
+  if(googleServiceLoading&&!googleServiceData)return `<div class="google-workspace">${header}<div class="google-workspace-loading"><span class="sub">Connecting to Google…</span></div></div>`;
   if(googleServiceError)return `<div class="google-workspace">${header}<div class="google-manager-error"><div><b>Google couldn't return this data</b><div class="sub" style="margin:4px 0 0;font-size:12px">${esc(googleServiceError)}</div></div><button class="btn" data-a="googlerefreshapp">Retry</button></div></div>`;
   const data=googleServiceData||{};
   if(id==='gmail'){
@@ -1915,10 +1914,12 @@ function startGoogleBackgroundSync(){
  googleCalendarPollTimer=setInterval(()=>{if(Date.now()-googleCalendarLastSync>600000)refreshGoogleCalendar()},600000);
  refreshGoogleConnectionStatus().then(()=>{pollGoogleMail();if(location.hash==='#/calendar')refreshGoogleCalendar()});
 }
-async function refreshGoogleService(query){
+async function refreshGoogleService(query,options={}){
   if(!activeGoogleService)return;
-  const id=activeGoogleService;
-  googleServiceLoading=true;googleServiceError='';googleServiceData=null;renderGoogleService();
+  const id=activeGoogleService,silent=!!options.silent;
+  if(googleServiceLoading)return;
+  if(silent&&!googleServiceData)return refreshGoogleService(query);
+  googleServiceLoading=true;googleServiceError='';if(!silent)renderGoogleService();
   try{
     if(id==='gmail'){
       const q=(typeof query==='string'&&query.trim())?query.trim():(googleServiceQuery.trim()||googleMailFolder);
@@ -1945,18 +1946,28 @@ async function refreshGoogleService(query){
       googleServiceData={people:q?(people.results||[]).map(item=>item.person).filter(Boolean):(people.connections||[])};
     }else return;
   }catch(error){googleServiceError=String(error?.message||error||'Google request failed')}
-  finally{googleServiceLoading=false;renderGoogleService()}
+  finally{googleServiceLoading=false;googleServiceLastSync=Date.now();if(islandMode==='google-service'&&$('#island')?.classList.contains('open'))renderGoogleService()}
+}
+function startGoogleServiceBackgroundSync(){
+  clearInterval(googleServicePollTimer);
+  googleServicePollTimer=setInterval(()=>{
+    if(!S?.loggedIn||document.hidden||islandMode!=='google-service'||!$('#island')?.classList.contains('open'))return;
+    if(!['gmail','calendar','drive','tasks','contacts'].includes(activeGoogleService))return;
+    if(googleServiceLoading||Date.now()-googleServiceLastSync<25000)return;
+    refreshGoogleService(undefined,{silent:true}).catch(error=>console.warn('Google background sync:',error?.message||error));
+  },30000);
 }
 async function openGoogleService(serviceId){
   const service=GOOGLE_SERVICE_CATALOG.find(item=>item.id===serviceId);
   if(!service)return;
-  activeGoogleService=serviceId;googleServiceQuery='';googleMessageOpen=null;googleServiceData=null;googleServiceError='';googleServiceLoading=false;googleCalendarSelectedEventId='';
+  activeGoogleService=serviceId;googleServiceQuery='';googleMessageOpen=null;googleServiceData=null;googleServiceError='';googleServiceLoading=false;googleServiceLastSync=0;googleCalendarSelectedEventId='';
   if(serviceId==='gmail'){googleMailFolder='in:inbox';googleMailFolderName='Inbox'}
   if(serviceId==='drive'){googleDriveView='mydrive';googleDriveFolderId='';googleDriveFolderName=''}
   if(serviceId==='calendar'){googleCalendarViewDate=new Date();googleCalendarView='month'}
   if(serviceId==='tasks'){googleSelectedTaskListId=''}
   if(islandMode==='google-service'&&$('#island').classList.contains('open')){renderGoogleService();refreshGoogleService();return}
   openIsland('google-service');
+  startGoogleServiceBackgroundSync();
   if(googleConnectionStatus===null)await refreshGoogleConnectionStatus();
   if(['gmail','calendar','drive','tasks','contacts'].includes(serviceId))await refreshGoogleService();
   else renderGoogleService();
