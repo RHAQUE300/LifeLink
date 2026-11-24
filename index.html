@@ -3055,7 +3055,7 @@ const X=(i,b)=>{const t=S.tasks.find(x=>x.id==i),delT=()=>{S.tasks=S.tasks.filte
  evedit:()=>{const e=S.events.find(x=>x.id==i);if(!e)return;ask('Edit event',EF.slice(0,3),e,o=>saveEv(e,o),()=>{S.events=S.events.filter(x=>x!==e);save();render()})},
  nf:()=>{U.nf=i;render()},readall:()=>{S.notifs.forEach(n=>n.read=true);save();badge();render()},
  nread:()=>{const n=S.notifs.find(x=>x.id==i);if(n)n.read=!n.read;save();badge();render()},
- dismissnotif:()=>{const n=S.notifs.find(x=>x.id==i);if(n){clearResetFlag(n);S.notifs=S.notifs.filter(x=>x.id!=i);save();render();toast('Notification dismissed')}},
+ dismissnotif:()=>{const n=S.notifs.find(x=>x.id==i);if(n){clearResetFlag(n);S.notifs=S.notifs.filter(x=>x.id!=i);save();badge();render();toast('Notification dismissed')}},
  pwreset:()=>startPasswordReset(),resetpw:()=>toast('Use the password-reset link sent by Supabase.'),
  aichat:()=>openChat(i),aichatren:()=>renameChat(i),aichatdel:()=>deleteChat(i),clearchats:()=>clearAllChats(),
  aifeedback:()=>{const rating=b.dataset.k;if(rating==='up')recordAIFeedback(i,'up');else ask('Improve this response',[['reason','What should LifeLink change or learn?','text']],{},d=>recordAIFeedback(i,'down',d.reason||''));},
