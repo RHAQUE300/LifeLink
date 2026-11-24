@@ -2098,7 +2098,7 @@ function renderAIExport(m,idx){
   };
   return '<details class="ai-export"><summary>Export / create</summary><div class="ai-export-menu">'+
     Object.entries(groups).map(([label,formats])=>'<div class="ai-export-group"><b>'+label+'</b><div>'+formats.map(fmt=>'<button type="button" data-ai-export="'+fmt+'" data-i="'+idx+'">'+fmt.toUpperCase()+'</button>').join("")+'</div></div>').join("")+
-    '<div class="ai-export-group"><b>AI media</b><div><button type="button" data-ai-illustrate="true" data-i="'+idx+'">AI vector image (SVG)</button><button type="button" data-ai-video="true" data-i="'+idx+'">Animated video (WebM)</button><button type="button" data-ai-audio="true" data-i="'+idx+'">Narrate (WAV)</button></div></div></div></details>';
+    '<div class="ai-export-group"><b>AI media</b><div><button type="button" data-ai-illustrate="true" data-i="'+idx+'">AI vector image (SVG)</button><button type="button" data-ai-video="true" data-i="'+idx+'">Local explainer video (WebM)</button><button type="button" data-ai-audio="true" data-i="'+idx+'">Narrate (WAV)</button><button type="button" data-ai-custom-export="true" data-i="'+idx+'">Other text extension…</button></div></div></div></details>';
 }
 function renderAI(){
   [['#ao','#ao'],['#af-col','#af-msgs']].forEach(([s,sc])=>{
@@ -3662,6 +3662,16 @@ async function aiGenerateVector(index){
   toast("AI vector image created.");
 }
 document.addEventListener("click",async e=>{
+  const custom=e.target.closest("[data-ai-custom-export]");
+  if(custom){
+    e.preventDefault();e.stopPropagation();
+    const index=Number(custom.dataset.i),message=aiHistory[index];
+    if(!message)return;
+    const extension=String(window.prompt("File extension for a raw text export (without a dot):","txt")||"").trim().replace(/^\./,"").toLowerCase();
+    if(!/^[a-z0-9][a-z0-9_-]{0,15}$/.test(extension)){if(extension)toast("Use a simple extension such as conf, properties or rst.");return}
+    const text=aiPlainText(message),name="lifelink-answer-"+new Date().toISOString().replace(/[:.]/g,"-")+"."+extension;
+    aiDownload(new Blob([text],{type:"text/plain;charset=utf-8"}),name);toast("Raw text file created as ."+extension+". Its contents are not converted into a proprietary binary format.");return;
+  }
   const exp=e.target.closest("[data-ai-export]");if(exp){e.preventDefault();e.stopPropagation();await aiExportMessage(Number(exp.dataset.i),exp.dataset.aiExport);return}
   const ill=e.target.closest("[data-ai-illustrate]");if(ill){e.preventDefault();e.stopPropagation();ill.disabled=true;try{await aiGenerateVector(Number(ill.dataset.i))}catch(err){toast("Illustration failed: "+String(err.message||err).slice(0,150))}finally{ill.disabled=false}return}
   const vid=e.target.closest("[data-ai-video]");if(vid){e.preventDefault();e.stopPropagation();vid.disabled=true;try{const m=aiHistory[Number(vid.dataset.i)];aiDownload(await aiCreateVideo(aiPlainText(m)),"lifelink-ai-explainer.webm");toast("Animated video created.")}catch(err){toast("Video creation failed: "+String(err.message||err).slice(0,150))}finally{vid.disabled=false}return}
