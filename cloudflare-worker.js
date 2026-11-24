@@ -221,16 +221,26 @@ function isHighRiskRequest(text) {
 }
 
 function quantityConstraintIssues(prompt, answer) {
+  const unitInfo = unit => {
+    const u = String(unit || "").toLowerCase();
+    if (u === "kg" || u.startsWith("kilo")) return { unit: "g", factor: 1000 };
+    if (u === "mg" || u.startsWith("milli")) return { unit: "g", factor: 0.001 };
+    if (u === "mcg" || u === "µg" || u.startsWith("micro")) return { unit: "g", factor: 0.000001 };
+    if (u === "g" || u.startsWith("gram")) return { unit: "g", factor: 1 };
+    return { unit: u, factor: 1 };
+  };
   const constraints = [];
-  const re = /(\d+(?:[.,]\d+)?)\s*(kg|g|mg|mcg|µg)\s*(?:per\s*day|\/\s*day|daily|a\s+day|each\s+day|maximum|max(?:imum)?|limit|at\s+most)/gi;
+  const re = /(\d+(?:[.,]\d+)?)\s*(kg|kilograms?|g|grams?|mg|milligrams?|mcg|µg|micrograms?)\b(?:\s*(?:of\s+)?(?:protein|food|carbohydrate|carbs?|fat|meal|meals))?\s*(?:per\s*day|\/\s*day|daily|a\s+day|each\s+day|maximum|max(?:imum)?|limit|at\s+most)/gi;
   let match;
   while ((match = re.exec(String(prompt || ""))) && constraints.length < 12) {
-    constraints.push({ value: Number(match[1].replace(",", ".")), unit: match[2].toLowerCase(), raw: match[0] });
+    const info = unitInfo(match[2]);
+    constraints.push({ value: Number(match[1].replace(",", ".")) * info.factor, unit: info.unit, raw: match[0] });
   }
   const answerValues = [];
-  const valueRe = /(\d+(?:[.,]\d+)?)\s*(kg|g|mg|mcg|µg)\b/gi;
+  const valueRe = /(\d+(?:[.,]\d+)?)\s*(kg|kilograms?|g|grams?|mg|milligrams?|mcg|µg|micrograms?)\b/gi;
   while ((match = valueRe.exec(String(answer || ""))) && answerValues.length < 100) {
-    answerValues.push({ value: Number(match[1].replace(",", ".")), unit: match[2].toLowerCase(), raw: match[0] });
+    const info = unitInfo(match[2]);
+    answerValues.push({ value: Number(match[1].replace(",", ".")) * info.factor, unit: info.unit, raw: match[0] });
   }
   const issues = [];
   for (const limit of constraints) {
@@ -1170,6 +1180,9 @@ export default {
       // explicitly requests an audio export from an assistant message.
       if (url.pathname === "/api/tts") {
         if (!env.GEMINI_API_KEY) return json({ error: "Gemini TTS is not configured on this Worker." }, 503);
+        if (!env.MY_RATE_LIMITER) return json({ error: "Rate limiter is not configured" }, 500);
+        const ttsLimit = await env.MY_RATE_LIMITER.limit({ key: user.id });
+        if (!ttsLimit.success) return json({ error: "Rate limit exceeded. Please try again in one minute." }, 429);
         let ttsBody = {};
         try { ttsBody = await request.json(); } catch { return json({ error: "Invalid JSON" }, 400); }
         const input = typeof ttsBody.text === "string" ? ttsBody.text.trim() : "";
@@ -1323,8 +1336,8 @@ export default {
           console.error("Gemini multimodal unavailable:", error.message);
         }
       }
-      if (!draft && mediaMode && !available.gemini) {
-        return json({ error: "Image, audio and video analysis currently requires a connected Gemini API key. Your files were not sent to another provider." }, 503);
+      if (mediaMode && !draft) {
+        return json({ error: "Gemini media analysis failed or is unavailable. LifeLink did not fall back to text-only processing, so your attachments were not silently ignored.", code: "MULTIMODAL_ANALYSIS_FAILED" }, 503);
       }
       if (!draft) {
         for (const provider of order) {
@@ -1362,9 +1375,14 @@ export default {
       try {
         verification = await verifyDraft(draft, messages, verifierProvider, env, quantityIssues);
         if (!verification) throw new Error("The reviewer did not return a valid audit result.");
-        if (verification.decision === "revise" && typeof verification.corrected_answer === "string" && verification.corrected_answer.trim()) {
-          finalReply = verification.corrected_answer.trim();
-          quantityIssues = quantityConstraintIssues(latestUserText, finalReply);
+        if (verification.decision === "revise") {
+          if (typeof verification.corrected_answer === "string" && verification.corrected_answer.trim()) {
+            finalReply = verification.corrected_answer.trim();
+            quantityIssues = quantityConstraintIssues(latestUserText, finalReply);
+          } else {
+            verification.decision = "withhold";
+            finalReply = "";
+          }
         } else if (verification.decision === "withhold") {
           finalReply = "";
         }
@@ -1378,8 +1396,8 @@ export default {
       }
 
       const unresolvedReview = !verification || !["pass", "revise"].includes(verification.decision);
-      if (quantityIssues.length || verification?.decision === "withhold" || (highRisk && unresolvedReview)) {
-        process.push({ name: "Safety and quantity gate", model: "LifeLink checks", status: "blocked", detail: quantityIssues.length ? "A stated quantity or unit constraint still conflicts with the answer" : "A high-stakes answer could not be independently verified" });
+      if (quantityIssues.length || verification?.decision === "withhold" || unresolvedReview) {
+        process.push({ name: "Safety and quantity gate", model: "LifeLink checks", status: "blocked", detail: quantityIssues.length ? "A stated quantity or unit constraint still conflicts with the answer" : "The response did not complete a successful independent review" });
         finalReply = highRisk
           ? "I’m not comfortable presenting this as a safe, verified answer. The answer did not pass LifeLink’s independent safety/quantity checks. For a diabetes-related meal plan, please confirm the intended daily amount and have a diabetes-qualified dietitian or clinician check the plan before using it."
           : (quantityIssues.length ? "I found a conflict between the quantities in your request and the drafted answer, and could not safely resolve it. I have withheld the conflicting figures rather than risk presenting an incorrect amount." : "The answer reviewer could not verify this response reliably, so LifeLink has withheld it rather than present an unchecked answer.");
