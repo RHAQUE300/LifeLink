@@ -417,8 +417,8 @@ pre,code{max-width:100%;overflow-wrap:anywhere;white-space:pre-wrap}
   <section id="af-main">
     <div id="af-head">
       <button class="ib" id="af-toggle" onclick="toggleAISide()" aria-label="Show or hide chat history" aria-expanded="true">☰</button>
-      <b style="font-size:17px">✦ LifeLink AI</b><span class="tag" id="af-prov">Auto</span>
-      <span class="tag" id="af-prov" title="LifeLink automatically routes across connected models">Auto</span>
+      <b style="font-size:17px">✦ LifeLink AI</b><span class="tag" id="af-prov" title="Selected AI provider">Auto</span>
+      <label for="af-model" class="lbl" style="font-size:12px;color:var(--mut)">Model</label><select id="af-model" aria-label="AI model" style="width:auto;max-width:190px;padding:6px 10px;border-radius:10px;font-size:12px"><option value="auto">Auto · best available</option><option value="groq">Groq</option><option value="gemini">Google Gemini</option><option value="openai">OpenAI</option><option value="anthropic">Anthropic</option></select>
       <span class="sp"></span>
       <button class="btn" id="af-new" onclick="clearAI()" aria-label="New chat">＋<span class="lbl"> New chat</span></button>
       
@@ -437,7 +437,7 @@ pre,code{max-width:100%;overflow-wrap:anywhere;white-space:pre-wrap}
         <div class="af-file-actions"><label class="btn" for="af-file-input" id="af-attach">＋ Attach files</label><input id="af-file-input" type="file" multiple hidden accept=".txt,.md,.markdown,.rtf,.html,.htm,.css,.js,.mjs,.ts,.tsx,.jsx,.json,.xml,.yaml,.yml,.toml,.ini,.csv,.tsv,.log,.py,.ipynb,.sql,.sh,.ps1,.java,.c,.h,.cpp,.cs,.go,.rs,.php,.rb,.tex,.pdf,.docx,.doc,.pptx,.ppt,.xlsx,.xls,.ods,.odt,.odp,.epub,.zip,.png,.jpg,.jpeg,.webp,.gif,.bmp,.mp3,.wav,.m4a,.aac,.ogg,.flac,.mp4,.mov,.webm,.mkv,image/*,audio/*,video/*"></div>
       </div>
       <div class="af-box"><textarea id="af-q" rows="1" placeholder="Message LifeLink AI…" aria-label="Message LifeLink AI"></textarea><button class="btn pri" id="af-send" type="button" aria-label="Send message" title="Send message"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M12 19V5M6 11l6-6 6 6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></button></div>
-      <p class="af-file-note">Files are read in your browser where possible. Extracted text is sent to the connected AI provider; media analysis and voice narration use Gemini. Google may use free-tier requests to improve its products. Do not attach sensitive material unless you are comfortable with the providers’ data handling.</p>
+      <p class="af-file-note">Files are extracted in your browser where supported. Extracted content is sent to your selected AI provider; image, audio and video understanding requires a connected multimodal provider. AI can make mistakes—verify important information. LifeLink is not responsible for decisions made solely from AI output. Google may use free-tier requests to improve its products. Do not attach sensitive material unless you are comfortable with the providers’ data handling.</p>
     </div>
   </section>
 </div>
@@ -2269,7 +2269,7 @@ async function sendMsg(text){
     const attachHtml=prepared.names.length?'<div class="ai-attachment-line">'+prepared.names.map(n=>'<span class="ai-attachment-tag">📎 '+esc(n)+'</span>').join('')+'</div>':'';
     aiHistory.splice(aiHistory.findIndex(m=>m.id===loadId),0,{role:'user',html:esc(displayText),text:promptText,attachments:prepared.names});
     const learnedNow=learnExplicitPreference(displayText);if(learnedNow)toast('Learned a preference from your message.');
-    const loading=aiHistory.find(m=>m.id===loadId);if(loading)loading.html='<i>Drafting, cross-checking and running safety checks…</i>';
+    const loading=aiHistory.find(m=>m.id===loadId);if(loading)loading.html='<i>Preparing your response…</i>';
     renderAI();
     const r=await getAIResponse(promptText,prepared.media,picked.length>0);
     if(!S||!S.loggedIn)return;
@@ -2700,11 +2700,11 @@ async function callLLM(msgs,opts={}){
   const fullMsgs=[{role:'system',text:opts.sys!=null?opts.sys:aiSystemPrompt()},...msgs].slice(-20);
   const latestUser=[...fullMsgs].reverse().find(m=>m.role==='user');
   const webSearch=opts.webSearch===true||shouldUseWebSearch(latestUser&&latestUser.text);
-  const status=$('#af-prov');if(status)status.textContent='Auto';
+  const status=$('#af-prov');if(status)status.textContent=(($('#af-model')&&$('#af-model').selectedOptions[0]&&$('#af-model').selectedOptions[0].textContent)||'Auto').split(' · ')[0];
   const res=await fetch(LL_CONFIG.apiUrl+'/api/chat',{
     method:'POST',
     headers:{'Content-Type':'application/json','Authorization':'Bearer '+session.access_token},
-    body:JSON.stringify({messages:fullMsgs.map(m=>({role:m.role,content:m.text})),attachments:Array.isArray(opts.attachments)?opts.attachments:[],model:'auto',webSearch}),
+    body:JSON.stringify({messages:fullMsgs.map(m=>({role:m.role,content:m.text})),attachments:Array.isArray(opts.attachments)?opts.attachments:[],model:($('#af-model')&&$('#af-model').value)||'auto',webSearch}),
     signal:AbortSignal.timeout(opts.timeout||90000)
   });
   let data={};try{data=await res.json()}catch{}
@@ -2718,7 +2718,7 @@ async function callLLM(msgs,opts={}){
   S.aiLastProvider=data.provider||'';
   aiLastProcess=Array.isArray(data.process)?data.process:[];
   if(Array.isArray(data.warnings)&&data.warnings.length)aiLastProcess.push({name:'Reviewer notes',model:data.reviewer||'',status:'warning',detail:data.warnings.join(' · ')});
-  if(status)status.textContent='Auto';
+  if(status)status.textContent=(($('#af-model')&&$('#af-model').selectedOptions[0]&&$('#af-model').selectedOptions[0].textContent)||'Auto').split(' · ')[0];
   return out;
 }
 async function lifeLinkWebSearch(query){
@@ -2969,7 +2969,7 @@ async function getAIResponse(raw,mediaAttachments=[],hasAttachments=false){
     if(Array.isArray(mediaAttachments)&&mediaAttachments.length){
       return{err:true,html:`⚠️ <b>Attachment analysis is unavailable:</b> ${esc(msg)}<br>${hint?esc(hint):'Check that Gemini is connected for image, audio and video analysis. Your files were not silently ignored.'}`};
     }
-    return{err:true,html:`⚠️ <b>AI service unavailable:</b> ${esc(msg)}${hint?'<br>'+esc(hint):''}<br><br>LifeLink has withheld an AI answer because it could not complete the required review. Please retry after the connected AI services are available.`};
+    return{err:true,html:`⚠️ <b>AI service unavailable:</b> ${esc(msg)}${hint?'<br>'+esc(hint):''}<br><br>Please check your provider connection and try again.`};
   }
 }
 
