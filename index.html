@@ -3555,8 +3555,7 @@ async function aiRasterizeImage(file){
   }finally{if(bitmap&&bitmap.close)bitmap.close()}
 }
 async function aiCompressMediaLocally(file,isVideo){
-  const captureSupported=HTMLMediaElement.prototype.captureStream||HTMLMediaElement.prototype.mozCaptureStream;
-  if(typeof MediaRecorder!=="function"||(!isVideo&&!captureSupported)|| (isVideo&&typeof HTMLCanvasElement.prototype.captureStream!=="function")){
+  if(typeof MediaRecorder!=="function"||(isVideo&&typeof HTMLCanvasElement.prototype.captureStream!=="function")){
     throw new Error("Your browser cannot re-encode this media locally. Try a shorter/lower-resolution export, or use FreeConvert manually.");
   }
   const url=URL.createObjectURL(file),media=document.createElement(isVideo?"video":"audio");
