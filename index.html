@@ -1980,10 +1980,10 @@ async function refreshAIModelStatus(){
       if(chosen!=='auto'&&!window.aiModelAvailability[chosen]){S.aiModel='auto';save();sel.value='auto';}
       else sel.value=chosen;
     }
-    if(p)p.textContent='Active: '+(S.aiModel&&S.aiModel!=='auto'?({'groq':'GPT-OSS 120B','gemini':'Gemini 3.8 Flash','openai':'GPT-4o mini','anthropic':'Claude Sonnet'}[S.aiModel]||S.aiModel):'Auto');
+    if(p)p.textContent='Auto';
   }catch(e){
     window.aiModelAvailability={};
-    if(p)p.textContent='Auto · availability check failed';
+    if(p)p.textContent='Auto';
     if(sel)sel.value='auto';
   }
 }
@@ -2070,10 +2070,28 @@ function clearAllChats(){
 }
 
 /* ---------- rendering ---------- */
+function renderAIProcess(m){
+  if(!Array.isArray(m.process)||!m.process.length)return "";
+  const steps=m.process.map(step=>{
+    const status=["warning","blocked"].includes(step.status)?step.status:"complete";
+    return '<div class="ai-process-step '+status+'"><span class="ai-process-dot"></span><div><b>'+esc(step.name||"Check")+(step.model?' · '+esc(step.model):'')+'</b><small>'+esc(step.detail||"Completed")+'</small></div></div>';
+  }).join("");
+  return '<details class="ai-process"><summary>Verification &amp; process · '+(m.process.some(x=>x.status==="blocked"||x.status==="warning")?'review needed':'checked')+'</summary><div class="ai-process-body">'+steps+'<div class="ai-process-note">This is a summary of checks and tools used, not a transcript of private internal reasoning. Model reviews reduce mistakes but cannot guarantee correctness.</div></div></details>';
+}
+function renderAIExport(m,idx){
+  if(m.role!=="bot"||m.id||m.err)return "";
+  return '<details class="ai-export"><summary>Export / create</summary><div class="ai-export-menu">'+
+    ['txt','md','html','rtf','json','csv','xml','tex','pdf','docx','odt','pptx','odp','xlsx','ods','epub','svg','png','jpg','webp','wav','webm'].map(fmt=>'<button type="button" data-ai-export="'+fmt+'" data-i="'+idx+'">'+fmt.toUpperCase()+'</button>').join("")+
+    '<button type="button" data-ai-illustrate="true" data-i="'+idx+'">AI vector image</button><button type="button" data-ai-video="true" data-i="'+idx+'">Animated video</button><button type="button" data-ai-audio="true" data-i="'+idx+'">Narrate</button></div></details>';
+}
 function renderAI(){
   [['#ao','#ao'],['#af-col','#af-msgs']].forEach(([s,sc])=>{
     const o=$(s);if(!o)return;
-    o.innerHTML=aiHistory.map((m,idx)=>`<div class="ai-msg ${m.role}">${m.html===AI_GREETING?localizedAIGreeting():m.html}${m.role==='bot'&&!m.id?`<div class="ai-copy-row"><button class="ai-copy-btn" type="button" data-copy-message="${idx}" title="Copy the entire response">▢ Copy response</button>${m.text&&!m.err&&!m.feedbackGiven?`<button class="btn" data-a="aifeedback" data-i="${idx}" data-k="up" style="padding:2px 7px;font-size:11px" title="Helpful">👍</button><button class="btn" data-a="aifeedback" data-i="${idx}" data-k="down" style="padding:2px 7px;font-size:11px" title="Needs improvement">👎</button>`:''}</div>`:''}</div>`).join('');
+    o.innerHTML=aiHistory.map((m,idx)=>{
+      const files=m.attachments&&m.attachments.length?'<div class="ai-attachment-line">'+m.attachments.map(n=>'<span class="ai-attachment-tag">📎 '+esc(n)+'</span>').join('')+'</div>':'';
+      const copy=m.role==='bot'&&!m.id?'<div class="ai-copy-row"><button class="ai-copy-btn" type="button" data-copy-message="'+idx+'" title="Copy the entire response">▢ Copy response</button>'+(m.text&&!m.err?'<button class="btn" data-a="aifeedback" data-i="'+idx+'" data-k="up" style="padding:2px 7px;font-size:11px" title="Helpful">👍</button><button class="btn" data-a="aifeedback" data-i="'+idx+'" data-k="down" style="padding:2px 7px;font-size:11px" title="Needs improvement">👎</button>':'')+'</div>':'';
+      return '<div class="ai-msg '+m.role+'">'+(m.html===AI_GREETING?localizedAIGreeting():m.html)+files+copy+'</div>'+renderAIProcess(m)+renderAIExport(m,idx);
+    }).join('');
     o.querySelectorAll('.ai-msg.bot pre').forEach(pre=>{
       if(pre.querySelector('.ai-copy-code'))return;
       const b=document.createElement('button');
@@ -2084,6 +2102,8 @@ function renderAI(){
     const c=$(sc);if(c)c.scrollTop=c.scrollHeight;
   });
   const ch=$('#af-chips');if(ch)ch.style.display=aiHistory.filter(m=>!m.id).length<=1?'flex':'none';
+  const live=$('#af-process-live');
+  if(live)live.innerHTML=aiPending?'<span class="ai-live-pulse"></span>Auto is preparing a draft, reviewing it independently and checking quantities…':'';
 }
 async function copyAIText(value){
   const text=String(value||'');
@@ -2214,20 +2234,41 @@ function sendAI(t){return sendMsg(t)}
 function sendModalAI(t){return sendMsg(t)}
 
 async function sendMsg(text){
-  text=String(text||'').trim();if(!text)return;
+  text=String(text||'').trim();
+  const picked=aiPendingFiles.splice(0,6);
+  renderAIPendingFiles();
+  if(!text&&!picked.length)return;
   ['#aiq','#af-q'].forEach(s=>{const q=$(s);if(q){q.value='';if(s==='#af-q')q.style.height='auto'}});
-  aiHistory.push({role:'user',html:esc(text),text});
-  const learnedNow=learnExplicitPreference(text);if(learnedNow)toast('Learned a preference from your message.');
+  aiPending++;aiLastProcess=[];
   const loadId='loading-'+uid();
-  aiHistory.push({role:'bot',id:loadId,html:'<i>Thinking…</i>'});
-  renderAI();aiPending++;
-  let r;
-  try{r=await getAIResponse(text)}catch(e){r={html:'⚠️ Something went wrong: '+esc(e&&e.message||e),err:true}}
-  finally{aiPending=Math.max(0,aiPending-1)}
+  aiHistory.push({role:'bot',id:loadId,html:'<i>Reading attachments and preparing checks…</i>'});
+  const displayText=text||'Please analyse the attached file(s).';
+  renderAI();
+  let prepared={textBlock:'',media:[],names:[]},promptText=displayText;
+  try{
+    if(picked.length)prepared=await aiPrepareFiles(picked);
+    promptText=displayText+(prepared.textBlock?'\n\n'+prepared.textBlock:'');
+    const attachHtml=prepared.names.length?'<div class="ai-attachment-line">'+prepared.names.map(n=>'<span class="ai-attachment-tag">📎 '+esc(n)+'</span>').join('')+'</div>':'';
+    aiHistory.splice(aiHistory.findIndex(m=>m.id===loadId),0,{role:'user',html:esc(displayText)+attachHtml,text:promptText,attachments:prepared.names});
+    const learnedNow=learnExplicitPreference(displayText);if(learnedNow)toast('Learned a preference from your message.');
+    const loading=aiHistory.find(m=>m.id===loadId);if(loading)loading.html='<i>Drafting, cross-checking and running safety checks…</i>';
+    renderAI();
+    const r=await getAIResponse(promptText,prepared.media);
+    if(!S||!S.loggedIn)return;
+    const msg={role:'bot',html:r.html,text:r.text||htmlToText(r.html),err:!!r.err,process:aiLastProcess.slice(0,8)};
+    const idx=aiHistory.findIndex(m=>m.id===loadId);
+    if(idx!==-1)aiHistory[idx]=msg;else aiHistory.push(msg);
+  }catch(e){
+    const idx=aiHistory.findIndex(m=>m.id===loadId);
+    const msg={role:'bot',html:'⚠️ <b>Could not prepare this message:</b> '+esc(e&&e.message||e),text:String(e&&e.message||e),err:true};
+    if(idx!==-1)aiHistory[idx]=msg;else aiHistory.push(msg);
+    aiPendingFiles.unshift(...picked);
+    renderAIPendingFiles();
+  }finally{
+    aiPending=Math.max(0,aiPending-1);
+    const live=$('#af-process-live');if(live)live.innerHTML='';
+  }
   if(!S||!S.loggedIn)return;
-  const msg={role:'bot',html:r.html,text:r.text||htmlToText(r.html),err:!!r.err};
-  const idx=aiHistory.findIndex(m=>m.id===loadId);
-  if(idx!==-1)aiHistory[idx]=msg;else aiHistory.push(msg);
   persistAI();renderAI();
 }
 
@@ -2895,13 +2936,16 @@ async function builtInGeneralAI(raw){
   return `I couldn’t answer “<b>${esc(q.length>80?q.slice(0,80)+'…':q)}</b>” in built-in mode. I can manage tasks, events and notes, do maths and unit conversions, and look up topics on Wikipedia.<br><br>Say <i>help</i> for examples, or choose an available model from the selector for open-ended questions.`;
 }
 
-async function getAIResponse(raw){
+async function getAIResponse(raw,mediaAttachments=[]){
   const ac=appCommand(raw);if(ac)return{html:ac};
   const wc=workspaceCommand(raw,false);if(wc)return{html:wc};
   try{
-    return applyAIActions(await callLLM(aiMessages()));
+    return applyAIActions(await callLLM(aiMessages(),{attachments:mediaAttachments}));
   }catch(err){
     const msg=String(err&&err.message||err),hint=aiHint(err&&err.status);
+    if(Array.isArray(mediaAttachments)&&mediaAttachments.length){
+      return{err:true,html:`⚠️ <b>Attachment analysis is unavailable:</b> ${esc(msg)}<br>${hint?esc(hint):'Check that Gemini is connected for image, audio and video analysis. Your files were not silently ignored.'}`};
+    }
     const fb=await builtInGeneralAI(raw);
     return{err:true,html:`⚠️ <b>AI service unavailable:</b> ${esc(msg)}${hint?'<br>'+esc(hint):''}<br><br><i>LifeLink fallback assistant:</i><br>${fb}`};
   }
