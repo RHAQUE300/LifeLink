@@ -1977,7 +1977,7 @@ async function refreshAIModelStatus(){
     window.aiModelAvailability=data.models||{};
     if(sel){
       [...sel.options].forEach(o=>{
-        if(o.value==='auto')o.textContent='Auto · Groq → Gemini → LifeLink fallback';
+        if(o.value==='auto')o.textContent='Auto';
         else{
           const label=o.dataset.label||o.value;
           o.textContent=label+(window.aiModelAvailability[o.value]?'':' · Connect');
@@ -2908,7 +2908,7 @@ async function fetchWikipediaSummary(topic){
 function capabilitiesHtml(){
   return `I’m LifeLink AI. Right now I’m in <b>built-in mode</b>, so I’m a fast assistant for your workspace plus quick lookups, not a full chatbot.<br><br>`
    +`<b>Try:</b><br>• <i>Add task Finish lab report due Friday high priority</i><br>• <i>Schedule meeting with Sam tomorrow at 3pm</i><br>• <i>Add note: ideas for the science fair</i><br>• <i>Complete task 2</i> · <i>What’s due today?</i> · <i>Summarize my day</i><br>• <i>Open my calendar</i> · <i>Dark mode</i> · <i>Start a 25 minute timer</i> · <i>Delete note groceries</i><br>• <i>15% of 240</i> · <i>72 f to c</i> · <i>What is photosynthesis?</i> (Wikipedia)<br><br>`
-   +`For real conversations, writing help and reasoning, choose an available model from the chat selector. If a model needs connecting, LifeLink will explain how to add its key securely to the server.`;
+   +`For real conversations, writing help and reasoning, LifeLink automatically chooses from the connected models and checks the answer before displaying it.`;
 }
 
 async function builtInGeneralAI(raw){
@@ -2951,7 +2951,7 @@ async function builtInGeneralAI(raw){
         +'<b>'+esc(w.title)+'</b><br>'+esc(w.extract)+(w.url?'<br><small><a href="'+esc(w.url)+'" target="_blank" rel="noopener noreferrer" style="color:var(--ac)">Source: Wikipedia ↗</a></small>':'');
     }
   }
-  return `I couldn’t answer “<b>${esc(q.length>80?q.slice(0,80)+'…':q)}</b>” in built-in mode. I can manage tasks, events and notes, do maths and unit conversions, and look up topics on Wikipedia.<br><br>Say <i>help</i> for examples, or choose an available model from the selector for open-ended questions.`;
+  return `I couldn’t answer “<b>${esc(q.length>80?q.slice(0,80)+'…':q)}</b>” in built-in mode. I can manage tasks, events and notes, do maths and unit conversions, and look up topics on Wikipedia.<br><br>Say <i>help</i> for examples. LifeLink uses Auto routing and reviews model answers before displaying them.`;
 }
 
 async function getAIResponse(raw,mediaAttachments=[],hasAttachments=false){
