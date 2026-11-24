@@ -1303,14 +1303,17 @@ export default {
       const attachments = [];
       const rawAttachments = Array.isArray(body.attachments) ? body.attachments : [];
       if (rawAttachments.length > 6) return json({ error: "Attach no more than 6 media files at once." }, 400);
-      let attachmentBytes = 0;
+      let attachmentBytes = 0, audioAttachmentCount = 0;
       for (const file of rawAttachments) {
         if (!file || typeof file !== "object") return json({ error: "Invalid attachment." }, 400);
         const name = typeof file.name === "string" ? file.name.slice(0, 180) : "attachment";
         const mimeType = typeof file.mimeType === "string" ? file.mimeType.toLowerCase() : "";
         const data = typeof file.data === "string" ? file.data : "";
-        if (!/^(image\/(?:jpeg|png|webp|gif)|audio\/(?:mpeg|mp3|wav|webm|ogg|flac|mp4|m4a|aac)|video\/(?:mp4|webm|quicktime|mpeg))$/.test(mimeType)) {
+        if (!/^(image\/(?:jpeg|png|webp|gif)|audio\/(?:mpeg|mp3|wav|webm|ogg|flac|mp4|m4a|aac|aiff|opus|mpga)|video\/(?:mp4|webm|quicktime|mpeg|mpg|avi|x-msvideo|x-flv|x-ms-wmv|3gpp|mpegps))$/.test(mimeType)) {
           return json({ error: "Unsupported media type for AI analysis: " + name }, 415);
+        }
+        if (mimeType.startsWith("audio/") && ++audioAttachmentCount > 1) {
+          return json({ error: "Gemini media analysis currently accepts one audio file per message. Send the other recordings separately." }, 400);
         }
         if (!/^[A-Za-z0-9+/]*={0,2}$/.test(data) || data.length > 14000000) {
           return json({ error: "Invalid or oversized media attachment: " + name }, 413);
