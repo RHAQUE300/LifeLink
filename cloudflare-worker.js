@@ -127,7 +127,7 @@ function availableModels(env) {
 }
 
 function providerLabel(provider) {
-  return ({ groq: "Groq · GPT-OSS 120B", gemini: "Gemini 3.1 Flash-Lite", openai: "OpenAI · GPT-4o mini", anthropic: "Anthropic · Claude" })[provider] || provider;
+  return ({ groq: "Groq · auto-selected model", gemini: "Gemini 3.1 Flash-Lite", openai: "OpenAI · GPT-4o mini", anthropic: "Anthropic · Claude" })[provider] || provider;
 }
 
 function extractGeminiText(data) {
@@ -160,29 +160,60 @@ async function readProviderResponse(response, provider) {
 }
 
 async function askGroq(messages, env) {
-  const response = await fetch(
-    "https://api.groq.com/openai/v1/chat/completions",
-    {
-      method: "POST",
-      headers: {
-        "Authorization": `Bearer ${env.GROQ_API_KEY}`,
-        "Content-Type": "application/json"
-      },
-      body: JSON.stringify({
-        model: "openai/gpt-oss-120b",
+  const headers = {
+    "Authorization": "Bearer " + env.GROQ_API_KEY,
+    "Content-Type": "application/json"
+  };
+  const preferred = [
+    "openai/gpt-oss-120b",
+    "openai/gpt-oss-20b",
+    "qwen/qwen3.8-27b",
+    "qwen/qwen3.6-27b",
+    "llama-3.3-70b-versatile",
+    "llama-3.1-8b-instant"
+  ];
+  let discovered = [];
+  try {
+    const modelResponse = await fetch("https://api.groq.com/openai/v1/models", {
+      method: "GET", headers, signal: AbortSignal.timeout(10000)
+    });
+    const modelData = await readProviderResponse(modelResponse, "Groq model discovery");
+    discovered = (Array.isArray(modelData.data) ? modelData.data : [])
+      .filter(item => item && item.active !== false && typeof item.id === "string")
+      .map(item => item.id)
+      .filter(id => !/(whisper|tts|guard|embed|orpheus)/i.test(id));
+  } catch (error) {
+    console.error("Groq model discovery failed; using known model fallbacks:", error.message);
+  }
+  const candidates = discovered.length
+    ? [...preferred.filter(id => discovered.includes(id)), ...discovered.filter(id => !preferred.includes(id))]
+    : preferred;
+  const failures = [];
+  for (const model of candidates.slice(0, 8)) {
+    try {
+      const body = {
+        model,
         messages,
         max_completion_tokens: 4096,
-        reasoning_effort: "high",
         temperature: 0.35
-      }),
-      signal: AbortSignal.timeout(45000)
+      };
+      if (/gpt-oss/i.test(model)) body.reasoning_effort = "high";
+      const response = await fetch("https://api.groq.com/openai/v1/chat/completions", {
+        method: "POST",
+        headers,
+        body: JSON.stringify(body),
+        signal: AbortSignal.timeout(45000)
+      });
+      const data = await readProviderResponse(response, "Groq " + model);
+      const reply = data.choices?.[0]?.message?.content?.trim();
+      if (!reply) throw new Error("Groq returned no text");
+      return reply;
+    } catch (error) {
+      failures.push(model);
+      console.error("Groq model unavailable:", model, error.message);
     }
-  );
-
-  const data = await readProviderResponse(response, "Groq");
-  const reply = data.choices?.[0]?.message?.content?.trim();
-  if (!reply) throw new Error("Groq returned no text");
-  return reply;
+  }
+  throw new Error("No active Groq chat model succeeded. Tried " + (failures.join(", ") || "the available model list"));
 }
 
 async function askGeminiMultimodal(messages, attachments, env) {
