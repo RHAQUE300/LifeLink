@@ -2236,7 +2236,7 @@ function sendModalAI(t){return sendMsg(t)}
 async function sendMsg(text){
   text=String(text||'').trim();
   const picked=aiPendingFiles.splice(0,6);
-  renderAIPendingFiles();
+  aiRenderPendingFiles();
   if(!text&&!picked.length)return;
   ['#aiq','#af-q'].forEach(s=>{const q=$(s);if(q){q.value='';if(s==='#af-q')q.style.height='auto'}});
   aiPending++;aiLastProcess=[];
@@ -2249,7 +2249,7 @@ async function sendMsg(text){
     if(picked.length)prepared=await aiPrepareFiles(picked);
     promptText=displayText+(prepared.textBlock?'\n\n'+prepared.textBlock:'');
     const attachHtml=prepared.names.length?'<div class="ai-attachment-line">'+prepared.names.map(n=>'<span class="ai-attachment-tag">📎 '+esc(n)+'</span>').join('')+'</div>':'';
-    aiHistory.splice(aiHistory.findIndex(m=>m.id===loadId),0,{role:'user',html:esc(displayText)+attachHtml,text:promptText,attachments:prepared.names});
+    aiHistory.splice(aiHistory.findIndex(m=>m.id===loadId),0,{role:'user',html:esc(displayText),text:promptText,attachments:prepared.names});
     const learnedNow=learnExplicitPreference(displayText);if(learnedNow)toast('Learned a preference from your message.');
     const loading=aiHistory.find(m=>m.id===loadId);if(loading)loading.html='<i>Drafting, cross-checking and running safety checks…</i>';
     renderAI();
@@ -2263,7 +2263,7 @@ async function sendMsg(text){
     const msg={role:'bot',html:'⚠️ <b>Could not prepare this message:</b> '+esc(e&&e.message||e),text:String(e&&e.message||e),err:true};
     if(idx!==-1)aiHistory[idx]=msg;else aiHistory.push(msg);
     aiPendingFiles.unshift(...picked);
-    renderAIPendingFiles();
+    aiRenderPendingFiles();
   }finally{
     aiPending=Math.max(0,aiPending-1);
     const live=$('#af-process-live');if(live)live.innerHTML='';
