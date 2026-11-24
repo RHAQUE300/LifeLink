@@ -1413,9 +1413,8 @@ export default {
         { name: "Model selection", model: requested === "auto" ? "Auto" : providerLabel(requested), status: "complete", detail: "Selected " + providerLabel(draftProvider) },
         { name: mediaMode ? "File analysis" : "Response generation", model: providerLabel(draftProvider), status: "complete", detail: mediaMode ? "Processed the attached media with a multimodal model" : "Generated a response" }
       ];
-      const disclaimer = "\\n\\n---\\n*AI-generated content may be inaccurate or incomplete. Verify important information independently. LifeLink is not responsible for decisions made solely on AI-generated output.*";
       return json({
-        reply: draft + disclaimer,
+        reply: draft,
         title: generatedTitle,
         provider: draftProvider,
         requested,
