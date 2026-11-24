@@ -2048,6 +2048,7 @@ function persistAI(){
 }
 function clearAI(quiet){
   if(aiBusy())return;
+  aiPendingFiles=[];aiRenderPendingFiles();
   aiChatId=null;aiHistory=aiBlank();if(S&&S.loggedIn){S.curChat='';save()}
   refreshAIFull();renderAI();if(quiet!==true)toast('Started a new chat');
   const q=$('#af-q');if(q&&$('#ai-full').classList.contains('open'))q.focus();
@@ -2249,6 +2250,7 @@ function sendAI(t){return sendMsg(t)}
 function sendModalAI(t){return sendMsg(t)}
 
 async function sendMsg(text){
+  if(aiBusy())return;
   text=String(text||'').trim();
   const picked=aiPendingFiles.splice(0,6);
   aiRenderPendingFiles();
