@@ -3495,7 +3495,7 @@ async function aiExportMessage(index,format){
     if(format==="txt")file=blob(text,"text/plain;charset=utf-8");
     else if(format==="md")file=blob(text,"text/markdown;charset=utf-8");
     else if(format==="html")file=blob('<!doctype html><meta charset="utf-8"><title>LifeLink AI</title><article style="max-width:850px;margin:40px auto;font:16px/1.65 system-ui;white-space:pre-wrap">'+aiEscapeXml(text)+'</article>',"text/html;charset=utf-8");
-    else if(format==="rtf")file=blob("{\\rtf1\\ansi\\deff0 "+text.replace(/[\\{}]/g,"\\applyPrefs();
+    else if(format==="rtf")file=blob("{\\rtf1\\ansi\\deff0 "+text.replace(/[\\{}]/g,ch=>"\\"+ch).replace(/\n/g,"\\par ")+"}","application/rtf");
 startLanguageObserver();").replace(/\n/g,"\\par ")+"}","application/rtf");
     else if(format==="json")file=blob(JSON.stringify({application:"LifeLink",createdAt:new Date().toISOString(),content:text,verification:m.process||[]},null,2),"application/json");
     else if(format==="csv")file=blob("Line\r\n"+text.split(/\r?\n/).map(x=>'"'+x.replace(/"/g,'""')+'"').join("\r\n"),"text/csv;charset=utf-8");
