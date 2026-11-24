@@ -341,6 +341,12 @@ pre,code{max-width:100%;overflow-wrap:anywhere;white-space:pre-wrap}
 .ai-export-menu{display:flex;flex-wrap:wrap;gap:5px;margin-top:6px;padding:7px;border:1px solid var(--gb);border-radius:11px;background:var(--g)}
 .ai-export-menu button{border:1px solid var(--gb);border-radius:8px;background:rgba(255,255,255,.3);padding:5px 8px;font-size:10px;cursor:pointer;color:var(--ink)}
 .ai-export-menu button:hover{background:rgba(79,124,255,.12)}
+.ai-export-menu{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));align-items:start}
+.ai-export-group{display:grid;gap:4px;align-content:start}
+.ai-export-group>b{font-size:10px;font-weight:700;color:var(--mut)}
+.ai-export-group>div{display:flex;gap:4px;flex-wrap:wrap;align-content:start}
+.ai-export-group button{padding:4px 6px}
+
 #af-process-live{max-width:780px;margin:4px auto 12px;padding:0 5px;font-size:11px;color:var(--mut)}
 #af-process-live:empty{display:none}
 .ai-live-pulse{display:inline-block;width:7px;height:7px;border-radius:50%;background:var(--ac);margin-right:7px;animation:aiPulse 1s ease-in-out infinite alternate}
@@ -2080,9 +2086,18 @@ function renderAIProcess(m){
 }
 function renderAIExport(m,idx){
   if(m.role!=="bot"||m.id||m.err)return "";
+  const groups={
+    Documents:["pdf","docx","odt","rtf","md","txt","html","epub","tex"],
+    Presentations:["pptx","odp"],
+    Spreadsheets:["xlsx","ods","csv","tsv"],
+    "Code & data":["json","xml","yaml","yml","toml","ini","py","js","ts","jsx","tsx","css","sql","sh","ps1","java","c","cpp","cs","go","rs","php","rb","kt","swift","properties","conf"],
+    Images:["svg","png","jpg","webp"],
+    Audio:["wav"],
+    Video:["webm"]
+  };
   return '<details class="ai-export"><summary>Export / create</summary><div class="ai-export-menu">'+
-    ['txt','md','html','rtf','json','csv','xml','tex','pdf','docx','odt','pptx','odp','xlsx','ods','epub','svg','png','jpg','webp','wav','webm'].map(fmt=>'<button type="button" data-ai-export="'+fmt+'" data-i="'+idx+'">'+fmt.toUpperCase()+'</button>').join("")+
-    '<button type="button" data-ai-illustrate="true" data-i="'+idx+'">AI vector image</button><button type="button" data-ai-video="true" data-i="'+idx+'">Animated video</button><button type="button" data-ai-audio="true" data-i="'+idx+'">Narrate</button></div></details>';
+    Object.entries(groups).map(([label,formats])=>'<div class="ai-export-group"><b>'+label+'</b><div>'+formats.map(fmt=>'<button type="button" data-ai-export="'+fmt+'" data-i="'+idx+'">'+fmt.toUpperCase()+'</button>').join("")+'</div></div>').join("")+
+    '<div class="ai-export-group"><b>AI media</b><div><button type="button" data-ai-illustrate="true" data-i="'+idx+'">AI vector image (SVG)</button><button type="button" data-ai-video="true" data-i="'+idx+'">Animated video (WebM)</button><button type="button" data-ai-audio="true" data-i="'+idx+'">Narrate (WAV)</button></div></div></div></details>';
 }
 function renderAI(){
   [['#ao','#ao'],['#af-col','#af-msgs']].forEach(([s,sc])=>{
@@ -3548,6 +3563,7 @@ async function aiExportMessage(index,format){
     else if(format==="rtf")file=blob("{\\rtf1\\ansi\\deff0 "+text.replace(/[\\{}]/g,ch=>"\\"+ch).replace(/\n/g,"\\par ")+"}","application/rtf");
     else if(format==="json")file=blob(JSON.stringify({application:"LifeLink",createdAt:new Date().toISOString(),content:text,verification:m.process||[]},null,2),"application/json");
     else if(format==="csv")file=blob("Line\r\n"+text.split(/\r?\n/).map(x=>'"'+x.replace(/"/g,'""')+'"').join("\r\n"),"text/csv;charset=utf-8");
+    else if(format==="tsv")file=blob("Line\r\n"+text.split(/\r?\n/).map(x=>'"'+x.replace(/"/g,'""')+'"').join("\r\n"),"text/tab-separated-values;charset=utf-8");
     else if(format==="xml")file=blob('<?xml version="1.0" encoding="UTF-8"?><answer xmlns="https://lifelink.app/schema/answer"><content>'+aiEscapeXml(text)+'</content></answer>',"application/xml");
     else if(format==="tex")file=blob("\\documentclass{article}\n\\usepackage[utf8]{inputenc}\n\\begin{document}\n"+text.replace(/([#$%&_{}])/g,"\\$1").replace(/\n/g,"\n\\par\n")+"\n\\end{document}","application/x-tex");
     else if(["svg","png","jpg","webp"].includes(format)){
@@ -3597,6 +3613,7 @@ async function aiExportMessage(index,format){
       }
       file=await zip.generateAsync({type:"blob",compression:"DEFLATE"});
     }
+    else if(["yaml","yml","toml","ini","py","js","ts","jsx","tsx","css","sql","sh","ps1","java","c","cpp","cs","go","rs","php","rb","kt","swift","properties","conf"].includes(format))file=blob(text,"text/plain;charset=utf-8");
     else if(format==="wav")file=await aiCreateWav(text);
     else if(format==="webm")file=await aiCreateVideo(text);
     if(!file)throw new Error("This export format is not supported in this browser.");
