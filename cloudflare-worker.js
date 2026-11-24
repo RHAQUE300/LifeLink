@@ -1350,11 +1350,11 @@ export default {
       }
 
       const unresolvedReview = !verification || !["pass", "revise"].includes(verification.decision);
-      if (quantityIssues.length || (highRisk && unresolvedReview)) {
+      if (quantityIssues.length || verification?.decision === "withhold" || (highRisk && unresolvedReview)) {
         process.push({ name: "Safety and quantity gate", model: "LifeLink checks", status: "blocked", detail: quantityIssues.length ? "A stated quantity or unit constraint still conflicts with the answer" : "A high-stakes answer could not be independently verified" });
         finalReply = highRisk
           ? "I’m not comfortable presenting this as a safe, verified answer. The answer did not pass LifeLink’s independent safety/quantity checks. For a diabetes-related meal plan, please confirm the intended daily amount and have a diabetes-qualified dietitian or clinician check the plan before using it."
-          : "I found a conflict between the quantities in your request and the drafted answer, and could not safely resolve it. I have withheld the conflicting figures rather than risk presenting an incorrect amount.";
+          : (quantityIssues.length ? "I found a conflict between the quantities in your request and the drafted answer, and could not safely resolve it. I have withheld the conflicting figures rather than risk presenting an incorrect amount." : "The answer reviewer could not verify this response reliably, so LifeLink has withheld it rather than present an unchecked answer.");
       } else {
         process.push({ name: "Safety and quantity gate", model: "LifeLink checks", status: "complete", detail: highRisk ? "High-stakes health response reviewed; not a substitute for clinical care" : "No unresolved numeric constraint conflict detected" });
       }
