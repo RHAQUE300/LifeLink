@@ -276,7 +276,7 @@ function quantityConstraintIssues(prompt, answer) {
   const issues = [];
   for (const limit of constraints) {
     for (const value of answerValues) {
-      if (value.unit === limit.unit && value.value > limit.value * 1.5) {
+      if (value.unit === limit.unit && value.value > limit.value * 1.1) {
         issues.push("The answer contains " + value.raw + ", which conflicts with the user-stated " + limit.raw + " constraint. Check whether this is a total, serving, or daily amount before presenting it.");
       }
     }
@@ -1401,7 +1401,7 @@ export default {
       const verifierProvider = verifierOrder[0] || draftProvider;
       const process = [
         { name: "Draft", model: providerLabel(draftProvider), status: "complete", detail: mediaMode ? "Multimodal analysis of the attached media" : "Prepared an initial response" },
-        { name: "Independent review", model: verifierProvider === draftProvider ? providerLabel(verifierProvider) + " · second pass" : providerLabel(verifierProvider), status: "running", detail: "Checking facts, arithmetic, units, contradictions and the user's constraints" }
+        { name: verifierProvider === draftProvider ? "Second-pass review" : "Independent review", model: verifierProvider === draftProvider ? providerLabel(verifierProvider) + " · second pass" : providerLabel(verifierProvider), status: "running", detail: "Checking facts, arithmetic, units, contradictions and the user's constraints" }
       ];
 
       let finalReply = draft;
