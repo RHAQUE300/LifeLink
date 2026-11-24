@@ -496,6 +496,136 @@ const PROVIDERS = {
   anthropic: askAnthropic
 };
 
+
+const COMPOSIO_API_BASE = "https://backend.composio.dev/api/v3.1";
+const COMPOSIO_MICROSOFT_TOOLKIT = "microsoft_365";
+
+async function composioRequest(path, env, options = {}) {
+  const key = typeof env.COMPOSIO_API_KEY === "string" ? env.COMPOSIO_API_KEY.trim() : "";
+  if (!key) throw new Error("Composio is not configured on the server.");
+  const response = await fetch(COMPOSIO_API_BASE + path, {
+    method: options.method || "GET",
+    headers: {
+      "x-api-key": key,
+      "Content-Type": "application/json",
+      ...(options.headers || {})
+    },
+    body: options.body === undefined ? undefined : JSON.stringify(options.body),
+    signal: AbortSignal.timeout(20000)
+  });
+  let data = {};
+  try { data = await response.json(); } catch {}
+  if (!response.ok) {
+    const detail = data?.message || data?.error?.message || data?.error || "Composio request failed (" + response.status + ")";
+    console.error("Composio API error:", response.status, String(detail).slice(0, 400));
+    throw new Error("Composio request failed (" + response.status + ").");
+  }
+  return data?.data && typeof data.data === "object" ? data.data : data;
+}
+
+async function composioMicrosoftAuthConfig(env) {
+  if (!env.GOOGLE_TOKENS) throw new Error("Worker KV storage is required to initialise the Microsoft connection.");
+  const cacheKey = "composio:auth-config:" + COMPOSIO_MICROSOFT_TOOLKIT;
+  const cached = await env.GOOGLE_TOKENS.get(cacheKey);
+  if (cached && /^ac_[A-Za-z0-9_-]+$/.test(cached)) return cached;
+
+  const created = await composioRequest("/auth_configs", env, {
+    method: "POST",
+    body: { toolkit: { slug: COMPOSIO_MICROSOFT_TOOLKIT } }
+  });
+  const authConfigId = created?.auth_config?.id || created?.auth_config_id || created?.id;
+  if (typeof authConfigId !== "string" || !authConfigId) {
+    throw new Error("Composio did not return a Microsoft 365 auth configuration ID.");
+  }
+  await env.GOOGLE_TOKENS.put(cacheKey, authConfigId);
+  return authConfigId;
+}
+
+async function composioMicrosoftAccounts(userId, env) {
+  const params = new URLSearchParams();
+  params.append("toolkit_slugs", COMPOSIO_MICROSOFT_TOOLKIT);
+  params.append("user_ids", userId);
+  params.append("limit", "100");
+  const result = await composioRequest("/connected_accounts?" + params.toString(), env);
+  const items = Array.isArray(result?.items) ? result.items : Array.isArray(result?.connected_accounts) ? result.connected_accounts : [];
+  return items.filter(item => item && item.user_id === userId &&
+    String(item.toolkit?.slug || item.toolkit_slug || "").toLowerCase() === COMPOSIO_MICROSOFT_TOOLKIT);
+}
+
+async function composioMicrosoftRoute(request, env, url, user) {
+  const path = url.pathname;
+  if (!["/api/microsoft/connect", "/api/microsoft/status", "/api/microsoft/execute", "/api/microsoft/disconnect"].includes(path)) return null;
+  if (!env.COMPOSIO_API_KEY) return json({ error: "Composio API key is not configured on the Worker." }, 503);
+  if (!env.GOOGLE_TOKENS) return json({ error: "Worker KV storage is not configured." }, 503);
+
+  try {
+    if (path === "/api/microsoft/status") {
+      if (request.method !== "GET") return json({ error: "Method not allowed" }, 405);
+      const accounts = await composioMicrosoftAccounts(user.id, env);
+      return json({
+        connected: accounts.some(account => account.status === "ACTIVE"),
+        accounts: accounts.map(account => ({
+          id: account.id,
+          status: account.status,
+          alias: account.alias || "Microsoft account",
+          createdAt: account.created_at || null,
+          updatedAt: account.updated_at || null
+        }))
+      });
+    }
+
+    if (request.method !== "POST") return json({ error: "Method not allowed" }, 405);
+    if (request.headers.get("X-Requested-With") !== "XMLHttpRequest") return json({ error: "Invalid request" }, 400);
+    const length = Number(request.headers.get("Content-Length") || 0);
+    if (length > 30000) return json({ error: "Request too large" }, 413);
+    let body;
+    try { body = await request.json(); } catch { return json({ error: "Invalid JSON" }, 400); }
+
+    if (path === "/api/microsoft/connect") {
+      const authConfigId = await composioMicrosoftAuthConfig(env);
+      const link = await composioRequest("/connected_accounts/link", env, {
+        method: "POST",
+        body: {
+          auth_config_id: authConfigId,
+          user_id: user.id,
+          alias: "LifeLink Microsoft 365",
+          callback_url: "https://rhaque300.github.io/LifeLink/?microsoft=connected"
+        }
+      });
+      if (!link?.redirect_url) throw new Error("Composio did not return a Microsoft sign-in link.");
+      return json({ redirectUrl: link.redirect_url, expiresAt: link.expires_at || null });
+    }
+
+    const accounts = await composioMicrosoftAccounts(user.id, env);
+    if (path === "/api/microsoft/disconnect") {
+      const accountId = String(body.accountId || "");
+      const account = accounts.find(item => item.id === accountId);
+      if (!account) return json({ error: "Microsoft account not found for this LifeLink user." }, 404);
+      await composioRequest("/connected_accounts/" + encodeURIComponent(accountId), env, { method: "DELETE" });
+      return json({ disconnected: true });
+    }
+
+    if (path === "/api/microsoft/execute") {
+      const toolSlug = String(body.toolSlug || "").trim().toUpperCase();
+      const accountId = String(body.accountId || "");
+      const args = body.arguments && typeof body.arguments === "object" && !Array.isArray(body.arguments) ? body.arguments : null;
+      if (!/^MICROSOFT_365_[A-Z0-9_]{2,120}$/.test(toolSlug)) return json({ error: "Unsupported Microsoft 365 action." }, 400);
+      if (!args || JSON.stringify(args).length > 24000) return json({ error: "Invalid or oversized tool arguments." }, 400);
+      const account = accounts.find(item => item.id === accountId && item.status === "ACTIVE");
+      if (!account) return json({ error: "Connect an active Microsoft 365 account first." }, 401);
+      const result = await composioRequest("/tools/execute/" + encodeURIComponent(toolSlug), env, {
+        method: "POST",
+        body: { connected_account_id: accountId, user_id: user.id, version: "latest", arguments: args }
+      });
+      return json({ result });
+    }
+    return json({ error: "Not found" }, 404);
+  } catch (error) {
+    console.error("LifeLink Microsoft integration failed:", error.message);
+    return json({ error: String(error.message || "Microsoft integration unavailable").slice(0, 220) }, 502);
+  }
+}
+
 export default {
   async fetch(request, env) {
     const origin = request.headers.get("Origin");
@@ -624,6 +754,15 @@ export default {
         console.error("LifeLink web search endpoint failed:", error.message);
         return json({ error: "Live web search is temporarily unavailable" }, 502);
       }
+    }
+
+    // Microsoft 365 connections are scoped to the authenticated LifeLink user.
+    if (url.pathname.startsWith("/api/microsoft/")) {
+      if (origin !== ALLOWED_ORIGIN) return json({ error: "Origin not allowed" }, 403);
+      const user = await verifyUser(request, env);
+      if (!user) return json({ error: "Authentication required" }, 401);
+      const response = await composioMicrosoftRoute(request, env, url, user);
+      if (response) return response;
     }
 
     // Multiple Google accounts, isolated under the authenticated LifeLink user.
