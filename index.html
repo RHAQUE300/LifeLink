@@ -367,7 +367,7 @@ pre,code{max-width:100%;overflow-wrap:anywhere;white-space:pre-wrap}
 .af-note-menu{max-width:780px;margin:7px auto 0;font-size:10px;color:var(--mut);line-height:1.45}
 .af-note-menu>summary{display:flex;align-items:center;gap:8px;width:max-content;max-width:100%;padding:4px 8px;border:1px solid var(--gb);border-radius:9px;background:var(--g);cursor:pointer;list-style:none;user-select:none}
 .af-note-menu>summary::-webkit-details-marker{display:none}
-.af-note-arrow{width:17px;height:9px;flex:none;transition:transform .2s}
+.af-note-arrow{width:19px;height:8px;flex:none;transition:transform .2s;stroke-width:3}
 .af-note-menu[open] .af-note-arrow{transform:rotate(180deg)}
 .af-note-content{margin-top:6px;padding:9px 11px;border:1px solid var(--gb);border-radius:11px;background:var(--g);display:grid;gap:6px}
 .af-note-content p{margin:0}
@@ -456,7 +456,7 @@ pre,code{max-width:100%;overflow-wrap:anywhere;white-space:pre-wrap}
         <div class="af-file-actions"><label class="btn" for="af-file-input" id="af-attach">＋ Attach files</label><input id="af-file-input" type="file" multiple hidden accept=".txt,.md,.markdown,.rtf,.html,.htm,.css,.js,.mjs,.ts,.tsx,.jsx,.json,.xml,.yaml,.yml,.toml,.ini,.csv,.tsv,.log,.py,.ipynb,.sql,.sh,.ps1,.java,.c,.h,.cpp,.cs,.go,.rs,.php,.rb,.tex,.pdf,.docx,.doc,.pptx,.ppt,.xlsx,.xls,.ods,.odt,.odp,.epub,.zip,.png,.jpg,.jpeg,.webp,.gif,.bmp,.mp3,.wav,.m4a,.aac,.ogg,.flac,.mp4,.mov,.webm,.mkv,image/*,audio/*,video/*"></div>
       </div>
       <div class="af-box"><textarea id="af-q" rows="1" placeholder="Message LifeLink AI…" aria-label="Message LifeLink AI"></textarea><button class="btn pri" id="af-send" type="button" aria-label="Send message" title="Send message"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M12 19V5M6 11l6-6 6 6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></button></div>
-      <details class="af-note-menu"><summary><span>File handling &amp; AI disclaimer</span><svg class="af-note-arrow" viewBox="0 0 24 12" aria-hidden="true"><path d="M2 2l10 8 10-8" fill="none" stroke="currentColor" stroke-width="2.8" stroke-linecap="round" stroke-linejoin="round"/></svg></summary><div class="af-note-content"><p>Supported text and code files up to 5 GB are sampled locally in your browser; only selected excerpts are sent to the AI provider, not the original large file. PDF, Office and archive files have a 50 MB browser-extraction limit. Audio and video are limited to 10 MB per file and still require a connected provider that supports that media.</p><p>Files are extracted in your browser where supported. Extracted content is sent to your selected AI provider; image, audio and video understanding requires a connected multimodal provider. Google may use free-tier requests to improve its products. Do not attach sensitive material unless you are comfortable with the providers’ data handling.</p><p class="af-disclaimer">AI-generated content may be inaccurate or incomplete. Verify important information independently. LifeLink is not responsible for decisions made solely on AI-generated output.</p></div></details>
+      <details class="af-note-menu"><summary><span>File handling &amp; AI disclaimer</span><svg class="af-note-arrow" viewBox="0 0 24 12" aria-hidden="true"><path d="M2 2l10 8 10-8" fill="none" stroke="currentColor" stroke-width="2.8" stroke-linecap="round" stroke-linejoin="round"/></svg></summary><div class="af-note-content"><p>Text and code files up to 5 GB total per message are sampled locally in your browser (beginning, middle and end); the original large file is not uploaded. The AI can answer from those excerpts, but cannot inspect every part of a sampled file. PDF, Office and archive files are limited to 50 MB because their browser extractors need to read the file. Audio and video are limited to 10 MB per file and require a connected provider that supports that media. LifeLink does not charge for local extraction; your selected AI provider’s free quota and request limits still apply.</p><p>Files are extracted in your browser where supported. Extracted content is sent to your selected AI provider; image, audio and video understanding requires a connected multimodal provider. Google may use free-tier requests to improve its products. Do not attach sensitive material unless you are comfortable with the providers’ data handling.</p><p class="af-disclaimer">AI-generated content may be inaccurate or incomplete. Verify important information independently. LifeLink is not responsible for decisions made solely on AI-generated output.</p></div></details>
     </div>
   </section>
 </div>
@@ -3391,12 +3391,12 @@ function aiReadDataUrl(file){
   return new Promise((resolve,reject)=>{const r=new FileReader();r.onload=()=>resolve(String(r.result||""));r.onerror=()=>reject(new Error("Could not read "+file.name));r.readAsDataURL(file)});
 }
 function aiDataUrlBase64(url){const i=String(url).indexOf(",");return i>=0?url.slice(i+1):""}
-function aiByteSize(n){return n<1024*1024?(n/1024).toFixed(0)+" KB":(n/1024/1024).toFixed(1)+" MB"}
+function aiByteSize(n){return n<1024*1024?(n/1024).toFixed(0)+" KB":n<1024*1024*1024?(n/1024/1024).toFixed(1)+" MB":(n/1024/1024/1024).toFixed(2)+" GB"}
 function aiRenderPendingFiles(){
   const markup=aiPendingFiles.map((file,i)=>'<span class="ai-file-pill"><span>📎 '+esc(file.name)+' · '+aiByteSize(file.size)+'</span><button type="button" data-ai-remove-file="'+i+'" aria-label="Remove attachment">×</button></span>').join("");
   ["#af-file-list","#ai-mini-file-list"].forEach(selector=>{const root=$(selector);if(root)root.innerHTML=markup});
 }
-const AI_MAX_LOCAL_FILE=5*1024*1024*1024,AI_MAX_BROWSER_BINARY=50*1024*1024,AI_LARGE_TEXT_SAMPLE=4*1024*1024;
+const AI_MAX_LOCAL_FILE=5*1024*1024*1024,AI_MAX_LOCAL_TOTAL=5*1024*1024*1024,AI_MAX_BROWSER_BINARY=50*1024*1024,AI_LARGE_TEXT_SAMPLE=4*1024*1024;
 async function aiReadTextSample(file,maxChars=26000){
   if(file.size<=AI_LARGE_TEXT_SAMPLE){const text=await file.text();return{text:text.slice(0,maxChars),sampled:text.length>maxChars}}
   const part=Math.floor(maxChars/3),middle=Math.max(0,Math.floor(file.size/2)-Math.floor(part/2)),tail=Math.max(0,file.size-part),ranges=[[0,part],[middle,middle+part],[tail,file.size]],labels=['BEGINNING','MIDDLE','END'],chunks=[];
@@ -3408,6 +3408,8 @@ function aiQueueFiles(list){
   if(aiPendingFiles.length+incoming.length>6){toast("Attach up to 6 files per message.");return}
   const tooBig=incoming.find(f=>f.size>AI_MAX_LOCAL_FILE);
   if(tooBig){toast(tooBig.name+" exceeds the 5 GB local processing limit.");return}
+  const queuedBytes=aiPendingFiles.reduce((sum,file)=>sum+file.size,0),incomingBytes=incoming.reduce((sum,file)=>sum+file.size,0);
+  if(queuedBytes+incomingBytes>AI_MAX_LOCAL_TOTAL){toast("Attachments together must be 5 GB or smaller per message.");return}
   aiPendingFiles.push(...incoming);aiRenderPendingFiles();
 }
 function aiTextFromXml(xml){
