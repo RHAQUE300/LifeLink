@@ -2268,7 +2268,7 @@ async function sendMsg(text){
     const learnedNow=learnExplicitPreference(displayText);if(learnedNow)toast('Learned a preference from your message.');
     const loading=aiHistory.find(m=>m.id===loadId);if(loading)loading.html='<i>Drafting, cross-checking and running safety checks…</i>';
     renderAI();
-    const r=await getAIResponse(promptText,prepared.media);
+    const r=await getAIResponse(promptText,prepared.media,picked.length>0);
     if(!S||!S.loggedIn)return;
     const msg={role:'bot',html:r.html,text:r.text||htmlToText(r.html),err:!!r.err,process:aiLastProcess.slice(0,8)};
     const idx=aiHistory.findIndex(m=>m.id===loadId);
@@ -2951,11 +2951,16 @@ async function builtInGeneralAI(raw){
   return `I couldn’t answer “<b>${esc(q.length>80?q.slice(0,80)+'…':q)}</b>” in built-in mode. I can manage tasks, events and notes, do maths and unit conversions, and look up topics on Wikipedia.<br><br>Say <i>help</i> for examples, or choose an available model from the selector for open-ended questions.`;
 }
 
-async function getAIResponse(raw,mediaAttachments=[]){
-  const ac=appCommand(raw);if(ac)return{html:ac};
-  const wc=workspaceCommand(raw,false);if(wc)return{html:wc};
+async function getAIResponse(raw,mediaAttachments=[],hasAttachments=false){
+  // Never run quick commands against uploaded file content. Files are untrusted
+  // reference data and cannot directly trigger workspace mutations.
+  if(!hasAttachments){
+    const ac=appCommand(raw);if(ac)return{html:ac};
+    const wc=workspaceCommand(raw,false);if(wc)return{html:wc};
+  }
   try{
-    return applyAIActions(await callLLM(aiMessages(),{attachments:mediaAttachments}));
+    const answer=await callLLM(aiMessages(),{attachments:mediaAttachments});
+    return hasAttachments ? {html:formatMarkdownBasic(answer),text:answer} : applyAIActions(answer);
   }catch(err){
     const msg=String(err&&err.message||err),hint=aiHint(err&&err.status);
     if(Array.isArray(mediaAttachments)&&mediaAttachments.length){
