@@ -3374,7 +3374,7 @@ document.addEventListener('change',e=>{
 
 /* ---------- AI attachments, media generation and portable exports ---------- */
 const AI_TEXT_EXT=new Set(["txt","md","markdown","rtf","html","htm","css","js","mjs","ts","tsx","jsx","json","xml","yaml","yml","toml","ini","csv","tsv","log","py","ipynb","sql","sh","ps1","java","c","h","cpp","cs","go","rs","php","rb","tex","ics","vcf","svg"]);
-const AI_MEDIA_EXT=new Set(["png","jpg","jpeg","webp","gif","bmp","mp3","wav","m4a","aac","ogg","flac","mp4","mov","webm","mkv"]);
+const AI_MEDIA_EXT=new Set(["png","jpg","jpeg","webp","gif","bmp","mp3","wav","m4a","aac","ogg","flac","aiff","aif","opus","mpga","mp4","mov","webm","mkv","avi","flv","wmv","3gp"]);
 const aiLibPromises={};
 function aiLoadLibrary(key,url,test){
   if(test&&test())return Promise.resolve();
