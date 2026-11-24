@@ -3449,12 +3449,12 @@ async function aiExtractText(file,ext){
   const textFile=()=>file.text();
   if(AI_TEXT_EXT.has(ext)){
       const sampled=await aiReadTextSample(file,26000);let value=sampled.text;
-      if(ext==="rtf"&&!sampled.sampled)value=value.replace(/\\'[0-9a-f]{2}/gi," ").replace(/\\[a-z]+-?\\d* ?/gi," ").replace(/[{}]/g," ");
+      if(ext==="rtf"&&!sampled.sampled)value=value.replace(/\\'[0-9a-f]{2}/gi," ").replace(/\\[a-z]+-?\d* ?/gi," ").replace(/[{}]/g," ");
       if((ext==="html"||ext==="htm")&&!sampled.sampled)value=aiStripMarkup(value);
       if(ext==="ipynb"&&!sampled.sampled){
-        try{const j=JSON.parse(value);value=(j.cells||[]).map(c=>(c.source||[]).join?c.source.join(""):String(c.source||"")).join("\\n\\n");}catch{}
+        try{const j=JSON.parse(value);value=(j.cells||[]).map(c=>(c.source||[]).join?c.source.join(""):String(c.source||"")).join("\n\n");}catch{}
       }
-      if(sampled.sampled)value='LARGE TEXT/CODE FILE: only selected excerpts were read locally; the original file was not uploaded.\\n'+value;
+      if(sampled.sampled)value='LARGE TEXT/CODE FILE: only selected excerpts were read locally; the original file was not uploaded.\n'+value;
       return value.slice(0,30000);
     }
   if(ext==="zip"){
