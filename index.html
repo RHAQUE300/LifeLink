@@ -710,7 +710,7 @@ function loadUserSession(){
   if(!Array.isArray(S.customApps))S.customApps=[];
   S.googleServices.forEach(id=>{const key='google:'+id;if(!S.apps.includes(key))S.apps.push(key)});
   S.aiCfg = {provider:'LifeLink Built-in AI',apiKey:'',model:'',customUrl:''};
-   S.aiModel='auto';
+  if(!['auto','groq','gemini','openai','anthropic'].includes(S.aiModel))S.aiModel='auto';
   if(!S.aiLearning||typeof S.aiLearning!=='object')S.aiLearning={enabled:true,memories:[],feedback:[]};
   S.aiLearning.enabled=S.aiLearning.enabled!==false;
   if(!Array.isArray(S.aiLearning.memories))S.aiLearning.memories=[];if(!Array.isArray(S.aiLearning.feedback))S.aiLearning.feedback=[];
