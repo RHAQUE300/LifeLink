@@ -1404,7 +1404,7 @@ export default {
           { role: "system", content: "Create a concise chat title based on the MAIN subject and purpose of the entire conversation, not merely its latest message. Return only a natural title of 2–7 words, maximum 60 characters. No quotes, punctuation at the end, or explanation." },
           { role: "user", content: titleContext + (attachments.length ? "\n\nAttached files: " + attachments.map(file => file.name).join(", ") : "") }
         ], env);
-        generatedTitle = String(titleReply || "").replace(/[\\r\\n\\\"“”]/g, " ").replace(/\\s+/g, " ").trim().replace(/[.!?]+$/, "").slice(0, 60);
+        generatedTitle = String(titleReply || "").replace(/[\r\n"“”]/g, " ").replace(/\s+/g, " ").trim().replace(/[.!?]+$/, "").slice(0, 60);
       } catch (error) {
         console.error("AI chat title generation unavailable:", error.message);
       }
