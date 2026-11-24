@@ -617,7 +617,7 @@ export default {
           query,
           text: result.text,
           sources: result.citations,
-          provider: "gemini-3.8-flash",
+          provider: "gemini-3.1-flash-lite",
           webSearch: true
         });
       } catch (error) {
@@ -1359,8 +1359,8 @@ export default {
         }
       }
 
-      // The selected provider is tried first. If it fails, try other connected
-      // providers before allowing the frontend's LifeLink fallback to respond.
+      // Auto tries Groq first, then the other connected providers. If none can
+      // draft a response, the request fails closed rather than showing an unchecked fallback.
       const order = requested === "auto"
         ? ["groq", "gemini", "openai", "anthropic"]
         : [requested, "groq", "gemini", "openai", "anthropic"].filter(
@@ -1407,6 +1407,7 @@ export default {
       const userContextText = messages.filter(m => m.role === "user").slice(-12)
         .map(message => String(message.content || "").slice(0, 12000)).join("\n\n");
       const highRisk = isHighRiskRequest(userContextText);
+      const diabetesRisk = /\\b(diabet(?:es|ic)|insulin|blood sugar|blood glucose)\\b/i.test(userContextText);
       let quantityIssues = quantityConstraintIssues(userContextText, draft);
       const verifierOrder = ["gemini", "groq", "openai", "anthropic"].filter(p => available[p] && p !== draftProvider);
       const verifierProvider = verifierOrder[0] || draftProvider;
@@ -1445,19 +1446,22 @@ export default {
       }
 
       const unresolvedReview = !verification || !["pass", "revise"].includes(verification.decision);
-      if (quantityIssues.length || verification?.decision === "withhold" || unresolvedReview) {
-        process.push({ name: "Safety and quantity gate", model: "LifeLink checks", status: "blocked", detail: quantityIssues.length ? "A stated quantity or unit constraint still conflicts with the answer" : "The response did not complete a successful independent review" });
+      const highRiskDisclosureMissing = highRisk && !/\\b(doctor|clinician|dietitian|nutritionist|pharmacist|healthcare professional|health professional|medical professional)\\b/i.test(finalReply);
+      if (quantityIssues.length || verification?.decision === "withhold" || unresolvedReview || highRiskDisclosureMissing) {
+        process.push({ name: "Safety and quantity gate", model: "LifeLink checks", status: "blocked", detail: quantityIssues.length ? "A stated quantity or unit constraint still conflicts with the answer" : (highRiskDisclosureMissing ? "A high-risk health answer is missing qualified-professional guidance" : "The response did not complete a successful independent review") });
         finalReply = highRisk
-          ? "I’m not comfortable presenting this as a safe, verified answer. The answer did not pass LifeLink’s independent safety/quantity checks. For a diabetes-related meal plan, please confirm the intended daily amount and have a diabetes-qualified dietitian or clinician check the plan before using it."
+          ? (diabetesRisk
+            ? "I’m not comfortable presenting this as a safe, verified answer. The answer did not pass LifeLink’s independent safety/quantity checks. For diabetes-related meal planning, please confirm the intended daily amount and have a diabetes-qualified dietitian or clinician check the plan before using it."
+            : "I’m not comfortable presenting this as a safe, verified health answer. Please have a qualified healthcare professional, doctor or pharmacist check the advice before acting on it.")
           : (quantityIssues.length ? "I found a conflict between the quantities in your request and the drafted answer, and could not safely resolve it. I have withheld the conflicting figures rather than risk presenting an incorrect amount." : "The answer reviewer could not verify this response reliably, so LifeLink has withheld it rather than present an unchecked answer.");
       } else {
-        process.push({ name: "Safety and quantity gate", model: "LifeLink checks", status: "complete", detail: highRisk ? "High-stakes health response reviewed; not a substitute for clinical care" : "No unresolved numeric constraint conflict detected" });
+        process.push({ name: "Safety and quantity gate", model: "LifeLink checks", status: "complete", detail: highRisk ? "High-stakes health response reviewed with a qualified-professional caveat" : "No unresolved numeric constraint conflict detected" });
       }
       return json({
         reply: finalReply,
         provider: draftProvider,
         requested,
-        verified: !!verification && ["pass", "revise"].includes(verification.decision) && !quantityIssues.length,
+        verified: !!verification && ["pass", "revise"].includes(verification.decision) && !quantityIssues.length && !highRiskDisclosureMissing,
         reviewer: providerLabel(verifierProvider),
         process,
         warnings: (Array.isArray(verification?.issues) ? verification.issues : []).slice(0, 5),
