@@ -217,18 +217,18 @@ async function askGeminiMultimodal(messages, attachments, env) {
 }
 
 function isHighRiskRequest(text) {
-  return /\\b(diabet(?:es|ic)|insulin|blood sugar|blood glucose|hypoglyc|hyperglyc|medication|dosage|dose|prescription|pregnan|kidney disease|renal disease|heart failure|anaphylaxis|allerg(?:y|ic)|suicid|self.harm|chest pain|stroke|seizure)\\b/i.test(String(text || ""));
+  return /\b(diabet(?:es|ic)|insulin|blood sugar|blood glucose|hypoglyc|hyperglyc|medication|dosage|dose|prescription|pregnan|kidney disease|renal disease|heart failure|anaphylaxis|allerg(?:y|ic)|suicid|self.harm|chest pain|stroke|seizure)\b/i.test(String(text || ""));
 }
 
 function quantityConstraintIssues(prompt, answer) {
   const constraints = [];
-  const re = /(\\d+(?:[.,]\\d+)?)\\s*(kg|g|mg|mcg|µg)\\s*(?:per\\s*day|\\/\\s*day|daily|a\\s+day|each\\s+day|maximum|max(?:imum)?|limit|at\\s+most)/gi;
+  const re = /(\d+(?:[.,]\d+)?)\s*(kg|g|mg|mcg|µg)\s*(?:per\s*day|\/\s*day|daily|a\s+day|each\s+day|maximum|max(?:imum)?|limit|at\s+most)/gi;
   let match;
   while ((match = re.exec(String(prompt || ""))) && constraints.length < 12) {
     constraints.push({ value: Number(match[1].replace(",", ".")), unit: match[2].toLowerCase(), raw: match[0] });
   }
   const answerValues = [];
-  const valueRe = /(\\d+(?:[.,]\\d+)?)\\s*(kg|g|mg|mcg|µg)\\b/gi;
+  const valueRe = /(\d+(?:[.,]\d+)?)\s*(kg|g|mg|mcg|µg)\b/gi;
   while ((match = valueRe.exec(String(answer || ""))) && answerValues.length < 100) {
     answerValues.push({ value: Number(match[1].replace(",", ".")), unit: match[2].toLowerCase(), raw: match[0] });
   }
@@ -236,7 +236,7 @@ function quantityConstraintIssues(prompt, answer) {
   for (const limit of constraints) {
     for (const value of answerValues) {
       if (value.unit === limit.unit && value.value > limit.value * 1.5) {
-        issues.push(`The answer contains ${value.raw}, which conflicts with the user-stated ${limit.raw} constraint. Check whether this is a total, serving, or daily amount before presenting it.`);
+        issues.push(\`The answer contains \${value.raw}, which conflicts with the user-stated \${limit.raw} constraint. Check whether this is a total, serving, or daily amount before presenting it.\`);
       }
     }
   }
@@ -244,7 +244,7 @@ function quantityConstraintIssues(prompt, answer) {
 }
 
 function parseVerifierJson(text) {
-  const raw = String(text || "").replace(/^\\s*```(?:json)?/i, "").replace(/```\\s*$/, "").trim();
+  const raw = String(text || "").replace(/^\s*\`\`\`(?:json)?/i, "").replace(/\`\`\`\s*$/, "").trim();
   try { return JSON.parse(raw); } catch {}
   const start = raw.indexOf("{"), end = raw.lastIndexOf("}");
   if (start >= 0 && end > start) {
@@ -269,7 +269,6 @@ async function verifyDraft(draft, messages, providerName, env, forcedIssues = []
   const reply = await PROVIDERS[providerName](reviewMessages, env);
   return parseVerifierJson(reply);
 }
-
 
 
 async function askGemini(messages, env) {
