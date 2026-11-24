@@ -255,23 +255,31 @@ function quantityConstraintIssues(prompt, answer) {
   const unitInfo = unit => {
     const u = String(unit || "").toLowerCase();
     if (u === "kg" || u.startsWith("kilo")) return { unit: "g", factor: 1000 };
+    if (u === "lb" || u === "lbs" || u.startsWith("pound")) return { unit: "g", factor: 453.59237 };
+    if (u === "oz" || u.startsWith("ounce")) return { unit: "g", factor: 28.349523125 };
     if (u === "mg" || u.startsWith("milli")) return { unit: "g", factor: 0.001 };
-    if (u === "mcg" || u === "µg" || u.startsWith("micro")) return { unit: "g", factor: 0.000001 };
+    if (u === "mcg" || u === "µg" || u === "ug" || u.startsWith("micro")) return { unit: "g", factor: 0.000001 };
     if (u === "g" || u.startsWith("gram")) return { unit: "g", factor: 1 };
     return { unit: u, factor: 1 };
   };
+  const parseNumber = raw => {
+    const value = String(raw || "").trim();
+    if (/^\d{1,3}(?:,\d{3})+(?:\.\d+)?$/.test(value)) return Number(value.replace(/,/g, ""));
+    if (/^\d{1,3}(?:\.\d{3})+(?:,\d+)?$/.test(value)) return Number(value.replace(/\./g, "").replace(",", "."));
+    return Number(value.replace(",", "."));
+  };
   const constraints = [];
-  const re = /(\d+(?:[.,]\d+)?)\s*(kg|kilograms?|g|grams?|mg|milligrams?|mcg|µg|micrograms?)\b(?:\s*(?:of\s+)?(?:protein|food|carbohydrate|carbs?|fat|meal|meals))?\s*(?:per\s*day|\/\s*day|daily|a\s+day|each\s+day|maximum|max(?:imum)?|limit|at\s+most)/gi;
+  const re = /(\d{1,3}(?:,\d{3})+(?:\.\d+)?|\d{1,3}(?:\.\d{3})+(?:,\d+)?|\d+(?:[.,]\d+)?)\s*(kg|kilograms?|g|grams?|mg|milligrams?|mcg|µg|ug|micrograms?|lbs?|pounds?|oz|ounces?)\b(?:\s*(?:of\s+)?(?:protein|food|carbohydrate|carbs?|fat|meal|meals))?\s*(?:per\s*day|\/\s*day|daily|a\s+day|each\s+day|every\s+day|maximum|max(?:imum)?|limit|at\s+most)/gi;
   let match;
   while ((match = re.exec(String(prompt || ""))) && constraints.length < 12) {
     const info = unitInfo(match[2]);
-    constraints.push({ value: Number(match[1].replace(",", ".")) * info.factor, unit: info.unit, raw: match[0] });
+    constraints.push({ value: parseNumber(match[1]) * info.factor, unit: info.unit, raw: match[0] });
   }
   const answerValues = [];
-  const valueRe = /(\d+(?:[.,]\d+)?)\s*(kg|kilograms?|g|grams?|mg|milligrams?|mcg|µg|micrograms?)\b/gi;
-  while ((match = valueRe.exec(String(answer || ""))) && answerValues.length < 100) {
+  const valueRe = /(\d{1,3}(?:,\d{3})+(?:\.\d+)?|\d{1,3}(?:\.\d{3})+(?:,\d+)?|\d+(?:[.,]\d+)?)\s*(kg|kilograms?|g|grams?|mg|milligrams?|mcg|µg|ug|micrograms?|lbs?|pounds?|oz|ounces?)\b/gi;
+  while ((match = valueRe.exec(String(answer || ""))) && answerValues.length < 120) {
     const info = unitInfo(match[2]);
-    answerValues.push({ value: Number(match[1].replace(",", ".")) * info.factor, unit: info.unit, raw: match[0] });
+    answerValues.push({ value: parseNumber(match[1]) * info.factor, unit: info.unit, raw: match[0] });
   }
   const issues = [];
   for (const limit of constraints) {
