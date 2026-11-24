@@ -456,7 +456,7 @@ pre,code{max-width:100%;overflow-wrap:anywhere;white-space:pre-wrap}
         <div class="af-file-actions"><label class="btn" for="af-file-input" id="af-attach">＋ Attach files</label><input id="af-file-input" type="file" multiple hidden accept=".txt,.md,.markdown,.rtf,.html,.htm,.css,.js,.mjs,.ts,.tsx,.jsx,.json,.xml,.yaml,.yml,.toml,.ini,.csv,.tsv,.log,.py,.ipynb,.sql,.sh,.ps1,.java,.c,.h,.cpp,.cs,.go,.rs,.php,.rb,.tex,.pdf,.docx,.doc,.pptx,.ppt,.xlsx,.xls,.ods,.odt,.odp,.epub,.zip,.png,.jpg,.jpeg,.webp,.gif,.bmp,.mp3,.wav,.m4a,.aac,.ogg,.flac,.mp4,.mov,.webm,.mkv,image/*,audio/*,video/*"></div>
       </div>
       <div class="af-box"><textarea id="af-q" rows="1" placeholder="Message LifeLink AI…" aria-label="Message LifeLink AI"></textarea><button class="btn pri" id="af-send" type="button" aria-label="Send message" title="Send message"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M12 19V5M6 11l6-6 6 6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></button></div>
-      <details class="af-note-menu"><summary><span>File handling &amp; AI disclaimer</span><svg class="af-note-arrow" viewBox="0 0 24 12" aria-hidden="true"><path d="M2 2l10 8 10-8" fill="none" stroke="currentColor" stroke-width="2.8" stroke-linecap="round" stroke-linejoin="round"/></svg></summary><div class="af-note-content"><p>Text and code files up to 5 GB total per message are sampled locally in your browser (beginning, middle and end); the original large file is not uploaded. The AI can answer from those excerpts, but cannot inspect every part of a sampled file. PDF, Office and archive files are limited to 50 MB because their browser extractors need to read the file. Audio and video are limited to 10 MB per file and require a connected provider that supports that media. LifeLink does not charge for local extraction; your selected AI provider’s free quota and request limits still apply.</p><p>Files are extracted in your browser where supported. Extracted content is sent to your selected AI provider; image, audio and video understanding requires a connected multimodal provider. Google may use free-tier requests to improve its products. Do not attach sensitive material unless you are comfortable with the providers’ data handling.</p><p class="af-disclaimer">AI-generated content may be inaccurate or incomplete. Verify important information independently. LifeLink is not responsible for decisions made solely on AI-generated output.</p></div></details>
+      <details class="af-note-menu"><summary><span>File handling &amp; AI disclaimer</span><svg class="af-note-arrow" viewBox="0 0 24 12" aria-hidden="true"><path d="M2 2l10 8 10-8" fill="none" stroke="currentColor" stroke-width="2.8" stroke-linecap="round" stroke-linejoin="round"/></svg></summary><div class="af-note-content"><p>Text and code files up to 5 GB total per message are sampled locally in your browser (beginning, middle and end); the original large file is not uploaded. The AI can answer from those excerpts, but cannot inspect every part of a sampled file. Images are automatically resized and re-encoded locally. Audio and video over 10 MB are automatically re-encoded in your browser when supported; clips longer than 30 minutes or clips that cannot fit under the provider limit at useful quality may still need trimming. PDF, Office and archive files are limited to 50 MB because their extractors must read them and cannot safely recompress every format. For those formats, you may try <a href="https://www.freeconvert.com/" target="_blank" rel="noopener noreferrer">FreeConvert</a> manually; its free usage has conversion and file-size limits, and large-file processing may require a paid plan. LifeLink does not charge for local compression; your selected AI provider’s free quota and request limits still apply.</p><p>Files are extracted in your browser where supported. Extracted content is sent to your selected AI provider; image, audio and video understanding requires a connected multimodal provider. Google may use free-tier requests to improve its products. Do not attach sensitive material unless you are comfortable with the providers’ data handling.</p><p class="af-disclaimer">AI-generated content may be inaccurate or incomplete. Verify important information independently. LifeLink is not responsible for decisions made solely on AI-generated output.</p></div></details>
     </div>
   </section>
 </div>
@@ -3521,24 +3521,133 @@ async function aiExtractText(file,ext){
   if(["doc","ppt"].includes(ext))throw new Error("Legacy ."+ext+" files are not reliably extractable in the browser. Save as .docx or .pptx and attach again.");
   throw new Error("LifeLink cannot extract text from ."+ext+" yet. Try exporting it as PDF, DOCX, PPTX, XLSX or TXT.");
 }
+async function aiCanvasBlob(canvas,type,quality){
+  return new Promise((resolve,reject)=>{
+    canvas.toBlob(blob=>blob?resolve(blob):reject(new Error("Your browser could not compress this image.")),type,quality);
+  });
+}
 async function aiRasterizeImage(file){
+  let bitmap;
+  try{bitmap=await createImageBitmap(file)}
+  catch(error){throw new Error("LifeLink could not decode "+file.name+" for local compression. Try exporting it as JPEG, PNG or WebP.")}
   try{
-    const bitmap=await createImageBitmap(file);
-    const scale=Math.min(1,1600/Math.max(bitmap.width,bitmap.height));
-    const canvas=document.createElement("canvas");canvas.width=Math.max(1,Math.round(bitmap.width*scale));canvas.height=Math.max(1,Math.round(bitmap.height*scale));
-    canvas.getContext("2d",{alpha:false}).drawImage(bitmap,0,0,canvas.width,canvas.height);bitmap.close&&bitmap.close();
-    return{mimeType:"image/jpeg",data:aiDataUrlBase64(canvas.toDataURL("image/jpeg",0.82))};
-  }catch(e){
-    const data=await aiReadDataUrl(file);
-    const mime=/^image\/(jpeg|png|webp|gif)$/i.test(file.type)?file.type:"";
-    if(!mime)throw new Error("This image format cannot be converted by your browser. Try PNG, JPEG or WebP.");
-    return{mimeType:mime,data:aiDataUrlBase64(data)};
+    const originalEdge=Math.max(bitmap.width,bitmap.height),edges=[1600,1280,1024,768],qualities=[0.82,0.68,0.54,0.42];
+    let best=null;
+    for(const edge of edges){
+      const scale=Math.min(1,edge/Math.max(1,originalEdge));
+      const width=Math.max(1,Math.round(bitmap.width*scale)),height=Math.max(1,Math.round(bitmap.height*scale));
+      const canvas=document.createElement("canvas");canvas.width=width;canvas.height=height;
+      const context=canvas.getContext("2d",{alpha:false});
+      context.fillStyle="#fff";context.fillRect(0,0,width,height);context.drawImage(bitmap,0,0,width,height);
+      for(const quality of qualities){
+        let blob=await aiCanvasBlob(canvas,"image/webp",quality);
+        if(!blob.type||blob.type==="image/png")blob=await aiCanvasBlob(canvas,"image/jpeg",quality);
+        if(!best||blob.size<best.size)best=blob;
+        if(blob.size<=8*1024*1024){
+          return{mimeType:blob.type||"image/jpeg",data:aiDataUrlBase64(await aiReadDataUrl(blob)),size:blob.size,compressed:blob.size<file.size};
+        }
+      }
+    }
+    if(best&&best.size<=10*1024*1024){
+      return{mimeType:best.type||"image/jpeg",data:aiDataUrlBase64(await aiReadDataUrl(best)),size:best.size,compressed:best.size<file.size};
+    }
+    throw new Error("LifeLink reduced the image as far as your browser could, but it is still too large for the connected AI provider. Try cropping it or lowering its resolution.");
+  }finally{if(bitmap&&bitmap.close)bitmap.close()}
+}
+async function aiCompressMediaLocally(file,isVideo){
+  const captureSupported=HTMLMediaElement.prototype.captureStream||HTMLMediaElement.prototype.mozCaptureStream;
+  if(typeof MediaRecorder!=="function"||(!isVideo&&!captureSupported)|| (isVideo&&typeof HTMLCanvasElement.prototype.captureStream!=="function")){
+    throw new Error("Your browser cannot re-encode this media locally. Try a shorter/lower-resolution export, or use FreeConvert manually.");
+  }
+  const url=URL.createObjectURL(file),media=document.createElement(isVideo?"video":"audio");
+  const AudioContextClass=window.AudioContext||window.webkitAudioContext;
+  if(!AudioContextClass){URL.revokeObjectURL(url);throw new Error("Local audio compression is not supported in this browser.")}
+  let audioContext=null,recorder=null,drawTimer=0,canvasStream=null,outputStream=null;
+  try{
+    media.preload="auto";media.playsInline=true;media.src=url;
+    media.style.cssText="position:fixed;width:1px;height:1px;opacity:0;pointer-events:none;left:-10px;top:-10px";
+    document.body.appendChild(media);
+    await new Promise((resolve,reject)=>{
+      const timer=setTimeout(()=>reject(new Error("The media file did not load in time for compression.")),30000);
+      media.addEventListener("loadedmetadata",()=>{clearTimeout(timer);resolve()},{once:true});
+      media.addEventListener("error",()=>{clearTimeout(timer);reject(new Error("Your browser cannot decode this media format for compression."))},{once:true});
+    });
+    const duration=Number(media.duration);
+    if(!Number.isFinite(duration)||duration<=0||duration>1800)throw new Error("This media is too long for safe real-time browser compression (maximum 30 minutes). Trim it or export a shorter clip.");
+    const targetBytes=9.2*1024*1024,totalBps=Math.floor(targetBytes*8/duration);
+    const audioBps=Math.max(24000,Math.min(96000,Math.floor(totalBps*(isVideo?0.16:0.96))));
+    const videoBps=isVideo?totalBps-audioBps:0;
+    if((isVideo&&videoBps<160000)||(!isVideo&&audioBps<16000)){
+      throw new Error("This recording cannot fit the AI provider's media limit at useful quality. Trim it or export a shorter clip.");
+    }
+    audioContext=new AudioContextClass();
+    const source=audioContext.createMediaElementSource(media);
+    const audioDestination=audioContext.createMediaStreamDestination();
+    source.connect(audioDestination);await audioContext.resume();
+    const tracks=[];
+    if(isVideo){
+      const edge=1280,scale=Math.min(1,edge/Math.max(media.videoWidth||1,media.videoHeight||1));
+      const width=Math.max(2,Math.floor((media.videoWidth||1280)*scale/2)*2);
+      const height=Math.max(2,Math.floor((media.videoHeight||720)*scale/2)*2);
+      const canvas=document.createElement("canvas");canvas.width=width;canvas.height=height;
+      const context=canvas.getContext("2d",{alpha:false});
+      canvasStream=canvas.captureStream(20);tracks.push(...canvasStream.getVideoTracks());
+      const draw=()=>{if(media.readyState>=2&&!media.ended)context.drawImage(media,0,0,width,height)};
+      drawTimer=setInterval(draw,50);draw();
+    }
+    tracks.push(...audioDestination.stream.getAudioTracks());
+    outputStream=new MediaStream(tracks);
+    const candidates=isVideo
+      ?["video/webm;codecs=vp9,opus","video/webm;codecs=vp8,opus","video/webm"]
+      :["audio/webm;codecs=opus","audio/webm","audio/ogg;codecs=opus"];
+    const mimeType=candidates.find(type=>MediaRecorder.isTypeSupported(type));
+    if(!mimeType)throw new Error("This browser does not provide a compatible local compression codec.");
+    recorder=new MediaRecorder(outputStream,{
+      mimeType,
+      videoBitsPerSecond:isVideo?videoBps:undefined,
+      audioBitsPerSecond:audioBps
+    });
+    const chunks=[];
+    const finished=new Promise((resolve,reject)=>{
+      recorder.ondataavailable=event=>{if(event.data&&event.data.size)chunks.push(event.data)};
+      recorder.onerror=()=>reject(new Error("Browser media compression failed."));
+      recorder.onstop=()=>resolve(new Blob(chunks,{type:recorder.mimeType||mimeType}));
+    });
+    recorder.start(1000);
+    await media.play();
+    await new Promise((resolve,reject)=>{
+      const timer=setTimeout(()=>{
+        if(recorder&&recorder.state!=="inactive")recorder.stop();
+        reject(new Error("Media compression timed out. Try a shorter clip."));
+      },Math.max(60000,duration*1000+20000));
+      media.addEventListener("ended",()=>{
+        clearTimeout(timer);
+        if(recorder&&recorder.state!=="inactive")recorder.stop();
+        resolve();
+      },{once:true});
+      media.addEventListener("error",()=>{
+        clearTimeout(timer);
+        if(recorder&&recorder.state!=="inactive")recorder.stop();
+        reject(new Error("The media could not be decoded completely."));
+      },{once:true});
+    });
+    const blob=await finished;
+    if(blob.size>10*1024*1024)throw new Error("LifeLink compressed this media, but it is still above the AI provider's 10 MB limit. Trim it further or reduce its resolution.");
+    const name=file.name.replace(/\\.[^.]+$/,"")+".webm";
+    return new File([blob],name,{type:blob.type||mimeType,lastModified:Date.now()});
+  }finally{
+    if(recorder&&recorder.state!=="inactive")try{recorder.stop()}catch{}
+    if(drawTimer)clearInterval(drawTimer);
+    if(outputStream)outputStream.getTracks().forEach(track=>track.stop());
+    if(canvasStream)canvasStream.getTracks().forEach(track=>track.stop());
+    if(audioContext)try{await audioContext.close()}catch{}
+    media.pause();media.removeAttribute("src");media.load();media.remove();URL.revokeObjectURL(url);
   }
 }
-async function aiPrepareFiles(files){
+async function aiPrepareFiles(files){async function aiPrepareFiles(files){
   const textParts=[],media=[],names=[];let binarySize=0,totalText=0,audioCount=0;
   for(const file of files){
-    const ext=(file.name.split(".").pop()||"").toLowerCase();names.push(file.name);if(file.size>AI_MAX_BROWSER_BINARY&&!AI_TEXT_EXT.has(ext))throw new Error(file.name+' is too large for safe browser extraction in this format. PDFs, Office files and archives are limited to 50 MB; audio/video are limited to 10 MB and must also fit the connected provider. For files up to 5 GB, use a supported text or code format so LifeLink can sample it locally.');
+    const ext=(file.name.split(".").pop()||"").toLowerCase();names.push(file.name);if(file.size>AI_MAX_BROWSER_BINARY&&!AI_TEXT_EXT.has(ext)&&!AI_MEDIA_EXT.has(ext))throw new Error(file.name+' is too large for browser extraction. LifeLink cannot safely shrink this PDF, Office file or archive without risking its contents. FreeConvert can be tried manually, but its free tier has conversion and file-size limits; see the file-handling details below.');
     if(ext==="pdf"){
       const pdf=await aiReadPdfForChat(file);
       if(pdf.text){totalText+=pdf.text.length;if(totalText>30000)throw new Error("Extracted file text is over 30,000 characters. Attach fewer pages or files.");textParts.push("FILE: "+file.name+"\n"+pdf.text.slice(0,30000));}
@@ -3551,21 +3660,30 @@ async function aiPrepareFiles(files){
     }
     if(/^image\//i.test(file.type)&&ext!=="svg"){
       const image=await aiRasterizeImage(file);
-      binarySize+=Math.floor(image.data.length*.75);if(binarySize>12*1024*1024)throw new Error("Compressed image/audio/video attachments exceed 12 MB in total.");
+      binarySize+=Math.floor(image.data.length*.75);
+      if(binarySize>12*1024*1024)throw new Error("LifeLink compressed the images, but the attachments still exceed the provider's 12 MB combined media limit. Attach fewer images.");
       media.push({name:file.name,mimeType:image.mimeType,data:image.data});
       continue;
     }
     if(/^audio\//i.test(file.type)||/^video\//i.test(file.type)||["mp3","wav","m4a","aac","ogg","flac","aiff","aif","opus","mpga","mp4","mov","webm","mkv","avi","flv","wmv","3gp"].includes(ext)){
-      if(/^audio\//i.test(file.type)||["mp3","wav","m4a","aac","ogg","flac","aiff","aif","opus","mpga"].includes(ext)){audioCount++;if(audioCount>1)throw new Error("Attach one audio recording per message. Send additional recordings in separate messages.");}
-      if(file.size>10*1024*1024)throw new Error(file.name+" is too large for direct media analysis. Keep each audio/video file under 10 MB.");
-      const mimeMap={mp3:"audio/mpeg",wav:"audio/wav",m4a:"audio/mp4",aac:"audio/aac",ogg:"audio/ogg",flac:"audio/flac",aiff:"audio/aiff",aif:"audio/aiff",opus:"audio/opus",mpga:"audio/mpga",mp4:"video/mp4",mov:"video/quicktime",webm:file.type||"video/webm",mkv:"video/mp4",avi:"video/x-msvideo",flv:"video/x-flv",wmv:"video/x-ms-wmv","3gp":"video/3gpp"};
-      const mime=file.type||mimeMap[ext]||"";
-      if(!/^(audio\/(mpeg|mp3|wav|webm|ogg|flac|mp4|aac|aiff|opus|mpga)|video\/(mp4|webm|quicktime|mpeg|mpg|avi|x-msvideo|x-flv|x-ms-wmv|3gpp|mpegps))$/i.test(mime))throw new Error("Unsupported media type: "+file.name);
-      const data=aiDataUrlBase64(await aiReadDataUrl(file));binarySize+=Math.floor(data.length*.75);
+      if(/^audio\//i.test(file.type)||["mp3","wav","m4a","aac","ogg","flac","aiff","aif","opus","mpga"].includes(ext)){
+        audioCount++;if(audioCount>1)throw new Error("Attach one audio recording per message. Send additional recordings in separate messages.");
+      }
+      const isVideo=/^video\//i.test(file.type)||["mp4","mov","webm","mkv","avi","flv","wmv","3gp"].includes(ext);
+      let mediaFile=file;
+      if(file.size>10*1024*1024){
+        toast("Compressing "+file.name+" locally…");
+        mediaFile=await aiCompressMediaLocally(file,isVideo);
+      }
+      if(mediaFile.size>10*1024*1024)throw new Error(mediaFile.name+" is still over the AI provider's 10 MB media limit after local compression.");
+      const mimeMap={mp3:"audio/mpeg",wav:"audio/wav",m4a:"audio/mp4",aac:"audio/aac",ogg:"audio/ogg",flac:"audio/flac",aiff:"audio/aiff",aif:"audio/aiff",opus:"audio/opus",mpga:"audio/mpga",mp4:"video/mp4",mov:"video/quicktime",webm:mediaFile.type||"video/webm",mkv:"video/mp4",avi:"video/x-msvideo",flv:"video/x-flv",wmv:"video/x-ms-wmv","3gp":"video/3gpp"};
+      const mime=mediaFile.type||mimeMap[ext]||"";
+      if(!/^(audio\/(mpeg|mp3|wav|webm|ogg|flac|mp4|aac|aiff|opus|mpga)|video\/(mp4|webm|quicktime|mpeg|mpg|avi|x-msvideo|x-flv|x-ms-wmv|3gpp|mpegps))$/i.test(mime))throw new Error("Unsupported media type after compression: "+mediaFile.name);
+      const data=aiDataUrlBase64(await aiReadDataUrl(mediaFile));binarySize+=Math.floor(data.length*.75);
       if(binarySize>12*1024*1024)throw new Error("Compressed image/audio/video attachments exceed 12 MB in total.");
-      media.push({name:file.name,mimeType:mime,data});continue;
+      media.push({name:mediaFile.name,mimeType:mime,data});continue;
     }
-    const extracted=await aiExtractText(file,ext);
+    const extracted=await aiExtractText(file,ext);    const extracted=await aiExtractText(file,ext);
     if(!String(extracted||"").trim())throw new Error("No readable text was found in "+file.name+".");
     totalText+=extracted.length;if(totalText>30000)throw new Error("Extracted file text is over 30,000 characters. Attach fewer pages or files.");
     textParts.push("FILE: "+file.name+"\n"+extracted);
