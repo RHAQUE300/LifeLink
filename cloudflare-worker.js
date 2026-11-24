@@ -1407,20 +1407,38 @@ export default {
       const userContextText = messages.filter(m => m.role === "user").slice(-12)
         .map(message => String(message.content || "").slice(0, 12000)).join("\n\n");
       const highRisk = isHighRiskRequest(userContextText);
-      const diabetesRisk = /\\b(diabet(?:es|ic)|insulin|blood sugar|blood glucose)\\b/i.test(userContextText);
+      const diabetesRisk = /\b(diabet(?:es|ic)|insulin|blood sugar|blood glucose)\b/i.test(userContextText);
       let quantityIssues = quantityConstraintIssues(userContextText, draft);
       const verifierOrder = ["gemini", "groq", "openai", "anthropic"].filter(p => available[p] && p !== draftProvider);
-      const verifierProvider = verifierOrder[0] || draftProvider;
+      verifierOrder.push(draftProvider);
+      let verifierProvider = "";
       const process = [
         { name: "Draft", model: providerLabel(draftProvider), status: "complete", detail: mediaMode ? "Multimodal analysis of the attached media" : "Prepared an initial response" },
-        { name: verifierProvider === draftProvider ? "Second-pass review" : "Independent review", model: verifierProvider === draftProvider ? providerLabel(verifierProvider) + " · second pass" : providerLabel(verifierProvider), status: "running", detail: "Checking facts, arithmetic, units, contradictions and the user's constraints" }
+        { name: "Answer review", model: "Selecting available reviewer", status: "running", detail: "Checking facts, arithmetic, units, contradictions and the user's constraints" }
       ];
 
       let finalReply = draft;
       let verification = null;
-      try {
-        verification = await verifyDraft(draft, messages, verifierProvider, env, quantityIssues);
-        if (!verification) throw new Error("The reviewer did not return a valid audit result.");
+      const reviewerFailures = [];
+      for (const candidate of verifierOrder) {
+        try {
+          const result = await verifyDraft(draft, messages, candidate, env, quantityIssues);
+          if (!result || !["pass", "revise", "withhold"].includes(result.decision)) {
+            throw new Error("Reviewer returned an invalid audit result.");
+          }
+          verification = result;
+          verifierProvider = candidate;
+          break;
+        } catch (error) {
+          reviewerFailures.push(candidate);
+          console.error("LifeLink reviewer unavailable:", candidate, error.message);
+        }
+      }
+      if (verification) {
+        process[1].name = verifierProvider === draftProvider ? "Second-pass review" : "Independent review";
+        process[1].model = verifierProvider === draftProvider
+          ? providerLabel(verifierProvider) + " · second pass"
+          : providerLabel(verifierProvider);
         if (verification.decision === "pass" && Array.isArray(verification.issues) && verification.issues.some(issue => String(issue || "").trim())) {
           verification.decision = "withhold";
           finalReply = "";
@@ -1439,14 +1457,15 @@ export default {
         process[1].status = verification.decision === "pass" || verification.decision === "revise" ? "complete" : "warning";
         process[1].detail = (Array.isArray(verification.checks) ? verification.checks : []).slice(0, 5).join(" · ") ||
           (verification.decision === "revise" ? "Reviewer corrected the draft" : "Reviewer checked the draft");
-      } catch (error) {
+      } else {
+        process[1].name = "Review unavailable";
+        process[1].model = "Connected models";
         process[1].status = "warning";
-        process[1].detail = "Independent verification could not be completed.";
-        console.error("LifeLink answer verification failed:", error.message);
+        process[1].detail = "No connected model could complete the independent review.";
       }
 
       const unresolvedReview = !verification || !["pass", "revise"].includes(verification.decision);
-      const highRiskDisclosureMissing = highRisk && !/\\b(doctor|clinician|dietitian|nutritionist|pharmacist|healthcare professional|health professional|medical professional)\\b/i.test(finalReply);
+      const highRiskDisclosureMissing = highRisk && !/\b(doctor|clinician|dietitian|nutritionist|pharmacist|healthcare professional|health professional|medical professional)\b/i.test(finalReply);
       if (quantityIssues.length || verification?.decision === "withhold" || unresolvedReview || highRiskDisclosureMissing) {
         process.push({ name: "Safety and quantity gate", model: "LifeLink checks", status: "blocked", detail: quantityIssues.length ? "A stated quantity or unit constraint still conflicts with the answer" : (highRiskDisclosureMissing ? "A high-risk health answer is missing qualified-professional guidance" : "The response did not complete a successful independent review") });
         finalReply = highRisk
@@ -1462,7 +1481,7 @@ export default {
         provider: draftProvider,
         requested,
         verified: !!verification && ["pass", "revise"].includes(verification.decision) && !quantityIssues.length && !highRiskDisclosureMissing,
-        reviewer: providerLabel(verifierProvider),
+        reviewer: verifierProvider ? providerLabel(verifierProvider) : "Unavailable",
         process,
         warnings: (Array.isArray(verification?.issues) ? verification.issues : []).slice(0, 5),
         webSearch: !!webSearchResult,
