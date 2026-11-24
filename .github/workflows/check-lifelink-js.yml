@@ -44,3 +44,19 @@ jobs:
           }
           if (!process.exitCode) console.log(`Syntax OK: ${checked} inline script(s) checked.`);
           NODE
+      - name: Regression-test AI quantity and unit safety checks
+        run: |
+          node <<'NODE'
+          const fs = require('node:fs');
+          const vm = require('node:vm');
+          const assert = require('node:assert/strict');
+          const worker = fs.readFileSync('cloudflare-worker.js', 'utf8');
+          const match = worker.match(/function quantityConstraintIssues\([\s\S]*?\n}\n(?=\nfunction parseVerifierJson)/);
+          if (!match) throw new Error('Could not locate quantityConstraintIssues in the Worker.');
+          const check = vm.runInNewContext('(()=>{' + match[0] + '; return quantityConstraintIssues;})()');
+          assert.ok(check('Target is 400 g daily', 'Total amount: 2450 g.').length, 'must catch 2450 g vs 400 g/day');
+          assert.ok(check('Target is 400 g daily', 'Total amount: 2.45 kg.').length, 'must catch kg-to-g mismatch');
+          assert.ok(check('Do not exceed 400 g per day', 'Suggested amount: 450 g.').length === 0, 'must not flag a 450 g near-neighbour under the current tolerance');
+          assert.ok(check('Do not exceed 400 g per day', 'Suggested amount: 400 g.').length === 0, 'must allow the stated quantity');
+          console.log('AI quantity/unit safety regression checks passed.');
+          NODE
