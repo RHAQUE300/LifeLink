@@ -428,7 +428,7 @@ pre,code{max-width:100%;overflow-wrap:anywhere;white-space:pre-wrap}
     </div>
     <div id="af-input">
       <div id="af-file-tools"><div id="af-file-list" aria-live="polite"></div>
-        <div class="af-file-actions"><label class="btn" for="af-file-input" id="af-attach">＋ Attach files</label><input id="af-file-input" type="file" multiple hidden accept=".txt,.md,.markdown,.rtf,.html,.htm,.css,.js,.mjs,.ts,.tsx,.jsx,.json,.xml,.yaml,.yml,.toml,.ini,.csv,.tsv,.log,.py,.ipynb,.sql,.sh,.ps1,.java,.c,.h,.cpp,.cs,.go,.rs,.php,.rb,.tex,.pdf,.docx,.doc,.pptx,.ppt,.xlsx,.xls,.ods,.odt,.odp,.epub,.png,.jpg,.jpeg,.webp,.gif,.bmp,.mp3,.wav,.m4a,.aac,.ogg,.flac,.mp4,.mov,.webm,.mkv,image/*,audio/*,video/*"></div>
+        <div class="af-file-actions"><label class="btn" for="af-file-input" id="af-attach">＋ Attach files</label><input id="af-file-input" type="file" multiple hidden accept=".txt,.md,.markdown,.rtf,.html,.htm,.css,.js,.mjs,.ts,.tsx,.jsx,.json,.xml,.yaml,.yml,.toml,.ini,.csv,.tsv,.log,.py,.ipynb,.sql,.sh,.ps1,.java,.c,.h,.cpp,.cs,.go,.rs,.php,.rb,.tex,.pdf,.docx,.doc,.pptx,.ppt,.xlsx,.xls,.ods,.odt,.odp,.epub,.zip,.png,.jpg,.jpeg,.webp,.gif,.bmp,.mp3,.wav,.m4a,.aac,.ogg,.flac,.mp4,.mov,.webm,.mkv,image/*,audio/*,video/*"></div>
       </div>
       <div class="af-box"><textarea id="af-q" rows="1" placeholder="Message LifeLink AI…" aria-label="Message LifeLink AI"></textarea><button class="btn pri" id="af-send" type="button" aria-label="Send message" title="Send message"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M12 19V5M6 11l6-6 6 6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></button></div>
       <p class="af-file-note">Files are read in your browser where possible. Images, audio and video are sent to the connected Gemini API for analysis. Free-tier data may be used by Google to improve its products.</p>
@@ -3375,6 +3375,20 @@ async function aiExtractText(file,ext){
       try{const j=JSON.parse(value);value=(j.cells||[]).map(c=>(c.source||[]).join?c.source.join(""):String(c.source||"")).join("\n\n");}catch{}
     }
     return value.slice(0,30000);
+  }
+  if(ext==="zip"){
+    await aiLoadLibrary("jszip","https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js",()=>!!window.JSZip);
+    const archive=await window.JSZip.loadAsync(await file.arrayBuffer()),names=Object.keys(archive.files).filter(name=>!archive.files[name].dir&&!name.startsWith("__MACOSX/")).slice(0,100);
+    const readable=[];
+    for(const name of names){
+      const subExt=(name.split(".").pop()||"").toLowerCase();
+      if(!["txt","md","markdown","csv","tsv","json","xml","html","htm","yaml","yml","toml","log","py","js","css","sql"].includes(subExt))continue;
+      const value=await archive.file(name).async("string");
+      if(value.trim())readable.push("ARCHIVE FILE: "+name+"\n"+value.slice(0,6000));
+      if(readable.join("\n").length>26000)break;
+    }
+    if(!readable.length)throw new Error("No supported text or code files were found inside "+file.name+". Extract the archive and attach its supported files directly.");
+    return readable.join("\n\n---\n\n").slice(0,30000);
   }
   if(ext==="pdf"){
     await aiLoadLibrary("pdfjs","https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js",()=>!!window.pdfjsLib);
