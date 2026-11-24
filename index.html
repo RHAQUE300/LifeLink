@@ -362,11 +362,21 @@ pre,code{max-width:100%;overflow-wrap:anywhere;white-space:pre-wrap}
 #bell b{top:-7px;right:-7px;z-index:2;display:flex;align-items:center;justify-content:center;min-width:19px;height:19px;line-height:1;padding:0 5px;border:2px solid var(--g);border-radius:999px;font-size:10px;font-weight:800;white-space:nowrap;box-shadow:0 2px 7px rgba(20,25,45,.2);pointer-events:none}
 @keyframes llBellRing{0%,100%{transform:rotate(0)}8%,24%,40%,56%,72%{transform:rotate(14deg)}16%,32%,48%,64%{transform:rotate(-14deg)}80%{transform:rotate(7deg)}88%{transform:rotate(-7deg)}}
 @media(prefers-reduced-motion:reduce){#bell.is-ringing .bell-icon{animation:none}}
+
+/* Compact disclosure below the AI prompt/send bar. */
+.af-note-menu{max-width:780px;margin:7px auto 0;font-size:10px;color:var(--mut);line-height:1.45}
+.af-note-menu>summary{display:flex;align-items:center;gap:8px;width:max-content;max-width:100%;padding:4px 8px;border:1px solid var(--gb);border-radius:9px;background:var(--g);cursor:pointer;list-style:none;user-select:none}
+.af-note-menu>summary::-webkit-details-marker{display:none}
+.af-note-arrow{width:17px;height:9px;flex:none;transition:transform .2s}
+.af-note-menu[open] .af-note-arrow{transform:rotate(180deg)}
+.af-note-content{margin-top:6px;padding:9px 11px;border:1px solid var(--gb);border-radius:11px;background:var(--g);display:grid;gap:6px}
+.af-note-content p{margin:0}
+.af-note-content .af-disclaimer{font-size:9px;font-style:italic}
 </style>
 </head><body>
 
 <header class="glass" id="app-header" style="display:none">
-  <a class="logo" href="#/home" aria-label="LifeLink home" aria-keyshortcuts="Alt+1" title="Home · Alt+1 (Option+1 on Mac; Ctrl+Alt+1 on Chromebook)">
+  <a class="logo" href="#/home" aria-label="LifeLink home" aria-keyshortcuts="Alt+H" title="Home · Alt+H (Option+H on Mac; Ctrl+Alt+H on Chromebook)">
     <span class="logo-icon" id="lgm">
       <svg width="28" height="28" viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">
         <defs><radialGradient id="ll-grad" cx="30%" cy="25%" r="85%"><stop offset="0%" stop-color="#fde4e4"/><stop offset="50%" stop-color="#d6f5f0"/><stop offset="100%" stop-color="#c4d9ff"/></radialGradient></defs>
@@ -382,7 +392,7 @@ pre,code{max-width:100%;overflow-wrap:anywhere;white-space:pre-wrap}
   <button class="ib" id="av" onclick="openIsland('account')" title="Account" aria-label="Account"></button>
 </header>
 <main></main>
-<nav id="dock" class="glass" aria-label="Dock" style="display:none"><button class="ib" id="dt" aria-label="Hide dock" aria-expanded="true"></button><div class="it"><span class="vd"></span><a class="dk" data-r="todo" href="#/todo" aria-keyshortcuts="Alt+2" title="To Do · Alt+2 (Option+2 on Mac; Ctrl+Alt+2 on Chromebook)">☑ <span>To Do</span></a><a class="dk" data-r="calendar" href="#/calendar" aria-keyshortcuts="Alt+3" title="Calendar · Alt+3 (Option+3 on Mac; Ctrl+Alt+3 on Chromebook)">▦ <span>Calendar</span></a><a class="dk" data-r="notes" href="#/notes" aria-keyshortcuts="Alt+4" title="Notes · Alt+4 (Option+4 on Mac; Ctrl+Alt+4 on Chromebook)">✎ <span>Notes</span></a><a class="dk" data-r="apps" href="#/apps" aria-keyshortcuts="Alt+5" title="Apps · Alt+5 (Option+5 on Mac; Ctrl+Alt+5 on Chromebook)">⊞ <span>Apps</span></a><a class="dk go" href="#/recovery" aria-keyshortcuts="Alt+6" title="Recovery · Alt+6 (Option+6 on Mac; Ctrl+Alt+6 on Chromebook)">▶ <span>Start Recovery</span></a></div></nav>
+<nav id="dock" class="glass" aria-label="Dock" style="display:none"><button class="ib" id="dt" aria-label="Hide dock" aria-expanded="true"></button><div class="it"><span class="vd"></span><a class="dk" data-r="todo" href="#/todo" aria-keyshortcuts="Alt+1" title="To Do · Alt+1 (Option+1 on Mac; Ctrl+Alt+1 on Chromebook)">☑ <span>To Do</span></a><a class="dk" data-r="calendar" href="#/calendar" aria-keyshortcuts="Alt+2" title="Calendar · Alt+2 (Option+2 on Mac; Ctrl+Alt+2 on Chromebook)">▦ <span>Calendar</span></a><a class="dk" data-r="notes" href="#/notes" aria-keyshortcuts="Alt+3" title="Notes · Alt+3 (Option+3 on Mac; Ctrl+Alt+3 on Chromebook)">✎ <span>Notes</span></a><a class="dk" data-r="apps" href="#/apps" aria-keyshortcuts="Alt+4" title="Apps · Alt+4 (Option+4 on Mac; Ctrl+Alt+4 on Chromebook)">⊞ <span>Apps</span></a><a class="dk go" href="#/recovery" aria-keyshortcuts="Alt+5" title="Recovery · Alt+5 (Option+5 on Mac; Ctrl+Alt+5 on Chromebook)">▶ <span>Start Recovery</span></a></div></nav>
 
 <div id="modal-backdrop" onclick="if(event.target===this)closeModal()">
   <div id="modal-card" role="dialog" aria-modal="true"></div>
@@ -446,7 +456,7 @@ pre,code{max-width:100%;overflow-wrap:anywhere;white-space:pre-wrap}
         <div class="af-file-actions"><label class="btn" for="af-file-input" id="af-attach">＋ Attach files</label><input id="af-file-input" type="file" multiple hidden accept=".txt,.md,.markdown,.rtf,.html,.htm,.css,.js,.mjs,.ts,.tsx,.jsx,.json,.xml,.yaml,.yml,.toml,.ini,.csv,.tsv,.log,.py,.ipynb,.sql,.sh,.ps1,.java,.c,.h,.cpp,.cs,.go,.rs,.php,.rb,.tex,.pdf,.docx,.doc,.pptx,.ppt,.xlsx,.xls,.ods,.odt,.odp,.epub,.zip,.png,.jpg,.jpeg,.webp,.gif,.bmp,.mp3,.wav,.m4a,.aac,.ogg,.flac,.mp4,.mov,.webm,.mkv,image/*,audio/*,video/*"></div>
       </div>
       <div class="af-box"><textarea id="af-q" rows="1" placeholder="Message LifeLink AI…" aria-label="Message LifeLink AI"></textarea><button class="btn pri" id="af-send" type="button" aria-label="Send message" title="Send message"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M12 19V5M6 11l6-6 6 6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></button></div>
-      <p class="af-file-note">Files are extracted in your browser where supported. Extracted content is sent to your selected AI provider; image, audio and video understanding requires a connected multimodal provider. Google may use free-tier requests to improve its products. Do not attach sensitive material unless you are comfortable with the providers’ data handling.<small class="af-disclaimer">AI-generated content may be inaccurate or incomplete. Verify important information independently. LifeLink is not responsible for decisions made solely on AI-generated output.</small></p>
+      <details class="af-note-menu"><summary><span>File handling &amp; AI disclaimer</span><svg class="af-note-arrow" viewBox="0 0 24 12" aria-hidden="true"><path d="M2 2l10 8 10-8" fill="none" stroke="currentColor" stroke-width="2.8" stroke-linecap="round" stroke-linejoin="round"/></svg></summary><div class="af-note-content"><p>Supported text and code files up to 5 GB are sampled locally in your browser; only selected excerpts are sent to the AI provider, not the original large file. PDF, Office and archive files have a 50 MB browser-extraction limit. Audio and video are limited to 10 MB per file and still require a connected provider that supports that media.</p><p>Files are extracted in your browser where supported. Extracted content is sent to your selected AI provider; image, audio and video understanding requires a connected multimodal provider. Google may use free-tier requests to improve its products. Do not attach sensitive material unless you are comfortable with the providers’ data handling.</p><p class="af-disclaimer">AI-generated content may be inaccurate or incomplete. Verify important information independently. LifeLink is not responsible for decisions made solely on AI-generated output.</p></div></details>
     </div>
   </section>
 </div>
@@ -762,7 +772,7 @@ A=[
   ['Adobe',6,'Available','https://www.adobe.com'],
   ['Spotify',6,'Available','https://open.spotify.com']
 ];
-function ringBell(){const bell=$('#bell');if(!bell)return;bell.classList.remove('is-ringing');void bell.offsetWidth;bell.classList.add('is-ringing')} function badge(){const u=(S.notifs||[]).length,b=$('#bell b'),bell=$('#bell');if(b){b.textContent=u>999?'999+':String(u);b.style.display=u?'flex':'none'}if(bell)bell.setAttribute('aria-label',u?`Notifications, ${u} active`:'Notifications')}
+function ringBell(){const bell=$('#bell');if(!bell)return;bell.classList.remove('is-ringing');void bell.offsetWidth;bell.classList.add('is-ringing')} function badge(){const u=(S.notifs||[]).filter(n=>!n.read).length,b=$('#bell b'),bell=$('#bell');if(b){b.textContent=u>999?'999+':String(u);b.style.display=u?'flex':'none'}if(bell)bell.setAttribute('aria-label',u?`Notifications, ${u} unread`:'Notifications')}
 const NP={Tasks:'nTasks',Messages:'nMsgs',Education:'nEdu',Files:'nFiles',Calendar:'nCal',System:'nSys'};
 function note(type,text,dismissable=true){if(S.p[NP[type]]===false)return;S.notifs.unshift({id:uid(),type,text,ts:Date.now(),read:false,dismissable});if(S.notifs.length>200)S.notifs.length=200;save();badge();ringBell()}
 
@@ -3043,8 +3053,8 @@ const X=(i,b)=>{const t=S.tasks.find(x=>x.id==i),delT=()=>{S.tasks=S.tasks.filte
  cprev:()=>{nav(-1);render()},cnext:()=>{nav(1);render()},ctoday:()=>{U.cm=new Date();render()},
  evnew:()=>ask('New event',EF,{date:i},o=>saveEv({id:uid()},o)),
  evedit:()=>{const e=S.events.find(x=>x.id==i);if(!e)return;ask('Edit event',EF.slice(0,3),e,o=>saveEv(e,o),()=>{S.events=S.events.filter(x=>x!==e);save();render()})},
- nf:()=>{U.nf=i;render()},readall:()=>{S.notifs.forEach(n=>n.read=true);save();render()},
- nread:()=>{const n=S.notifs.find(x=>x.id==i);n.read=!n.read;save();render()},
+ nf:()=>{U.nf=i;render()},readall:()=>{S.notifs.forEach(n=>n.read=true);save();badge();render()},
+ nread:()=>{const n=S.notifs.find(x=>x.id==i);if(n)n.read=!n.read;save();badge();render()},
  dismissnotif:()=>{const n=S.notifs.find(x=>x.id==i);if(n){clearResetFlag(n);S.notifs=S.notifs.filter(x=>x.id!=i);save();render();toast('Notification dismissed')}},
  pwreset:()=>startPasswordReset(),resetpw:()=>toast('Use the password-reset link sent by Supabase.'),
  aichat:()=>openChat(i),aichatren:()=>renameChat(i),aichatdel:()=>deleteChat(i),clearchats:()=>clearAllChats(),
@@ -3128,12 +3138,12 @@ addEventListener('keydown',e=>{
   if(!S.loggedIn)return;
   const typing=e.target&&e.target.closest&&e.target.closest('input,textarea,select,[contenteditable]');
   const llShortcut=(code,key)=>{const plainAlt=e.altKey&&!e.ctrlKey&&!e.metaKey&&!e.shiftKey,macAlt=llKeyboardPlatform==='mac'&&e.altKey&&!e.ctrlKey&&!e.shiftKey,chromeAlt=llKeyboardPlatform==='chromeos'&&e.altKey&&e.ctrlKey&&!e.metaKey&&!e.shiftKey,keyMatch=e.code===code||String(e.key||'').toLowerCase()===key;return !typing&&(plainAlt||macAlt||chromeAlt)&&keyMatch};
-  if((e.key=='Home'&&!typing)||llShortcut('Digit1','1')){e.preventDefault();location.hash='#/home'}
-  else if(llShortcut('Digit2','2')){e.preventDefault();location.hash='#/todo'}
-  else if(llShortcut('Digit3','3')){e.preventDefault();location.hash='#/calendar'}
-  else if(llShortcut('Digit4','4')){e.preventDefault();location.hash='#/notes'}
-  else if(llShortcut('Digit5','5')){e.preventDefault();location.hash='#/apps'}
-  else if(llShortcut('Digit6','6')){e.preventDefault();location.hash='#/recovery'}
+  if((e.key=='Home'&&!typing)||llShortcut('KeyH','h')){e.preventDefault();location.hash='#/home'}
+  else if(llShortcut('Digit1','1')){e.preventDefault();location.hash='#/todo'}
+  else if(llShortcut('Digit2','2')){e.preventDefault();location.hash='#/calendar'}
+  else if(llShortcut('Digit3','3')){e.preventDefault();location.hash='#/notes'}
+  else if(llShortcut('Digit4','4')){e.preventDefault();location.hash='#/apps'}
+  else if(llShortcut('Digit5','5')){e.preventDefault();location.hash='#/recovery'}
   else if(llShortcut('KeyN','n')){e.preventDefault();openIsland('notifications')}
   else if(llShortcut('KeyA','a')){e.preventDefault();openIsland('ai')}
 });
@@ -3386,11 +3396,18 @@ function aiRenderPendingFiles(){
   const markup=aiPendingFiles.map((file,i)=>'<span class="ai-file-pill"><span>📎 '+esc(file.name)+' · '+aiByteSize(file.size)+'</span><button type="button" data-ai-remove-file="'+i+'" aria-label="Remove attachment">×</button></span>').join("");
   ["#af-file-list","#ai-mini-file-list"].forEach(selector=>{const root=$(selector);if(root)root.innerHTML=markup});
 }
+const AI_MAX_LOCAL_FILE=5*1024*1024*1024,AI_MAX_BROWSER_BINARY=50*1024*1024,AI_LARGE_TEXT_SAMPLE=4*1024*1024;
+async function aiReadTextSample(file,maxChars=26000){
+  if(file.size<=AI_LARGE_TEXT_SAMPLE){const text=await file.text();return{text:text.slice(0,maxChars),sampled:text.length>maxChars}}
+  const part=Math.floor(maxChars/3),middle=Math.max(0,Math.floor(file.size/2)-Math.floor(part/2)),tail=Math.max(0,file.size-part),ranges=[[0,part],[middle,middle+part],[tail,file.size]],labels=['BEGINNING','MIDDLE','END'],chunks=[];
+  for(let i=0;i<ranges.length;i++){const [start,end]=ranges[i];chunks.push('--- '+labels[i]+' EXCERPT ---\\n'+await file.slice(start,end).text())}
+  return{text:'LARGE FILE SAMPLE. The original file is '+aiByteSize(file.size)+'. Only the following beginning, middle and ending excerpts were read locally; the original file was not uploaded.\\n\\n'+chunks.join('\\n\\n'),sampled:true}
+}
 function aiQueueFiles(list){
   const incoming=Array.from(list||[]);
   if(aiPendingFiles.length+incoming.length>6){toast("Attach up to 6 files per message.");return}
-  const tooBig=incoming.find(f=>f.size>25*1024*1024);
-  if(tooBig){toast("Each file must be 25 MB or smaller.");return}
+  const tooBig=incoming.find(f=>f.size>AI_MAX_LOCAL_FILE);
+  if(tooBig){toast(tooBig.name+" exceeds the 5 GB local processing limit.");return}
   aiPendingFiles.push(...incoming);aiRenderPendingFiles();
 }
 function aiTextFromXml(xml){
@@ -3431,14 +3448,15 @@ async function aiReadPdfForChat(file){
 async function aiExtractText(file,ext){
   const textFile=()=>file.text();
   if(AI_TEXT_EXT.has(ext)){
-    let value=await textFile();
-    if(ext==="rtf")value=value.replace(/\\'[0-9a-f]{2}/gi," ").replace(/\\[a-z]+-?\d* ?/gi," ").replace(/[{}]/g," ");
-    if(ext==="html"||ext==="htm")value=aiStripMarkup(value);
-    if(ext==="ipynb"){
-      try{const j=JSON.parse(value);value=(j.cells||[]).map(c=>(c.source||[]).join?c.source.join(""):String(c.source||"")).join("\n\n");}catch{}
+      const sampled=await aiReadTextSample(file,26000);let value=sampled.text;
+      if(ext==="rtf"&&!sampled.sampled)value=value.replace(/\\'[0-9a-f]{2}/gi," ").replace(/\\[a-z]+-?\\d* ?/gi," ").replace(/[{}]/g," ");
+      if((ext==="html"||ext==="htm")&&!sampled.sampled)value=aiStripMarkup(value);
+      if(ext==="ipynb"&&!sampled.sampled){
+        try{const j=JSON.parse(value);value=(j.cells||[]).map(c=>(c.source||[]).join?c.source.join(""):String(c.source||"")).join("\\n\\n");}catch{}
+      }
+      if(sampled.sampled)value='LARGE TEXT/CODE FILE: only selected excerpts were read locally; the original file was not uploaded.\\n'+value;
+      return value.slice(0,30000);
     }
-    return value.slice(0,30000);
-  }
   if(ext==="zip"){
     await aiLoadLibrary("jszip","https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js",()=>!!window.JSZip);
     const archive=await window.JSZip.loadAsync(await file.arrayBuffer()),names=Object.keys(archive.files).filter(name=>!archive.files[name].dir&&!name.startsWith("__MACOSX/")).slice(0,100);
@@ -3518,7 +3536,7 @@ async function aiRasterizeImage(file){
 async function aiPrepareFiles(files){
   const textParts=[],media=[],names=[];let binarySize=0,totalText=0,audioCount=0;
   for(const file of files){
-    const ext=(file.name.split(".").pop()||"").toLowerCase();names.push(file.name);
+    const ext=(file.name.split(".").pop()||"").toLowerCase();names.push(file.name);if(file.size>AI_MAX_BROWSER_BINARY&&!AI_TEXT_EXT.has(ext))throw new Error(file.name+' is too large for safe browser extraction in this format. PDFs, Office files and archives are limited to 50 MB; audio/video are limited to 10 MB and must also fit the connected provider. For files up to 5 GB, use a supported text or code format so LifeLink can sample it locally.');
     if(ext==="pdf"){
       const pdf=await aiReadPdfForChat(file);
       if(pdf.text){totalText+=pdf.text.length;if(totalText>30000)throw new Error("Extracted file text is over 30,000 characters. Attach fewer pages or files.");textParts.push("FILE: "+file.name+"\n"+pdf.text.slice(0,30000));}
