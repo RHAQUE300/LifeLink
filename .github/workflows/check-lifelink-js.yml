@@ -56,6 +56,9 @@ jobs:
           const check = vm.runInNewContext('(()=>{' + match[0] + '; return quantityConstraintIssues;})()');
           assert.ok(check('Target is 400 g daily', 'Total amount: 2450 g.').length, 'must catch 2450 g vs 400 g/day');
           assert.ok(check('Target is 400 g daily', 'Total amount: 2.45 kg.').length, 'must catch kg-to-g mismatch');
+          assert.ok(check('Target is 400 g daily', 'Total amount: 2,450 g.').length, 'must parse thousands separators correctly');
+          assert.ok(check('Target is 400 g daily', 'Total amount: 2 lb.').length, 'must normalise pounds to grams');
+          assert.ok(check('Target is 400 g daily', 'Total amount: 20 oz.').length, 'must normalise ounces to grams');
           assert.ok(check('Do not exceed 400 g per day', 'Suggested amount: 450 g.').length > 0, 'must catch a 450 g amount that exceeds a 400 g daily limit');
           assert.ok(check('Do not exceed 400 g per day', 'Suggested amount: 400 g.').length === 0, 'must allow the stated quantity');
           console.log('AI quantity/unit safety regression checks passed.');
