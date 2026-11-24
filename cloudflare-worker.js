@@ -236,7 +236,7 @@ function quantityConstraintIssues(prompt, answer) {
   for (const limit of constraints) {
     for (const value of answerValues) {
       if (value.unit === limit.unit && value.value > limit.value * 1.5) {
-        issues.push(\`The answer contains \${value.raw}, which conflicts with the user-stated \${limit.raw} constraint. Check whether this is a total, serving, or daily amount before presenting it.\`);
+        issues.push("The answer contains " + value.raw + ", which conflicts with the user-stated " + limit.raw + " constraint. Check whether this is a total, serving, or daily amount before presenting it.");
       }
     }
   }
