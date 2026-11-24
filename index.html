@@ -321,6 +321,7 @@ pre,code{max-width:100%;overflow-wrap:anywhere;white-space:pre-wrap}
 .ai-file-pill span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .ai-file-pill button{border:0;background:transparent;cursor:pointer;color:var(--mut);padding:0 2px}
 .af-file-note{max-width:780px;margin:5px auto 0;font-size:10px;color:var(--mut);line-height:1.4}
+ .af-disclaimer{display:block;margin-top:3px;font-size:9px;font-style:italic}
 .ai-attachment-line{display:flex;gap:5px;flex-wrap:wrap;margin-top:7px}
 .ai-attachment-tag{font-size:10px;padding:3px 8px;border:1px solid currentColor;border-radius:9px;opacity:.8}
 .ai-process{max-width:780px;margin:-2px auto 12px 0;font-size:11px;color:var(--mut);width:min(92%,780px)}
@@ -437,7 +438,7 @@ pre,code{max-width:100%;overflow-wrap:anywhere;white-space:pre-wrap}
         <div class="af-file-actions"><label class="btn" for="af-file-input" id="af-attach">＋ Attach files</label><input id="af-file-input" type="file" multiple hidden accept=".txt,.md,.markdown,.rtf,.html,.htm,.css,.js,.mjs,.ts,.tsx,.jsx,.json,.xml,.yaml,.yml,.toml,.ini,.csv,.tsv,.log,.py,.ipynb,.sql,.sh,.ps1,.java,.c,.h,.cpp,.cs,.go,.rs,.php,.rb,.tex,.pdf,.docx,.doc,.pptx,.ppt,.xlsx,.xls,.ods,.odt,.odp,.epub,.zip,.png,.jpg,.jpeg,.webp,.gif,.bmp,.mp3,.wav,.m4a,.aac,.ogg,.flac,.mp4,.mov,.webm,.mkv,image/*,audio/*,video/*"></div>
       </div>
       <div class="af-box"><textarea id="af-q" rows="1" placeholder="Message LifeLink AI…" aria-label="Message LifeLink AI"></textarea><button class="btn pri" id="af-send" type="button" aria-label="Send message" title="Send message"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M12 19V5M6 11l6-6 6 6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></button></div>
-      <p class="af-file-note">Files are extracted in your browser where supported. Extracted content is sent to your selected AI provider; image, audio and video understanding requires a connected multimodal provider. AI can make mistakes—verify important information. LifeLink is not responsible for decisions made solely from AI output. Google may use free-tier requests to improve its products. Do not attach sensitive material unless you are comfortable with the providers’ data handling.</p>
+      <p class="af-file-note">Files are extracted in your browser where supported. Extracted content is sent to your selected AI provider; image, audio and video understanding requires a connected multimodal provider. Google may use free-tier requests to improve its products. Do not attach sensitive material unless you are comfortable with the providers’ data handling.<small class="af-disclaimer">AI-generated content may be inaccurate or incomplete. Verify important information independently. LifeLink is not responsible for decisions made solely on AI-generated output.</small></p>
     </div>
   </section>
 </div>
