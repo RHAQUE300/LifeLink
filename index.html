@@ -372,6 +372,95 @@ pre,code{max-width:100%;overflow-wrap:anywhere;white-space:pre-wrap}
 .af-note-content{margin-top:6px;padding:9px 11px;border:1px solid var(--gb);border-radius:11px;background:var(--g);display:grid;gap:6px}
 .af-note-content p{margin:0}
 .af-note-content .af-disclaimer{font-size:9px;font-style:italic}
+
+/* Smooth motion additions for previously static controls and content.
+   Existing animation and transition declarations above are intentionally left unchanged. */
+@media (prefers-reduced-motion:no-preference){
+  body:not(.rm) input:not([type="checkbox"]):not([type="radio"]):not([type="range"]),
+  body:not(.rm) select,
+  body:not(.rm) textarea{
+    transition:border-color .22s var(--motion-ease),box-shadow .22s var(--motion-ease),background-color .22s var(--motion-ease);
+  }
+  body:not(.rm) input:focus,
+  body:not(.rm) select:focus,
+  body:not(.rm) textarea:focus{
+    box-shadow:0 0 0 3px color-mix(in srgb,var(--ac) 16%,transparent);
+  }
+
+  body:not(.rm) .cd{
+    transition:background-color .24s var(--motion-ease),border-color .24s var(--motion-ease),box-shadow .24s var(--motion-ease),transform .24s var(--motion-ease);
+  }
+  body:not(.rm) .cd:hover{transform:translateY(-2px);box-shadow:0 7px 18px rgba(40,60,100,.09)}
+  body:not(.rm) .ev{transition:filter .2s var(--motion-ease),transform .2s var(--motion-ease)}
+  body:not(.rm) .ev:hover{filter:brightness(1.06);transform:translateX(2px)}
+
+  body:not(.rm) .gmail-row{
+    transition:background-color .22s var(--motion-ease),box-shadow .22s var(--motion-ease);
+  }
+  body:not(.rm) .google-nav-item{
+    transition:background-color .22s var(--motion-ease),color .22s var(--motion-ease),transform .22s var(--motion-ease);
+  }
+  body:not(.rm) .google-nav-item:hover{transform:translateX(2px)}
+  body:not(.rm) .google-compose-placeholder{
+    transition:background-color .24s var(--motion-ease),box-shadow .24s var(--motion-ease),transform .24s var(--motion-ease);
+    cursor:pointer;
+  }
+  body:not(.rm) .google-compose-placeholder:hover{transform:translateY(-1px);box-shadow:0 6px 18px rgba(40,60,100,.09)}
+  body:not(.rm) .google-workspace-item{
+    transition:background-color .22s var(--motion-ease),border-color .22s var(--motion-ease),box-shadow .22s var(--motion-ease),transform .22s var(--motion-ease);
+  }
+  body:not(.rm) .google-workspace-item:hover{transform:translateY(-1px);box-shadow:0 7px 20px rgba(30,40,70,.08)}
+
+  body:not(.rm) .af-x{
+    transition:opacity .2s var(--motion-ease),background-color .2s var(--motion-ease),transform .2s var(--motion-ease);
+  }
+  body:not(.rm) .af-x:hover{transform:scale(1.08)}
+  body:not(.rm) .ai-file-pill{
+    transition:background-color .2s var(--motion-ease),border-color .2s var(--motion-ease),transform .2s var(--motion-ease),opacity .2s var(--motion-ease);
+  }
+  body:not(.rm) .ai-file-pill:hover{transform:translateY(-1px)}
+  body:not(.rm) .ai-file-pill button{transition:color .18s var(--motion-ease),transform .18s var(--motion-ease)}
+  body:not(.rm) .ai-file-pill button:hover{transform:scale(1.16)}
+  body:not(.rm) .ai-attachment-tag{
+    transition:background-color .2s var(--motion-ease),border-color .2s var(--motion-ease),opacity .2s var(--motion-ease);
+  }
+
+  body:not(.rm) .ai-process summary,
+  body:not(.rm) .ai-export summary,
+  body:not(.rm) .af-note-menu>summary{
+    transition:background-color .2s var(--motion-ease),border-color .2s var(--motion-ease),box-shadow .2s var(--motion-ease),transform .2s var(--motion-ease);
+  }
+  body:not(.rm) .ai-process summary:hover,
+  body:not(.rm) .ai-export summary:hover,
+  body:not(.rm) .af-note-menu>summary:hover{
+    transform:translateY(-1px);box-shadow:0 4px 12px rgba(30,40,70,.07);
+  }
+  body:not(.rm) .ai-export-menu button{
+    transition:background-color .2s var(--motion-ease),border-color .2s var(--motion-ease),transform .2s var(--motion-ease),box-shadow .2s var(--motion-ease);
+  }
+  body:not(.rm) .ai-export-menu button:hover{transform:translateY(-1px);box-shadow:0 3px 9px rgba(30,40,70,.08)}
+
+  body:not(.rm) #af-q{transition:border-color .22s var(--motion-ease),box-shadow .22s var(--motion-ease),background-color .22s var(--motion-ease)}
+  body:not(.rm) #af-send svg{transition:transform .32s var(--motion-ease)}
+  body:not(.rm) #af-input.is-sending #af-send svg{transform:translateY(-2px) scale(.9)}
+  body:not(.rm) #af-input.is-sending #af-send{animation:llSendPulse 1.15s ease-in-out infinite}
+  body:not(.rm) .ai-msg.ai-msg-enter{animation:llAiBubbleIn .42s var(--motion-ease) both}
+  body:not(.rm) .af-note-menu[open]>.af-note-content,
+  body:not(.rm) .ai-process[open]>.ai-process-body,
+  body:not(.rm) .ai-export[open]>.ai-export-menu{animation:llDropdownReveal .24s var(--motion-ease) both}
+}
+@keyframes llAiBubbleIn{
+  from{opacity:0;transform:translate3d(0,12px,0) scale(.985);filter:blur(2px)}
+  to{opacity:1;transform:translate3d(0,0,0) scale(1);filter:blur(0)}
+}
+@keyframes llDropdownReveal{
+  from{opacity:0;transform:translate3d(0,-5px,0) scale(.995)}
+  to{opacity:1;transform:translate3d(0,0,0) scale(1)}
+}
+@keyframes llSendPulse{
+  0%,100%{box-shadow:0 0 0 0 color-mix(in srgb,var(--ac) 0%,transparent)}
+  50%{box-shadow:0 0 0 5px color-mix(in srgb,var(--ac) 15%,transparent)}
+}
 </style>
 </head><body>
 
@@ -2121,13 +2210,16 @@ function renderAIExport(m,idx){
     Object.entries(groups).map(([label,formats])=>'<div class="ai-export-group"><b>'+label+'</b><div>'+formats.map(fmt=>'<button type="button" data-ai-export="'+fmt+'" data-i="'+idx+'">'+fmt.toUpperCase()+'</button>').join("")+'</div></div>').join("")+
     '<div class="ai-export-group"><b>AI media</b><div><button type="button" data-ai-illustrate="true" data-i="'+idx+'">AI vector image (SVG)</button><button type="button" data-ai-video="true" data-i="'+idx+'">Local explainer video (WebM)</button><button type="button" data-ai-audio="true" data-i="'+idx+'">Narrate (WAV)</button><button type="button" data-ai-custom-export="true" data-i="'+idx+'">Other text extension…</button></div></div></div></details>';
 }
+const aiMotionNewMessages=new WeakSet();
 function renderAI(){
   [['#ao','#ao'],['#af-col','#af-msgs']].forEach(([s,sc])=>{
     const o=$(s);if(!o)return;
     o.innerHTML=aiHistory.map((m,idx)=>{
       const files=m.attachments&&m.attachments.length?'<div class="ai-attachment-line">'+m.attachments.map(n=>'<span class="ai-attachment-tag">📎 '+esc(n)+'</span>').join('')+'</div>':'';
       const copy=m.role==='bot'&&!m.id?'<div class="ai-copy-row"><button class="ai-copy-btn" type="button" data-copy-message="'+idx+'" title="Copy the entire response">▢ Copy response</button>'+(m.text&&!m.err?'<button class="btn" data-a="aifeedback" data-i="'+idx+'" data-k="up" style="padding:2px 7px;font-size:11px" title="Helpful">👍</button><button class="btn" data-a="aifeedback" data-i="'+idx+'" data-k="down" style="padding:2px 7px;font-size:11px" title="Needs improvement">👎</button>':'')+'</div>':'';
-      return '<div class="ai-msg '+m.role+'">'+(m.html===AI_GREETING?localizedAIGreeting():m.html)+files+copy+'</div>'+renderAIProcess(m)+renderAIExport(m,idx);
+      const animateEntry=sc==='#af-msgs'&&aiMotionNewMessages.has(m);
+      if(animateEntry)aiMotionNewMessages.delete(m);
+      return '<div class="ai-msg '+m.role+(animateEntry?' ai-msg-enter':'')+'">'+(m.html===AI_GREETING?localizedAIGreeting():m.html)+files+copy+'</div>'+renderAIProcess(m)+renderAIExport(m,idx);
     }).join('');
     o.querySelectorAll('.ai-msg.bot pre').forEach(pre=>{
       if(pre.querySelector('.ai-copy-code'))return;
@@ -2280,7 +2372,9 @@ async function sendMsg(text){
   ['#aiq','#af-q'].forEach(s=>{const q=$(s);if(q){q.value='';if(s==='#af-q')q.style.height='auto'}});
   aiPending++;aiLastProcess=[];aiLastTitle='';
   const loadId='loading-'+uid();
-  aiHistory.push({role:'bot',id:loadId,html:'<i>Reading attachments and preparing checks…</i>'});
+  const loadingMessage={role:'bot',id:loadId,html:'<i>Reading attachments and preparing checks…</i>'};
+  aiMotionNewMessages.add(loadingMessage);aiHistory.push(loadingMessage);
+  const composer=$('#af-input');if(composer)composer.classList.add('is-sending');
   const displayText=text||'Please analyse the attached file(s).';
   renderAI();
   let prepared={textBlock:'',media:[],names:[]},promptText=displayText;
@@ -2288,23 +2382,25 @@ async function sendMsg(text){
     if(picked.length)prepared=await aiPrepareFiles(picked);
     promptText=displayText+(prepared.textBlock?'\n\n'+prepared.textBlock:'');
     const attachHtml=prepared.names.length?'<div class="ai-attachment-line">'+prepared.names.map(n=>'<span class="ai-attachment-tag">📎 '+esc(n)+'</span>').join('')+'</div>':'';
-    aiHistory.splice(aiHistory.findIndex(m=>m.id===loadId),0,{role:'user',html:esc(displayText),text:promptText,attachments:prepared.names});
+    const userMessage={role:'user',html:esc(displayText),text:promptText,attachments:prepared.names};
+    aiMotionNewMessages.add(userMessage);aiHistory.splice(aiHistory.findIndex(m=>m.id===loadId),0,userMessage);
     const learnedNow=learnExplicitPreference(displayText);if(learnedNow)toast('Learned a preference from your message.');
     const loading=aiHistory.find(m=>m.id===loadId);if(loading)loading.html='<i>Preparing your response…</i>';
     renderAI();
     const r=await getAIResponse(promptText,prepared.media,picked.length>0);
     if(!S||!S.loggedIn)return;
-    const msg={role:'bot',html:r.html,text:r.text||htmlToText(r.html),err:!!r.err,process:aiLastProcess.slice(0,8)};
+    const msg={role:'bot',html:r.html,text:r.text||htmlToText(r.html),err:!!r.err,process:aiLastProcess.slice(0,8)};aiMotionNewMessages.add(msg);
     const idx=aiHistory.findIndex(m=>m.id===loadId);
     if(idx!==-1)aiHistory[idx]=msg;else aiHistory.push(msg);
   }catch(e){
     const idx=aiHistory.findIndex(m=>m.id===loadId);
-    const msg={role:'bot',html:'⚠️ <b>Could not prepare this message:</b> '+esc(e&&e.message||e),text:String(e&&e.message||e),err:true};
+    const msg={role:'bot',html:'⚠️ <b>Could not prepare this message:</b> '+esc(e&&e.message||e),text:String(e&&e.message||e),err:true};aiMotionNewMessages.add(msg);
     if(idx!==-1)aiHistory[idx]=msg;else aiHistory.push(msg);
     aiPendingFiles.unshift(...picked);
     aiRenderPendingFiles();
   }finally{
     aiPending=Math.max(0,aiPending-1);
+    if(!aiPending){const composer=$('#af-input');if(composer)composer.classList.remove('is-sending')}
     const live=$('#af-process-live');if(live)live.innerHTML='';
   }
   if(!S||!S.loggedIn)return;
