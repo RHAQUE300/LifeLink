@@ -1146,13 +1146,13 @@ export default {
       return json({ service: "LifeLink API", status: "online" });
     }
 
-    if (url.pathname !== "/api/chat" && url.pathname !== "/api/models") {
+    if (url.pathname !== "/api/chat" && url.pathname !== "/api/models" && url.pathname !== "/api/tts") {
       return json({ error: "Not found" }, 404);
     }
 
     if (
       (url.pathname === "/api/models" && request.method !== "GET") ||
-      (url.pathname === "/api/chat" && request.method !== "POST")
+      ((url.pathname === "/api/chat" || url.pathname === "/api/tts") && request.method !== "POST")
     ) {
       return json({ error: "Method not allowed" }, 405);
     }
@@ -1163,7 +1163,35 @@ export default {
 
       // The authenticated model-status endpoint never exposes secret values.
       if (url.pathname === "/api/models") {
-        return json({ models: availableModels(env) });
+        return json({ models: availableModels(env), mode: "auto", verification: true });
+      }
+
+      // Free-tier speech synthesis is optional and is only called when the user
+      // explicitly requests an audio export from an assistant message.
+      if (url.pathname === "/api/tts") {
+        if (!env.GEMINI_API_KEY) return json({ error: "Gemini TTS is not configured on this Worker." }, 503);
+        let ttsBody = {};
+        try { ttsBody = await request.json(); } catch { return json({ error: "Invalid JSON" }, 400); }
+        const input = typeof ttsBody.text === "string" ? ttsBody.text.trim() : "";
+        if (!input || input.length > 12000) return json({ error: "Text must be between 1 and 12,000 characters." }, 400);
+        const voice = ["Zephyr","Puck","Charon","Kore","Fenrir","Leda","Orus","Aoede","Callirrhoe","Autonoe","Enceladus","Iapetus","Umbriel","Algieba","Despina","Erinome","Algenib","Rasalgethi","Laomedeia","Achernar","Alnilam","Schedar","Gacrux","Pulcherrima","Achird","Zubenelgenubi","Vindemiatrix","Sadachbia","Sadaltager","Sulafat"].includes(ttsBody.voice) ? ttsBody.voice : "Kore";
+        const response = await fetch("https://generativelanguage.googleapis.com/v1beta/interactions", {
+          method: "POST",
+          headers: { "Content-Type": "application/json", "x-goog-api-key": env.GEMINI_API_KEY },
+          body: JSON.stringify({
+            model: "gemini-3.1-flash-tts-preview",
+            input,
+            response_format: { type: "audio" },
+            generation_config: { speech_config: [{ voice }] }
+          }),
+          signal: AbortSignal.timeout(60000)
+        });
+        const data = await readProviderResponse(response, "Gemini TTS");
+        const audioBase64 = data?.output_audio?.data || data?.output?.audio?.data || "";
+        if (typeof audioBase64 !== "string" || !/^[A-Za-z0-9+/]+={0,2}$/.test(audioBase64)) {
+          return json({ error: "Gemini did not return playable audio." }, 502);
+        }
+        return json({ audioBase64, mimeType: "audio/pcm", sampleRate: 24000, channels: 1, sampleWidth: 2, voice });
       }
 
       // Per-user rate limit: 10 chat requests per 60 seconds.
@@ -1237,7 +1265,7 @@ export default {
         const name = typeof file.name === "string" ? file.name.slice(0, 180) : "attachment";
         const mimeType = typeof file.mimeType === "string" ? file.mimeType.toLowerCase() : "";
         const data = typeof file.data === "string" ? file.data : "";
-        if (!/^(image\\/(?:jpeg|png|webp|gif)|audio\\/(?:mpeg|mp3|wav|webm|ogg|flac|mp4|m4a)|video\\/(?:mp4|webm|quicktime|mpeg))$/.test(mimeType)) {
+        if (!/^(image\/(?:jpeg|png|webp|gif)|audio\/(?:mpeg|mp3|wav|webm|ogg|flac|mp4|m4a|aac)|video\/(?:mp4|webm|quicktime|mpeg))$/.test(mimeType)) {
           return json({ error: "Unsupported media type for AI analysis: " + name }, 415);
         }
         if (!/^[A-Za-z0-9+/]*={0,2}$/.test(data) || data.length > 14000000) {
