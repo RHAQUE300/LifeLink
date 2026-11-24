@@ -3683,7 +3683,7 @@ async function aiPrepareFiles(files){
       if(binarySize>12*1024*1024)throw new Error("Compressed image/audio/video attachments exceed 12 MB in total.");
       media.push({name:mediaFile.name,mimeType:mime,data});continue;
     }
-    const extracted=await aiExtractText(file,ext);    const extracted=await aiExtractText(file,ext);
+    const extracted=await aiExtractText(file,ext);
     if(!String(extracted||"").trim())throw new Error("No readable text was found in "+file.name+".");
     totalText+=extracted.length;if(totalText>30000)throw new Error("Extracted file text is over 30,000 characters. Attach fewer pages or files.");
     textParts.push("FILE: "+file.name+"\n"+extracted);
