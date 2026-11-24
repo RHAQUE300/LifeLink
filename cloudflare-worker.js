@@ -1395,6 +1395,20 @@ export default {
         return json({ error: "All connected AI models are temporarily unavailable.", code: "AI_MODELS_UNAVAILABLE", attempted: failures }, 503);
       }
 
+      let generatedTitle = "";
+      try {
+        const titleContext = messages.filter(message => message.role !== "system").slice(-12)
+          .map(message => (message.role === "assistant" ? "Assistant: " : "User: ") + message.content.slice(0, 1800))
+          .join("\n\n").slice(-14000);
+        const titleReply = await PROVIDERS[draftProvider]([
+          { role: "system", content: "Create a concise chat title based on the MAIN subject and purpose of the entire conversation, not merely its latest message. Return only a natural title of 2–7 words, maximum 60 characters. No quotes, punctuation at the end, or explanation." },
+          { role: "user", content: titleContext + (attachments.length ? "\n\nAttached files: " + attachments.map(file => file.name).join(", ") : "") }
+        ], env);
+        generatedTitle = String(titleReply || "").replace(/[\\r\\n\\\"“”]/g, " ").replace(/\\s+/g, " ").trim().replace(/[.!?]+$/, "").slice(0, 60);
+      } catch (error) {
+        console.error("AI chat title generation unavailable:", error.message);
+      }
+
       const process = [
         { name: "Model selection", model: requested === "auto" ? "Auto" : providerLabel(requested), status: "complete", detail: "Selected " + providerLabel(draftProvider) },
         { name: mediaMode ? "File analysis" : "Response generation", model: providerLabel(draftProvider), status: "complete", detail: mediaMode ? "Processed the attached media with a multimodal model" : "Generated a response" }
@@ -1402,6 +1416,7 @@ export default {
       const disclaimer = "\\n\\n---\\n*AI-generated content may be inaccurate or incomplete. Verify important information independently. LifeLink is not responsible for decisions made solely on AI-generated output.*";
       return json({
         reply: draft + disclaimer,
+        title: generatedTitle,
         provider: draftProvider,
         requested,
         process,
