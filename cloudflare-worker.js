@@ -295,7 +295,9 @@ function parseVerifierJson(text) {
 }
 
 async function verifyDraft(draft, messages, providerName, env, forcedIssues = []) {
-  const latest = [...messages].reverse().find(m => m.role === "user")?.content || "";
+  const userContext = messages.filter(m => m.role === "user").slice(-12)
+    .map((message, index) => "USER TURN " + (index + 1) + ":\n" + String(message.content || "").slice(0, 12000))
+    .join("\n\n");
   const prompt = [
     "You are LifeLink's independent answer auditor. Review the draft for factual accuracy, arithmetic, units, internal contradictions, missed user constraints, unsafe instructions, unsupported certainty, and invented citations.",
     "Do not provide hidden chain-of-thought. Return only a concise JSON object with keys: decision (pass|revise|withhold), issues (array containing only unresolved material problems; use [] when none remain), corrected_answer (complete corrected answer or empty string), checks (array of short user-visible audit labels). A pass with any unresolved issue is not a pass.",
@@ -305,7 +307,7 @@ async function verifyDraft(draft, messages, providerName, env, forcedIssues = []
   ].join(" ");
   const reviewMessages = [
     { role: "system", content: prompt },
-    { role: "user", content: "USER REQUEST:\n" + latest.slice(0, 12000) + "\n\nDRAFT ANSWER:\n" + String(draft || "").slice(0, 18000) + (forcedIssues.length ? "\n\nDETERMINISTIC FLAGS:\n- " + forcedIssues.join("\n- ") : "") }
+    { role: "user", content: "USER CONVERSATION AND CONSTRAINTS:\n" + userContext.slice(0, 24000) + "\n\nDRAFT ANSWER:\n" + String(draft || "").slice(0, 18000) + (forcedIssues.length ? "\n\nDETERMINISTIC FLAGS:\n- " + forcedIssues.join("\n- ") : "") }
   ];
   const reply = await PROVIDERS[providerName](reviewMessages, env);
   return parseVerifierJson(reply);
@@ -1394,9 +1396,10 @@ export default {
         }, 503);
       }
 
-      const latestUserText = [...messages].reverse().find(m => m.role === "user")?.content || "";
-      const highRisk = isHighRiskRequest(latestUserText);
-      let quantityIssues = quantityConstraintIssues(latestUserText, draft);
+      const userContextText = messages.filter(m => m.role === "user").slice(-12)
+        .map(message => String(message.content || "").slice(0, 12000)).join("\n\n");
+      const highRisk = isHighRiskRequest(userContextText);
+      let quantityIssues = quantityConstraintIssues(userContextText, draft);
       const verifierOrder = ["gemini", "groq", "openai", "anthropic"].filter(p => available[p] && p !== draftProvider);
       const verifierProvider = verifierOrder[0] || draftProvider;
       const process = [
@@ -1416,7 +1419,7 @@ export default {
         if (verification.decision === "revise") {
           if (typeof verification.corrected_answer === "string" && verification.corrected_answer.trim()) {
             finalReply = verification.corrected_answer.trim();
-            quantityIssues = quantityConstraintIssues(latestUserText, finalReply);
+            quantityIssues = quantityConstraintIssues(userContextText, finalReply);
           } else {
             verification.decision = "withhold";
             finalReply = "";
