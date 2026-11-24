@@ -3334,7 +3334,7 @@ if(dockContent){
 let ly=0;addEventListener('scroll',()=>{$('#dock').classList.toggle('hide',scrollY>ly&&scrollY>140);ly=scrollY},{passive:true});
 addEventListener('hashchange',()=>{
   if(!S.loggedIn){location.hash='#/login';return;}
-  render();scrollTo(0,0);const m=$('main');m.classList.remove('in');void m.offsetWidth;m.classList.add('in')
+  render();if(location.hash==='#/settings')refreshMicrosoftConnectionStatus();scrollTo(0,0);const m=$('main');m.classList.remove('in');void m.offsetWidth;m.classList.add('in')
 });
 
 
