@@ -3400,8 +3400,8 @@ const AI_MAX_LOCAL_FILE=5*1024*1024*1024,AI_MAX_BROWSER_BINARY=50*1024*1024,AI_L
 async function aiReadTextSample(file,maxChars=26000){
   if(file.size<=AI_LARGE_TEXT_SAMPLE){const text=await file.text();return{text:text.slice(0,maxChars),sampled:text.length>maxChars}}
   const part=Math.floor(maxChars/3),middle=Math.max(0,Math.floor(file.size/2)-Math.floor(part/2)),tail=Math.max(0,file.size-part),ranges=[[0,part],[middle,middle+part],[tail,file.size]],labels=['BEGINNING','MIDDLE','END'],chunks=[];
-  for(let i=0;i<ranges.length;i++){const [start,end]=ranges[i];chunks.push('--- '+labels[i]+' EXCERPT ---\\n'+await file.slice(start,end).text())}
-  return{text:'LARGE FILE SAMPLE. The original file is '+aiByteSize(file.size)+'. Only the following beginning, middle and ending excerpts were read locally; the original file was not uploaded.\\n\\n'+chunks.join('\\n\\n'),sampled:true}
+  for(let i=0;i<ranges.length;i++){const [start,end]=ranges[i];chunks.push('--- '+labels[i]+' EXCERPT ---\n'+await file.slice(start,end).text())}
+  return{text:'LARGE FILE SAMPLE. The original file is '+aiByteSize(file.size)+'. Only the following beginning, middle and ending excerpts were read locally; the original file was not uploaded.\n\n'+chunks.join('\n\n'),sampled:true}
 }
 function aiQueueFiles(list){
   const incoming=Array.from(list||[]);
