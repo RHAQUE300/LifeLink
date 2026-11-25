@@ -499,6 +499,20 @@ const PROVIDERS = {
 
 const COMPOSIO_API_BASE = "https://backend.composio.dev/api/v3.1";
 const COMPOSIO_MICROSOFT_TOOLKIT = "microsoft_365";
+const COMPOSIO_MICROSOFT_TOOLKITS = ["microsoft_365", "outlook", "one_drive", "excel"];
+
+// These personal-account configs omit organisation-only permissions.
+const COMPOSIO_PERSONAL_SCOPES = Object.freeze({
+  outlook: "Calendars.Read,Calendars.ReadWrite,Contacts.ReadWrite,Mail.Read,Mail.ReadWrite,Mail.Send,offline_access,User.Read",
+  one_drive: "Files.ReadWrite,offline_access",
+  excel: "Files.ReadWrite,offline_access,User.Read"
+});
+const COMPOSIO_MICROSOFT_CONNECT_OPTIONS = Object.freeze({
+  work: { toolkit: "microsoft_365", alias: "LifeLink Microsoft 365" },
+  personal_outlook: { toolkit: "outlook", alias: "LifeLink Personal Outlook" },
+  personal_onedrive: { toolkit: "one_drive", alias: "LifeLink Personal OneDrive" },
+  personal_excel: { toolkit: "excel", alias: "LifeLink Personal Excel" }
+});
 
 function composioProjectApiKey(env) {
   const key = typeof env.COMPOSIO_API_KEY === "string" ? env.COMPOSIO_API_KEY.trim() : "";
@@ -546,43 +560,50 @@ async function composioRequest(path, env, options = {}) {
   return data?.data && typeof data.data === "object" ? data.data : data;
 }
 
-async function composioMicrosoftAuthConfig(env) {
+async function composioMicrosoftAuthConfig(toolkitSlug, env) {
+  if (!COMPOSIO_MICROSOFT_TOOLKITS.includes(toolkitSlug)) throw new Error("Unsupported Microsoft toolkit.");
   const key = composioProjectApiKey(env);
   if (!env.GOOGLE_TOKENS) throw new Error("Worker KV storage is required to initialise the Microsoft connection.");
-  const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(key));
+  const scopes = COMPOSIO_PERSONAL_SCOPES[toolkitSlug] || "";
+  const digestInput = scopes ? key + "\n" + toolkitSlug + "\n" + scopes : key;
+  const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(digestInput));
   const fingerprint = Array.from(new Uint8Array(digest), byte => byte.toString(16).padStart(2, "0")).join("").slice(0, 24);
-  const cacheKey = "composio:auth-config:" + COMPOSIO_MICROSOFT_TOOLKIT + ":" + fingerprint;
+  const cacheKey = "composio:auth-config:" + toolkitSlug + ":" + fingerprint;
   const cached = await env.GOOGLE_TOKENS.get(cacheKey);
   if (cached && /^ac_[A-Za-z0-9_-]+$/.test(cached)) return cached;
 
   const created = await composioRequest("/auth_configs", env, {
     method: "POST",
     body: {
-      toolkit: { slug: COMPOSIO_MICROSOFT_TOOLKIT },
+      toolkit: { slug: toolkitSlug },
       auth_config: {
         type: "use_composio_managed_auth",
-        credentials: {},
+        credentials: scopes ? { scopes } : {},
         restrict_to_following_tools: []
       }
     }
   });
   const authConfigId = created?.auth_config?.id || created?.auth_config_id || created?.id;
   if (typeof authConfigId !== "string" || !/^ac_[A-Za-z0-9_-]+$/.test(authConfigId)) {
-    throw new Error("Composio did not return a valid Microsoft 365 auth configuration ID.");
+    throw new Error("Composio did not return a valid " + toolkitSlug + " auth configuration ID.");
   }
   await env.GOOGLE_TOKENS.put(cacheKey, authConfigId);
   return authConfigId;
 }
 
 async function composioMicrosoftAccounts(userId, env) {
-  const params = new URLSearchParams();
-  params.append("toolkit_slugs", COMPOSIO_MICROSOFT_TOOLKIT);
-  params.append("user_ids", userId);
-  params.append("limit", "100");
-  const result = await composioRequest("/connected_accounts?" + params.toString(), env);
-  const items = Array.isArray(result?.items) ? result.items : Array.isArray(result?.connected_accounts) ? result.connected_accounts : [];
-  return items.filter(item => item && item.user_id === userId &&
-    String(item.toolkit?.slug || item.toolkit_slug || "").toLowerCase() === COMPOSIO_MICROSOFT_TOOLKIT);
+  const groups = await Promise.all(COMPOSIO_MICROSOFT_TOOLKITS.map(async toolkitSlug => {
+    const params = new URLSearchParams();
+    params.append("toolkit_slugs", toolkitSlug);
+    params.append("user_ids", userId);
+    params.append("limit", "100");
+    const result = await composioRequest("/connected_accounts?" + params.toString(), env);
+    const items = Array.isArray(result?.items) ? result.items : Array.isArray(result?.connected_accounts) ? result.connected_accounts : [];
+    return items.filter(item => item && item.user_id === userId &&
+      String(item.toolkit?.slug || item.toolkit_slug || toolkitSlug).toLowerCase() === toolkitSlug)
+      .map(item => ({ ...item, toolkit_slug: toolkitSlug }));
+  }));
+  return groups.flat();
 }
 
 async function composioMicrosoftRoute(request, env, url, user) {
@@ -602,6 +623,7 @@ async function composioMicrosoftRoute(request, env, url, user) {
         accounts: accounts.map(account => ({
           id: account.id,
           status: account.status,
+          toolkit: account.toolkit_slug,
           alias: account.alias || "Microsoft account",
           createdAt: account.created_at || null,
           updatedAt: account.updated_at || null
@@ -617,13 +639,15 @@ async function composioMicrosoftRoute(request, env, url, user) {
     try { body = await request.json(); } catch { return json({ error: "Invalid JSON" }, 400); }
 
     if (path === "/api/microsoft/connect") {
-      const authConfigId = await composioMicrosoftAuthConfig(env);
+      const selection = COMPOSIO_MICROSOFT_CONNECT_OPTIONS[String(body.accountType || "work")];
+      if (!selection) return json({ error: "Choose a supported Microsoft account type." }, 400);
+      const authConfigId = await composioMicrosoftAuthConfig(selection.toolkit, env);
       const link = await composioRequest("/connected_accounts/link", env, {
         method: "POST",
         body: {
           auth_config_id: authConfigId,
           user_id: user.id,
-          alias: "LifeLink Microsoft 365",
+          alias: selection.alias,
           callback_url: "https://rhaque300.github.io/LifeLink/?microsoft=connected"
         }
       });
@@ -644,10 +668,17 @@ async function composioMicrosoftRoute(request, env, url, user) {
       const toolSlug = String(body.toolSlug || "").trim().toUpperCase();
       const accountId = String(body.accountId || "");
       const args = body.arguments && typeof body.arguments === "object" && !Array.isArray(body.arguments) ? body.arguments : null;
-      if (!/^MICROSOFT_365_[A-Z0-9_]{2,120}$/.test(toolSlug)) return json({ error: "Unsupported Microsoft 365 action." }, 400);
+      const toolkitByPrefix = [
+        ["MICROSOFT_365_", "microsoft_365"],
+        ["OUTLOOK_", "outlook"],
+        ["ONE_DRIVE_", "one_drive"],
+        ["EXCEL_", "excel"]
+      ];
+      const requiredToolkit = toolkitByPrefix.find(([prefix]) => toolSlug.startsWith(prefix))?.[1];
+      if (!requiredToolkit || !/^[A-Z0-9_]{8,140}$/.test(toolSlug)) return json({ error: "Unsupported Microsoft action." }, 400);
       if (!args || JSON.stringify(args).length > 24000) return json({ error: "Invalid or oversized tool arguments." }, 400);
-      const account = accounts.find(item => item.id === accountId && item.status === "ACTIVE");
-      if (!account) return json({ error: "Connect an active Microsoft 365 account first." }, 401);
+      const account = accounts.find(item => item.id === accountId && item.status === "ACTIVE" && item.toolkit_slug === requiredToolkit);
+      if (!account) return json({ error: "Connect an active " + requiredToolkit.replace(/_/g, " ") + " account first." }, 401);
       const result = await composioRequest("/tools/execute/" + encodeURIComponent(toolSlug), env, {
         method: "POST",
         body: { connected_account_id: accountId, user_id: user.id, version: "latest", arguments: args }
