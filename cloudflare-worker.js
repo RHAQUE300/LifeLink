@@ -500,9 +500,22 @@ const PROVIDERS = {
 const COMPOSIO_API_BASE = "https://backend.composio.dev/api/v3.1";
 const COMPOSIO_MICROSOFT_TOOLKIT = "microsoft_365";
 
-async function composioRequest(path, env, options = {}) {
+function composioProjectApiKey(env) {
   const key = typeof env.COMPOSIO_API_KEY === "string" ? env.COMPOSIO_API_KEY.trim() : "";
-  if (!key) throw new Error("Composio is not configured on the server.");
+  if (!key) throw new Error("Composio is not configured. Add a Platform Project API key to the Production Worker secret COMPOSIO_API_KEY.");
+  if (!key.startsWith("ak_")) {
+    const kind = key.startsWith("ck_")
+      ? "This is a For You/Connect consumer key (ck_), not a Platform Project API key."
+      : key.startsWith("uak_")
+        ? "This is a Composio User API key (uak_), not a Platform Project API key."
+        : "The configured credential is not recognised as a Composio Platform Project API key.";
+    throw new Error(kind + " LifeLink requires an active Platform Project API key (ak_...) sent as x-api-key. Get it from Platform → Settings → Project Settings → API Keys.");
+  }
+  return key;
+}
+
+async function composioRequest(path, env, options = {}) {
+  const key = composioProjectApiKey(env);
   const response = await fetch(COMPOSIO_API_BASE + path, {
     method: options.method || "GET",
     headers: {
@@ -516,26 +529,46 @@ async function composioRequest(path, env, options = {}) {
   let data = {};
   try { data = await response.json(); } catch {}
   if (!response.ok) {
-    const detail = data?.message || data?.error?.message || data?.error || "Composio request failed (" + response.status + ")";
-    console.error("Composio API error:", response.status, String(detail).slice(0, 400));
-    throw new Error("Composio request failed (" + response.status + ").");
+    const apiError = data?.error && typeof data.error === "object" ? data.error : {};
+    const detail = apiError.message || data?.message ||
+      (typeof data?.error === "string" ? data.error : "Composio request failed (" + response.status + ")");
+    const requestId = apiError.request_id || data?.request_id || "";
+    const safeDetail = String(detail).replace(/(?:ak_|ck_|uak_)[A-Za-z0-9_-]+/g, "[redacted]").slice(0, 300);
+    console.error("Composio API error:", response.status, safeDetail, requestId || "");
+    if (response.status === 401) {
+      throw new Error("Composio rejected the Platform API credential (401). Use an active, full-access Project API key (ak_...) from the same Composio Platform project. For You/Connect keys (ck_...) and User API keys (uak_...) cannot authenticate this LifeLink API. " + (requestId ? "Composio request ID: " + requestId : ""));
+    }
+    if (response.status === 403) {
+      throw new Error("Composio denied this request (403). Check that the Project API key has full access to auth configs, connected accounts and tool execution. " + (requestId ? "Composio request ID: " + requestId : ""));
+    }
+    throw new Error("Composio request failed (" + response.status + "): " + safeDetail + (requestId ? " [request " + requestId + "]" : ""));
   }
   return data?.data && typeof data.data === "object" ? data.data : data;
 }
 
 async function composioMicrosoftAuthConfig(env) {
+  const key = composioProjectApiKey(env);
   if (!env.GOOGLE_TOKENS) throw new Error("Worker KV storage is required to initialise the Microsoft connection.");
-  const cacheKey = "composio:auth-config:" + COMPOSIO_MICROSOFT_TOOLKIT;
+  const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(key));
+  const fingerprint = Array.from(new Uint8Array(digest), byte => byte.toString(16).padStart(2, "0")).join("").slice(0, 24);
+  const cacheKey = "composio:auth-config:" + COMPOSIO_MICROSOFT_TOOLKIT + ":" + fingerprint;
   const cached = await env.GOOGLE_TOKENS.get(cacheKey);
   if (cached && /^ac_[A-Za-z0-9_-]+$/.test(cached)) return cached;
 
   const created = await composioRequest("/auth_configs", env, {
     method: "POST",
-    body: { toolkit: { slug: COMPOSIO_MICROSOFT_TOOLKIT } }
+    body: {
+      toolkit: { slug: COMPOSIO_MICROSOFT_TOOLKIT },
+      auth_config: {
+        type: "use_composio_managed_auth",
+        credentials: {},
+        restrict_to_following_tools: []
+      }
+    }
   });
   const authConfigId = created?.auth_config?.id || created?.auth_config_id || created?.id;
-  if (typeof authConfigId !== "string" || !authConfigId) {
-    throw new Error("Composio did not return a Microsoft 365 auth configuration ID.");
+  if (typeof authConfigId !== "string" || !/^ac_[A-Za-z0-9_-]+$/.test(authConfigId)) {
+    throw new Error("Composio did not return a valid Microsoft 365 auth configuration ID.");
   }
   await env.GOOGLE_TOKENS.put(cacheKey, authConfigId);
   return authConfigId;
@@ -555,7 +588,9 @@ async function composioMicrosoftAccounts(userId, env) {
 async function composioMicrosoftRoute(request, env, url, user) {
   const path = url.pathname;
   if (!["/api/microsoft/connect", "/api/microsoft/status", "/api/microsoft/execute", "/api/microsoft/disconnect"].includes(path)) return null;
-  if (!env.COMPOSIO_API_KEY) return json({ error: "Composio API key is not configured on the Worker." }, 503);
+  if (!env.COMPOSIO_API_KEY) return json({ error: "Composio is not configured. Add a Platform Project API key to the Production Worker secret COMPOSIO_API_KEY." }, 503);
+  try { composioProjectApiKey(env); }
+  catch (error) { return json({ error: String(error.message || "Invalid Composio API credential") }, 503); }
   if (!env.GOOGLE_TOKENS) return json({ error: "Worker KV storage is not configured." }, 503);
 
   try {
