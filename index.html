@@ -2337,7 +2337,7 @@ function startAIOrganiserLoop(){
     if(!S||!S.loggedIn||S.aiOrganizer?.enabled===false)return;
     const seconds=Math.min(60,Math.max(10,Number(S.aiOrganizer?.intervalSeconds)||30));
     aiOrganiserTimer=setTimeout(async()=>{
-      if(S?.loggedIn&&S.aiOrganizer?.enabled!==false){if(!document.hidden)await runAIOrganiser();schedule()}
+      if(S?.loggedIn&&supabaseSession?.access_token&&S.aiOrganizer?.enabled!==false){await runAIOrganiser();schedule()}
     },seconds*1000);
   };
   if(S?.loggedIn&&supabaseSession?.access_token&&S.aiOrganizer?.enabled!==false){setTimeout(()=>{if(S?.loggedIn&&supabaseSession?.access_token&&S.aiOrganizer?.enabled!==false)runAIOrganiser()},1500);schedule()}
