@@ -475,10 +475,14 @@ pre,code{max-width:100%;overflow-wrap:anywhere;white-space:pre-wrap}
 .ll-notif-dismiss{margin-left:auto;color:var(--muted,#858b99);font-size:19px;line-height:1}
 @media(max-width:560px){.ll-notif-card{padding:13px;border-radius:14px}.ll-notif-heading{font-size:16px}}
 
-/* Hide native scrollbar chrome without reserving a visible gutter. Scrolling remains enabled. */
-html{scrollbar-gutter:auto!important;scrollbar-width:none!important}
-html,body,*{scrollbar-width:none!important;-ms-overflow-style:none!important}
-html::-webkit-scrollbar,body::-webkit-scrollbar,*::-webkit-scrollbar{display:none!important;width:0!important;height:0!important}
+/* Keep scrollbar tracks unobtrusive; reveal the thumb only while its scroll area is hovered. */
+html{scrollbar-gutter:auto!important;scrollbar-width:thin!important;scrollbar-color:transparent transparent!important}
+html,body,*{-ms-overflow-style:auto!important;scrollbar-width:thin!important;scrollbar-color:transparent transparent!important}
+html:hover,body:hover,*:hover{scrollbar-color:rgba(100,112,135,.55) transparent!important}
+html::-webkit-scrollbar,body::-webkit-scrollbar,*::-webkit-scrollbar{width:8px!important;height:8px!important;background:transparent!important}
+html::-webkit-scrollbar-track,body::-webkit-scrollbar-track,*::-webkit-scrollbar-track{background:transparent!important}
+html::-webkit-scrollbar-thumb,body::-webkit-scrollbar-thumb,*::-webkit-scrollbar-thumb{background:transparent!important;border-radius:20px!important}
+html:hover::-webkit-scrollbar-thumb,body:hover::-webkit-scrollbar-thumb,*:hover::-webkit-scrollbar-thumb{background:rgba(100,112,135,.55)!important}
 /* Keep the Task Bubbles heading and its first card closely, evenly spaced. */
 .home-task-bubbles-head{margin-bottom:3px!important}
 .home-task-bubbles-head+.bub{margin-top:0!important}
