@@ -4507,6 +4507,8 @@ document.addEventListener("click",async e=>{
     S={loggedIn:false};currentEmail=null;
   }
   try{
+    // Re-apply the user's saved appearance after Supabase restores the signed-in account.
+    applyPrefs();
     syncTimer();
     loadAIHistory();
     render();
