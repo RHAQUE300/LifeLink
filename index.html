@@ -1970,6 +1970,160 @@ async function aiOrganiserCollectGoogle(sources,warnings){
   await Promise.all(work);
 }
 
+
+async function aiOrganiserCollectMicrosoft(sources,warnings){
+  await refreshMicrosoftConnectionStatus();
+  const accounts=(Array.isArray(microsoftConnectionStatus&&microsoftConnectionStatus.accounts)?microsoftConnectionStatus.accounts:[])
+    .filter(account=>String(account.status||"").toUpperCase()==="ACTIVE");
+  const now=new Date(),since=new Date(now.getTime()-14*86400000).toISOString();
+  const end=new Date(now.getTime()+30*86400000).toISOString();
+  const timezone=Intl.DateTimeFormat().resolvedOptions().timeZone||"UTC";
+  for(const account of accounts){
+    const toolkit=aiOrganiserAccountToolkit(account);
+    const prefix=toolkit==="outlook"?"OUTLOOK_":toolkit==="microsoft_365"?"MICROSOFT_365_":null;
+    if(prefix){
+      const mailAndCalendar=await Promise.allSettled([
+        (async()=>{
+          const listed=await aiOrganiserMicrosoft(account,prefix+"LIST_MESSAGES",{
+            top:18,received_date_time_ge:since,
+            select:["id","subject","from","receivedDateTime","bodyPreview","webLink","importance","isRead"],
+            orderby:["receivedDateTime desc"]
+          });
+          const messages=aiOrganiserFindArray(listed,["messages","value","items"]);
+          const details=await Promise.all(messages.slice(0,6).map(async message=>{
+            const id=message.id||message.message_id;if(!id)return message;
+            try{
+              const full=await aiOrganiserMicrosoft(account,prefix+"GET_MESSAGE",{
+                message_id:id,select:["id","subject","from","toRecipients","receivedDateTime","body","bodyPreview","webLink","importance","isRead"]
+              });
+              return full&&full.message?full.message:full;
+            }catch{return message}
+          }));
+          details.forEach((message,index)=>{
+            const id=message.id||(messages[index]&&(messages[index].id||messages[index].message_id));if(!id)return;
+            const sender=message.from&&message.from.emailAddress?
+              (message.from.emailAddress.address||message.from.emailAddress.name):message.from||"";
+            const body=message.body&&message.body.content?message.body.content:
+              message.body||message.bodyPreview||(messages[index]&&messages[index].bodyPreview)||"";
+            aiOrganiserAddSource(sources,{
+              id:"microsoft:"+account.id+":mail:"+id,
+              service:toolkit==="outlook"?"Outlook":"Microsoft 365 Outlook",
+              kind:"email",title:message.subject||(messages[index]&&messages[index].subject)||"Email",
+              when:message.receivedDateTime||(messages[index]&&messages[index].receivedDateTime)||"",
+              text:"Account: "+(account.alias||toolkit)+"\nFrom: "+aiOrganiserGetText(sender)+
+                "\nSubject: "+(message.subject||(messages[index]&&messages[index].subject)||"")+
+                "\nImportance: "+(message.importance||"")+"\nRead: "+String(message.isRead===undefined?"":message.isRead)+
+                "\nContent:\n"+aiOrganiserGetText(body),
+              url:message.webLink||(messages[index]&&messages[index].webLink)||""
+            });
+          });
+        })(),
+        (async()=>{
+          const result=await aiOrganiserMicrosoft(account,prefix+"GET_CALENDAR_VIEW",{
+            start_datetime:now.toISOString(),end_datetime:end,top:40,timezone:timezone,
+            select:["id","subject","start","end","location","organizer","bodyPreview","webLink","isCancelled","importance","responseStatus"]
+          });
+          const events=aiOrganiserFindArray(result,["events","value","items"]);
+          events.filter(event=>!event.isCancelled).forEach(event=>{
+            aiOrganiserAddSource(sources,{
+              id:"microsoft:"+account.id+":event:"+event.id,
+              service:toolkit==="outlook"?"Outlook Calendar":"Microsoft 365 Calendar",
+              kind:"event",title:event.subject||"Calendar event",
+              when:aiOrganiserGetText(event.start),
+              text:"Account: "+(account.alias||toolkit)+"\nTitle: "+(event.subject||"")+
+                "\nStarts: "+aiOrganiserGetText(event.start)+"\nEnds: "+aiOrganiserGetText(event.end)+
+                "\nLocation: "+aiOrganiserGetText(event.location)+"\nOrganiser: "+aiOrganiserGetText(event.organizer)+
+                "\nDetails: "+aiOrganiserGetText(event.bodyPreview)+"\nResponse: "+aiOrganiserGetText(event.responseStatus),
+              url:event.webLink||""
+            });
+          });
+        })()
+      ]);
+      mailAndCalendar.forEach((result,index)=>{
+        if(result.status==="rejected")warnings.push((index===0?"Microsoft email":"Microsoft calendar")+": "+String(result.reason&&result.reason.message||result.reason).slice(0,150));
+      });
+    }
+    if(toolkit==="microsoft_365"){
+      try{
+        const listsResult=await aiOrganiserMicrosoft(account,"MICROSOFT_365_LIST_TASK_LISTS",{top:30});
+        const lists=aiOrganiserFindArray(listsResult,["taskLists","lists","value","items"]);
+        const batches=await Promise.all(lists.slice(0,5).map(async list=>{
+          try{
+            const result=await aiOrganiserMicrosoft(account,"MICROSOFT_365_LIST_TASKS",{list_id:list.id,top:40});
+            return aiOrganiserFindArray(result,["tasks","value","items"]).map(task=>({list:list,task:task}));
+          }catch{return []}
+        }));
+        batches.flat().slice(0,40).forEach(pair=>{
+          const list=pair.list,task=pair.task;
+          aiOrganiserAddSource(sources,{
+            id:"microsoft:"+account.id+":todo:"+task.id,service:"Microsoft To Do",kind:"existing-task",
+            title:task.title||"Existing Microsoft To Do task",
+            when:aiOrganiserGetText(task.dueDateTime),
+            text:"Already exists in Microsoft To Do. List: "+(list.displayName||list.name||"")+
+              "\nTitle: "+(task.title||"")+"\nStatus: "+(task.status||"")+
+              "\nDue: "+aiOrganiserGetText(task.dueDateTime)+"\nNotes: "+aiOrganiserGetText(task.body)
+          });
+        });
+      }catch(error){warnings.push("Microsoft To Do: "+String(error&&error.message||error).slice(0,150))}
+    }
+    if(toolkit==="one_drive"){
+      for(const query of ["invoice","assignment","schedule"]){
+        try{
+          const result=await aiOrganiserMicrosoft(account,"ONE_DRIVE_SEARCH_ITEMS",{
+            q:query,top:8,select:"id,name,webUrl,lastModifiedDateTime,file,parentReference,description,size"
+          });
+          aiOrganiserFindArray(result,["items","value","files","results"]).forEach(file=>aiOrganiserAddSource(sources,{
+            id:"microsoft:"+account.id+":file:"+file.id,service:"Microsoft OneDrive",kind:"file",
+            title:file.name||"OneDrive file",when:file.lastModifiedDateTime||"",
+            text:"Account: "+(account.alias||"OneDrive")+"\nFile: "+(file.name||"")+
+              "\nLast modified: "+(file.lastModifiedDateTime||"")+"\nDescription: "+(file.description||""),
+            url:file.webUrl||file.web_url||""
+          }));
+        }catch(error){warnings.push("OneDrive search ("+query+"): "+String(error&&error.message||error).slice(0,120))}
+      }
+    }
+    if(toolkit==="excel"){
+      const workbooks=new Map();
+      for(const query of ["assignment","schedule","budget"]){
+        try{
+          const result=await aiOrganiserMicrosoft(account,"EXCEL_SEARCH_FILES",{
+            query:query,top:6,scope:"drive",drive_id:"me",file_extensions:[".xlsx",".xlsm"]
+          });
+          aiOrganiserFindArray(result,["files","items","value","results"]).forEach(file=>{
+            if(file.id&&!workbooks.has(file.id))workbooks.set(file.id,file);
+          });
+        }catch(error){warnings.push("Excel search ("+query+"): "+String(error&&error.message||error).slice(0,120))}
+      }
+      for(const file of Array.from(workbooks.values()).slice(0,3)){
+        try{
+          const worksheetsResult=await aiOrganiserMicrosoft(account,"EXCEL_LIST_WORKSHEETS",{item_id:file.id,drive_id:"me"});
+          const worksheets=aiOrganiserFindArray(worksheetsResult,["worksheets","items","value"]).slice(0,2);
+          for(const sheet of worksheets){
+            const sheetName=sheet.name||sheet.id;if(!sheetName)continue;
+            try{
+              const range=await aiOrganiserMicrosoft(account,"EXCEL_GET_WORKSHEET_USED_RANGE",{
+                item_id:file.id,drive_id:"me",worksheet_id:sheetName,values_only:true
+              });
+              const payload=range&&range.data?range.data:(range&&range.result?range.result:range);
+              const values=payload&&payload.values?payload.values:(payload&&payload.range&&payload.range.values?payload.range.values:[]);
+              if(!Array.isArray(values)||!values.length)continue;
+              const compact=values.slice(0,35).map(row=>Array.isArray(row)?row.slice(0,12):[row]);
+              aiOrganiserAddSource(sources,{
+                id:"microsoft:"+account.id+":excel:"+file.id+":"+sheetName,
+                service:"Microsoft Excel",kind:"spreadsheet",title:(file.name||"Workbook")+" · "+sheetName,
+                when:file.lastModifiedDateTime||"",
+                text:"Workbook: "+(file.name||"")+"\nWorksheet: "+sheetName+
+                  "\nCell values (up to 35 rows × 12 columns):\n"+JSON.stringify(compact),
+                url:file.webUrl||file.web_url||""
+              });
+            }catch(error){warnings.push("Excel worksheet "+sheetName+": "+String(error&&error.message||error).slice(0,110))}
+          }
+        }catch(error){warnings.push("Excel workbook "+(file.name||"")+": "+String(error&&error.message||error).slice(0,120))}
+      }
+    }
+  }
+}
+
 function googleServiceMarkup(){
   const id=activeGoogleService,service=GOOGLE_SERVICE_CATALOG.find(item=>item.id===id);
   if(!service)return '<div class="google-workspace-empty">Choose a Google service.</div>';
