@@ -474,6 +474,8 @@ pre,code{max-width:100%;overflow-wrap:anywhere;white-space:pre-wrap}
 .ll-notif-more,.ll-notif-dismiss{border:0;background:transparent;color:var(--ac);font:inherit;font-size:12px;padding:5px 3px;cursor:pointer}
 .ll-notif-dismiss{margin-left:auto;color:var(--muted,#858b99);font-size:19px;line-height:1}
 @media(max-width:560px){.ll-notif-card{padding:13px;border-radius:14px}.ll-notif-heading{font-size:16px}}
+
+.ll-notif-card.swiping{transition:none!important}.ll-notif-card.swiped{transform:translateX(-110%);opacity:0}
 </style>
 </head><body>
 
@@ -1141,8 +1143,8 @@ function askConfirm(title,msg,onYes){
 const F=[['title','Title*','text'],['src','Source','text'],['pri','Priority','select',['High','Medium','Low']],['due','Deadline','date']],
 EF=[['title','Title*','text'],['date','Date*','date'],['time','Time','time'],['task','Also create a task bubble','checkbox']];
 const openT=()=>S.tasks.filter(t=>!t.done).sort((a,b)=>(a.due||'9').localeCompare(b.due||'9'));
-const bubble=t=>`<div class="bub" onclick="openTaskBubble('${t.id}')"><span class="num">${t.n}</span><div style="flex:1;min-width:0"><b>${esc(t.title)}</b><div class="sub" style="margin:0;font-size:12px">${esc(t.src)} · ${t.due||'No deadline'}</div></div><span class="tag ${PC[t.pri]}">${t.pri}</span></div>`;
-function openTaskBubble(id){location.hash='#/task/'+id}
+const bubble=t=>`<div class="bub" onclick="openTaskBubble('${t.id}')"><div style="flex:1;min-width:0"><b>${esc(t.title)}</b><div class="sub" style="margin:0;font-size:12px">${esc(t.src)} · ${t.due||'No deadline'}</div></div><span class="tag ${PC[t.pri]}">${t.pri}</span></div>`;
+function linkCommonName(l){let h='';try{h=new URL(l.u).hostname.replace(/^www\\./,'').toLowerCase()}catch{}const m={'mail.google.com':'Gmail','drive.google.com':'Google Drive','calendar.google.com':'Google Calendar','classroom.google.com':'Google Classroom','docs.google.com':'Google Docs','outlook.live.com':'Outlook','outlook.office.com':'Outlook','onedrive.live.com':'OneDrive','notion.so':'Notion','github.com':'GitHub','slack.com':'Slack','discord.com':'Discord','linear.app':'Linear'};return m[h]||l.t||h||'Link'}\nfunction openTaskBubble(id){location.hash='#/task/'+id}
 
 /* Login View */
 const V_login=()=>`<div style="display:grid;place-items:center;min-height:75vh"><div class="glass card" style="width:min(440px,94vw);padding:36px;text-align:center">
@@ -1221,7 +1223,7 @@ settings:()=>`<h1>Settings</h1><p class="sub">Account: <b>${esc(currentEmail)}</
 <div class="glass card"><h2>AI learning &amp; memory</h2><p class="sub" style="font-size:13px">LifeLink can learn from explicit preferences and your feedback. Memories are stored locally with this prototype’s account data; they do not retrain the underlying model.</p><div class="row"><label style="flex:1">Automatically learn explicit preferences and corrections</label><input id="ai-learn-enabled" type="checkbox" ${S.aiLearning?.enabled!==false?'checked':''} style="width:auto"></div><p class="sub" style="font-size:12px">${(S.aiLearning?.memories||[]).length} saved memories · ${(S.aiLearning?.feedback||[]).length} feedback examples</p><div style="max-height:220px;overflow:auto">${(S.aiLearning?.memories||[]).length?S.aiLearning.memories.slice(-12).reverse().map(m=>`<div class="row" style="align-items:flex-start"><span style="flex:1;font-size:12px">${esc(m.text||'')}</span><button class="btn" data-a="aimemdel" data-i="${m.id}" style="padding:2px 7px">×</button></div>`).join(''):'<p class="sub">No saved memories yet. Explicit preferences and corrections can be learned from chat.</p>'}</div><div class="row" style="border:0;flex-wrap:wrap"><button class="btn" data-a="aimemclear">Clear learned memories &amp; feedback</button></div></div>
 <div class="glass card"><h2>Data</h2><div class="row" style="border:0;flex-wrap:wrap"><button class="btn" data-a="exp">Export JSON</button><label class="btn">Import JSON<input id="imp" type="file" accept=".json" hidden></label><button class="btn" data-a="rmdemo">Remove sample data</button><button class="btn" data-a="reset">Reset account data</button></div></div></div>`,
 task:id=>{const t=S.tasks.find(x=>x.id==id);if(!t)return `<h1>Task not found</h1><a class="btn" href="#/todo">Back to To Do</a>`;U.tid=id;
- return `<h1>#${t.n} ${esc(t.title)}</h1><p class="sub">${esc(t.src)} · <span class="tag ${PC[t.pri]}">${t.pri}</span> · Due ${t.due||'—'} · ${t.done?'Completed':'In progress'}</p><div class="grid" style="grid-template-columns:1fr 300px"><div class="col"><div class="glass card"><h2>Progress <span id="wpv">${t.prog}%</span></h2><input id="wp" type="range" min="0" max="100" value="${t.prog}" aria-label="Progress"><div class="row" style="border:0"><button class="btn${t.done?'':' pri'}" data-a="tick2" data-i="${t.id}">${t.done?'Reopen':'Mark complete'}</button><button class="btn" data-a="edit" data-i="${t.id}">Edit details</button></div></div><div class="glass card"><h2>Notes</h2><textarea id="wn" rows="10" placeholder="Write here. Saved automatically.">${esc(t.notes)}</textarea></div><div class="glass card"><h2>Resources and links</h2>${t.links.map((l,li)=>`<div class="row"><a href="#" data-a="openlink" data-k="task" data-i="${li}">${esc(l.t)} ↗</a></div>`).join('')||empty('No links yet')}<button class="btn" data-a="addlink" data-i="${t.id}">Add link</button></div></div><aside class="glass card"><h2>Switch task</h2>${openT().map(x=>`<div class="bub" onclick="openTaskBubble('${x.id}')" style="${x.id==id?'outline:2px solid var(--ac)':''}"><span class="num">${x.n}</span><b>${esc(x.title)}</b></div>`).join('')||empty('No open tasks')}</aside></div>`}};
+ return `<h1>#${t.n} ${esc(t.title)}</h1><p class="sub">${esc(t.src)} · <span class="tag ${PC[t.pri]}">${t.pri}</span> · Due ${t.due||'—'} · ${t.done?'Completed':'In progress'}</p><div class="grid" style="grid-template-columns:1fr 300px"><div class="col"><div class="glass card"><h2>Progress <span id="wpv">${t.prog}%</span></h2><input id="wp" type="range" min="0" max="100" value="${t.prog}" aria-label="Progress"><div class="row" style="border:0"><button class="btn${t.done?'':' pri'}" data-a="tick2" data-i="${t.id}">${t.done?'Reopen':'Mark complete'}</button><button class="btn" data-a="edit" data-i="${t.id}">Edit details</button></div></div><div class="glass card"><h2>Notes</h2><textarea id="wn" rows="10" placeholder="Write here. Saved automatically.">${esc(t.notes)}</textarea></div><div class="glass card"><h2>Resources and links</h2>${t.links.map((l,li)=>`<div class="row"><a href="#" data-a="openlink" data-k="task" data-i="${li}">${esc(linkCommonName(l))} ↗</a></div>`).join('')||empty('No links yet')}<button class="btn" data-a="addlink" data-i="${t.id}">Add link</button></div></div><aside class="glass card"><h2>Switch task</h2>${openT().map(x=>`<div class="bub" onclick="openTaskBubble('${x.id}')" style="${x.id==id?'outline:2px solid var(--ac)':''}"><b>${esc(x.title)}</b></div>`).join('')||empty('No open tasks')}</aside></div>`}};
 
 function tl(){const R={High:0,Medium:1,Low:2},q=U.q.toLowerCase();
  const a=S.tasks.filter(t=>(U.f=='All'?!(S.p.hideDone&&t.done):(U.f=='Done')==t.done)&&(t.title+t.src).toLowerCase().includes(q)).sort((x,y)=>U.s=='Priority'?R[x.pri]-R[y.pri]:U.s=='Source'?x.src.localeCompare(y.src):(x.due||'9').localeCompare(y.due||'9'));
@@ -2562,6 +2564,13 @@ function closeIsland(){
   document.body.classList.remove('google-manager-active');
   islandMode=null;
 }
+
+
+let llSwipe=null;
+document.addEventListener('pointerdown',e=>{const card=e.target.closest('.ll-notif-card');if(!card||e.target.closest('button'))return;llSwipe={card,x:e.clientX,y:e.clientY,id:card.dataset.i}},{passive:true});
+document.addEventListener('pointermove',e=>{if(!llSwipe)return;const dx=e.clientX-llSwipe.x,dy=e.clientY-llSwipe.y;if(Math.abs(dy)>Math.abs(dx)*1.15){llSwipe=null;return}if(dx<0){llSwipe.card.style.transform='translateX('+Math.max(-180,dx)+'px)'}},{passive:true});
+document.addEventListener('pointerup',()=>{if(!llSwipe)return;const c=llSwipe.card,dx=parseFloat((c.style.transform.match(/-?[0-9.]+px/)||['0px'])[0]);if(dx<-90){c.classList.add('swiped');const id=llSwipe.id;setTimeout(()=>dismissNotif(id),180)}else c.style.transform='';llSwipe=null},{passive:true});
+document.addEventListener('pointercancel',()=>{if(llSwipe){llSwipe.card.style.transform='';llSwipe=null}},{passive:true});
 
 function dismissNotif(id){
   clearResetFlag(S.notifs.find(n=>n.id===id));
