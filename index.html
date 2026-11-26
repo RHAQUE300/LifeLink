@@ -1825,6 +1825,151 @@ async function disconnectMicrosoft(accountId){
   });
 }
 
+
+/* ---------- AI connector organiser helpers ---------- */
+let aiOrganiserBusy=false;
+function aiOrganiserClean(value,max=5000){
+  if(value===null||value===undefined)return "";
+  let text=typeof value==="string"?value:JSON.stringify(value);
+  return String(text).replace(/<script[\s\S]*?<\/script>/gi," ").replace(/<style[\s\S]*?<\/style>/gi," ")
+    .replace(/<[^>]+>/g," ").replace(/&nbsp;/gi," ").replace(/&amp;/gi,"&")
+    .replace(/&lt;/gi,"<").replace(/&gt;/gi,">").replace(/&#39;|&apos;/gi,"'")
+    .replace(/&quot;/gi,'"').replace(/\s+/g," ").trim().slice(0,max);
+}
+function aiOrganiserFindArray(value,keys,depth=0){
+  if(Array.isArray(value))return value;
+  if(!value||typeof value!=="object"||depth>6)return [];
+  for(const key of keys){if(Array.isArray(value[key]))return value[key]}
+  for(const key of ["data","result","response_data","output","response","payload","value"]){
+    if(value[key]&&typeof value[key]==="object"){
+      const found=aiOrganiserFindArray(value[key],keys,depth+1);
+      if(found.length)return found;
+    }
+  }
+  return [];
+}
+function aiOrganiserGetText(value){
+  if(value===null||value===undefined)return "";
+  if(typeof value==="string")return value;
+  if(typeof value==="number"||typeof value==="boolean")return String(value);
+  if(typeof value==="object"){
+    if(typeof value.content==="string")return value.content;
+    if(typeof value.text==="string")return value.text;
+    if(typeof value.preview==="string")return value.preview;
+    if(typeof value.value==="string")return value.value;
+    try{return JSON.stringify(value)}catch{return ""}
+  }
+  return "";
+}
+function aiOrganiserAddSource(sources,source){
+  if(sources.length>=70||!source||!source.id)return;
+  if(sources.some(item=>item.id===String(source.id)))return;
+  const url=String(source.url||"");
+  sources.push({
+    id:String(source.id).slice(0,220),
+    service:String(source.service||"Connector").slice(0,60),
+    kind:String(source.kind||"record").slice(0,30),
+    title:aiOrganiserClean(source.title||"Untitled source",180),
+    when:String(source.when||"").slice(0,60),
+    text:aiOrganiserClean(source.text||"",6500),
+    url:/^https?:\/\/\S+$/i.test(url)?url.slice(0,1200):""
+  });
+}
+async function aiOrganiserMicrosoft(account,toolSlug,args){
+  const result=await microsoftApi("/api/microsoft/execute","POST",{
+    accountId:account.id,toolSlug:toolSlug,arguments:args||{}
+  });
+  return result&&result.result?result.result:result;
+}
+function aiOrganiserAccountToolkit(account){
+  return String(account&& (account.toolkit||account.toolkit_slug||account.toolkitSlug)||"").toLowerCase();
+}
+async function aiOrganiserCollectGoogle(sources,warnings){
+  await refreshGoogleConnectionStatus();
+  const accounts=Array.isArray(googleConnectionStatus&&googleConnectionStatus.accounts)?googleConnectionStatus.accounts:[];
+  const account=accounts.find(item=>item.id===S.googleActiveAccountId)||accounts[0];
+  if(!account)return;
+  const accountLabel=account.email||"Google account";
+  const work=[];
+  work.push((async()=>{
+    try{
+      const result=await requestGoogleService("gmail.list",{query:"in:inbox newer_than:14d",maxResults:25});
+      const messages=Array.isArray(result&&result.messages)?result.messages:[];
+      const details=await Promise.all(messages.slice(0,7).map(async message=>{
+        try{
+          const detail=await requestGoogleService("gmail.get",{messageId:message.id});
+          return detail&&detail.message?detail.message:detail;
+        }catch{return message}
+      }));
+      details.forEach((message,index)=>{
+        const id=message.id||(messages[index]&&messages[index].id);if(!id)return;
+        const text=[message.body,message.snippet,message.bodyPreview].filter(Boolean).join("\n\n");
+        aiOrganiserAddSource(sources,{
+          id:"google:gmail:"+id,service:"Google Gmail",kind:"email",
+          title:message.subject||(messages[index]&&messages[index].subject)||"Email",
+          when:message.date||message.internalDate||(messages[index]&&messages[index].date)||"",
+          text:"Account: "+accountLabel+"\nFrom: "+(message.from||(messages[index]&&messages[index].from)||"")+
+            "\nTo: "+(message.to||"")+"\nSubject: "+(message.subject||(messages[index]&&messages[index].subject)||"")+
+            "\nContent:\n"+text,
+          url:"https://mail.google.com/mail/u/0/#all/"+encodeURIComponent(id)
+        });
+      });
+    }catch(error){warnings.push("Google Gmail: "+String(error&&error.message||error).slice(0,150))}
+  })());
+  work.push((async()=>{
+    try{
+      const now=new Date(),end=new Date(now.getTime()+30*86400000);
+      const result=await requestGoogleService("calendar.list",{maxResults:80,timeMin:now.toISOString(),timeMax:end.toISOString()});
+      (Array.isArray(result&&result.events)?result.events:[]).forEach(event=>{
+        if(event.status==="cancelled")return;
+        aiOrganiserAddSource(sources,{
+          id:"google:calendar:"+event.id,service:"Google Calendar",kind:"event",
+          title:event.summary||"Calendar event",when:event.start||"",
+          text:"Account: "+accountLabel+"\nTitle: "+(event.summary||"")+"\nStarts: "+(event.start||"")+
+            "\nEnds: "+(event.end||"")+"\nLocation: "+(event.location||"")+
+            "\nDescription: "+(event.description||"")+"\nAttendees: "+JSON.stringify(event.attendees||[]),
+          url:event.htmlLink||""
+        });
+      });
+    }catch(error){warnings.push("Google Calendar: "+String(error&&error.message||error).slice(0,150))}
+  })());
+  work.push((async()=>{
+    try{
+      const result=await requestGoogleService("drive.list",{query:"",view:"recent",pageSize:25});
+      const files=Array.isArray(result&&result.files)?result.files:[];
+      files.forEach(file=>aiOrganiserAddSource(sources,{
+        id:"google:drive:"+file.id,service:"Google Drive",kind:"file",
+        title:file.name||"Drive file",when:file.modifiedTime||"",
+        text:"Account: "+accountLabel+"\nFile: "+(file.name||"")+"\nType: "+(file.mimeType||"")+
+          "\nLast modified: "+(file.modifiedTime||"")+"\nDescription: "+(file.description||""),
+        url:file.webViewLink||""
+      }));
+    }catch(error){warnings.push("Google Drive: "+String(error&&error.message||error).slice(0,150))}
+  })());
+  work.push((async()=>{
+    try{
+      const listed=await googleServiceApiCall("tasks","/tasks/v1/users/@me/lists","GET",{maxResults:50});
+      const lists=Array.isArray(listed.items)?listed.items:[];
+      const taskSets=await Promise.all(lists.slice(0,5).map(async list=>{
+        try{
+          const result=await googleServiceApiCall("tasks","/tasks/v1/lists/"+encodeURIComponent(list.id)+"/tasks","GET",{maxResults:50,showCompleted:false,showHidden:false});
+          return (Array.isArray(result.items)?result.items:[]).map(task=>({list:list,task:task}));
+        }catch{return []}
+      }));
+      taskSets.flat().slice(0,40).forEach(pair=>{
+        const list=pair.list,task=pair.task;
+        aiOrganiserAddSource(sources,{
+          id:"google:task:"+task.id,service:"Google Tasks",kind:"existing-task",
+          title:task.title||"Existing Google task",when:task.due||"",
+          text:"Already exists in Google Tasks. List: "+(list.title||"")+"\nTitle: "+(task.title||"")+
+            "\nStatus: "+(task.status||"")+"\nDue: "+(task.due||"")+"\nNotes: "+(task.notes||"")
+        });
+      });
+    }catch(error){warnings.push("Google Tasks: "+String(error&&error.message||error).slice(0,150))}
+  })());
+  await Promise.all(work);
+}
+
 function googleServiceMarkup(){
   const id=activeGoogleService,service=GOOGLE_SERVICE_CATALOG.find(item=>item.id===id);
   if(!service)return '<div class="google-workspace-empty">Choose a Google service.</div>';
