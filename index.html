@@ -1155,7 +1155,7 @@ function linkCommonName(l){
     'outlook.live.com':'Outlook','outlook.office.com':'Outlook','outlook.office365.com':'Outlook',
     'onedrive.live.com':'OneDrive','onedrive.com':'OneDrive','office.com':'Microsoft 365','microsoft365.com':'Microsoft 365',
     'word.cloud.microsoft':'Word','excel.cloud.microsoft':'Excel','powerpoint.cloud.microsoft':'PowerPoint',
-    'teams.microsoft.com':'Microsoft Teams','to-do.office.com':'Microsoft To Do','planner.cloud.microsoft':'Microsoft Planner',
+    'teams.microsoft.com':'Microsoft Teams','to-do.office.com':'Microsoft To Do','planner.cloud.microsoft':'Microsoft Planner','sharepoint.com':'SharePoint',
     'notion.so':'Notion','notion.site':'Notion','github.com':'GitHub','gitlab.com':'GitLab',
     'slack.com':'Slack','discord.com':'Discord','linear.app':'Linear','trello.com':'Trello',
     'dropbox.com':'Dropbox','box.com':'Box','icloud.com':'iCloud','figma.com':'Figma','canva.com':'Canva',
@@ -2608,6 +2608,7 @@ document.addEventListener('pointerup',()=>{
   if(!llSwipe)return;
   const {card,id,dx}=llSwipe;llSwipe=null;
   if(dx<=-96){
+    card.style.transform='';
     card.classList.add('swiped');
     setTimeout(()=>dismissNotif(id),190);
   }else{
