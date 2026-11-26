@@ -475,12 +475,13 @@ pre,code{max-width:100%;overflow-wrap:anywhere;white-space:pre-wrap}
 .ll-notif-dismiss{margin-left:auto;color:var(--muted,#858b99);font-size:19px;line-height:1}
 @media(max-width:560px){.ll-notif-card{padding:13px;border-radius:14px}.ll-notif-heading{font-size:16px}}
 
-/* Hide scrollbar chrome while preserving native scrolling. */
-html,body,*{scrollbar-width:none;-ms-overflow-style:none}
-html::-webkit-scrollbar,body::-webkit-scrollbar,*::-webkit-scrollbar{width:0;height:0;display:none}
-/* Slightly separate the Task Bubbles heading from its first card. */
-.home-task-bubbles-head{margin-bottom:6px}
-.home-task-bubbles-head+.bub{margin-top:2px}
+/* Hide native scrollbar chrome without reserving a visible gutter. Scrolling remains enabled. */
+html{scrollbar-gutter:auto!important;scrollbar-width:none!important}
+html,body,*{scrollbar-width:none!important;-ms-overflow-style:none!important}
+html::-webkit-scrollbar,body::-webkit-scrollbar,*::-webkit-scrollbar{display:none!important;width:0!important;height:0!important}
+/* Keep the Task Bubbles heading and its first card closely, evenly spaced. */
+.home-task-bubbles-head{margin-bottom:3px!important}
+.home-task-bubbles-head+.bub{margin-top:0!important}
 </style>
 </head><body>
 
