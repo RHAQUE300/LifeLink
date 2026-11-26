@@ -1216,6 +1216,7 @@ function syncTimer(){
 function enterApp(msg){
   resetTransientState();
   loadUserSession();
+  startAIOrganiserLoop();
   syncTimer();
   loadAIHistory();
   closeIsland();closeAIFull();
@@ -1452,6 +1453,12 @@ document.addEventListener('change',e=>{
       img.src=r.result;
     };
     r.readAsDataURL(f);
+  } else if(e.target.id==='ai-org-enabled'){
+    S.aiOrganizer.enabled=e.target.checked;save();startAIOrganiserLoop();toast(e.target.checked?'Automatic organisation enabled':'Automatic organisation paused');
+  } else if(e.target.id==='ai-org-interval'){
+    S.aiOrganizer.intervalSeconds=Math.min(60,Math.max(10,Number(e.target.value)||30));save();startAIOrganiserLoop();
+  } else if(e.target.id==='ai-org-priorities'){
+    S.aiOrganizer.preferences=String(e.target.value||'').slice(0,3000);save();
   } else if(e.target.id=='imp'&&e.target.files[0]){
     const inp=e.target,r=new FileReader();
     r.onload=()=>{try{
@@ -3706,7 +3713,7 @@ const X=(i,b)=>{const t=S.tasks.find(x=>x.id==i),delT=()=>{S.tasks=S.tasks.filte
  tick2:()=>{t.done=!t.done;if(t.done)t.prog=100;save();render()},
  newtask:()=>ask('New task',F,{pri:S.p.dPri},o=>{addTask(o);render()}),
  organise:()=>runAIOrganiser(),
- edit:()=>ask('Edit task',F,t,o=>{Object.assign(t,o);save();render()},delT),
+ edit:()=>ask('Edit task',F,t,o=>{if(t.aiManaged&&o.pri!==t.pri)t.priorityManual=true;Object.assign(t,o);save();render()},delT),
  del:()=>{if(S.p.confirmDel)askConfirm('Delete task',`Remove "${t.title}" permanently?`,delT);else delT()},
  addlink:()=>ask('Add link',[['t','Label*','text'],['u','URL*','text']],{},o=>{t.links.push({t:o.t,u:/^https?:\/\//i.test(o.u)?o.u:'https://'+o.u});save();render()}),
  addlinkhome:()=>ask('Add Quick Link',[['t','Label*','text'],['u','URL*','text']],{},o=>{S.links.push({t:o.t,u:/^https?:\/\//i.test(o.u)?o.u:'https://'+o.u});save();render()}),
@@ -3754,6 +3761,7 @@ const X=(i,b)=>{const t=S.tasks.find(x=>x.id==i),delT=()=>{S.tasks=S.tasks.filte
  exp:()=>{const out=JSON.parse(JSON.stringify(S));delete out.aiHist;delete out.chats;delete out.curChat;delete out.loggedIn;if(out.aiCfg)out.aiCfg.apiKey='';const u=URL.createObjectURL(new Blob([JSON.stringify(out,null,1)],{type:'application/json'})),a=document.createElement('a');a.href=u;a.download='lifelink-'+currentEmail+'-backup.json';a.click();setTimeout(()=>URL.revokeObjectURL(u),2000);toast('Backup downloaded (API keys are not included)')},
  rmdemo:()=>{['tasks','events','notes','notifs'].forEach(k=>S[k]=S[k].filter(x=>!x.demo));save();render();toast('Sample data removed')},
  logout:async()=>{
+   stopAIOrganiserLoop();
    save();
    try{if(supabaseClient)await supabaseClient.auth.signOut()}catch(e){console.warn('Sign-out error',e)}
    supabaseSession=null;
@@ -4533,6 +4541,7 @@ document.addEventListener("click",async e=>{
   try{
     // Re-apply the user's saved appearance after Supabase restores the signed-in account.
     applyPrefs();
+    if(S?.loggedIn)startAIOrganiserLoop();
     syncTimer();
     loadAIHistory();
     render();
