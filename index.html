@@ -3714,7 +3714,7 @@ const X=(i,b)=>{const t=S.tasks.find(x=>x.id==i),delT=()=>{S.tasks=S.tasks.filte
  tick:()=>{t.done=b.checked;if(t.done){t.prog=100;note('Tasks','Completed: '+t.title)}save();render()},
  tick2:()=>{t.done=!t.done;if(t.done)t.prog=100;save();render()},
  newtask:()=>ask('New task',F,{pri:S.p.dPri},o=>{addTask(o);render()}),
- organise:()=>runAIOrganiser(),
+
  edit:()=>ask('Edit task',F,t,o=>{if(t.aiManaged&&o.pri!==t.pri)t.priorityManual=true;if(t.aiManaged&&o.due!==t.due)t.dueManual=true;Object.assign(t,o);save();render()},delT),
  del:()=>{if(S.p.confirmDel)askConfirm('Delete task',`Remove "${t.title}" permanently?`,delT);else delT()},
  addlink:()=>ask('Add link',[['t','Label*','text'],['u','URL*','text']],{},o=>{t.links.push({t:o.t,u:/^https?:\/\//i.test(o.u)?o.u:'https://'+o.u});save();render()}),
