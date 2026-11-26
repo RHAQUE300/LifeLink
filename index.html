@@ -2208,7 +2208,7 @@ function aiOrganiserTokenSimilarity(left,right){
   return overlap/Math.max(1,Math.min(a.size,b.size));
 }
 async function runAIOrganiser(){
-  if(aiOrganiserBusy||!S||!S.loggedIn||S.aiOrganizer?.enabled===false)return;
+  if(aiOrganiserBusy||!S||!S.loggedIn||!supabaseSession?.access_token||S.aiOrganizer?.enabled===false)return;
   aiOrganiserBusy=true;
   const warnings=[],sources=[];
   try{
@@ -2270,7 +2270,8 @@ async function runAIOrganiser(){
       const task=(S.tasks||[]).find(item=>item.id===String(proposal.taskId||""));
       const cited=validCitations(proposal.sourceIds),confidence=Number(proposal.confidence);
       if(!task||task.done||!cited.length||!Number.isFinite(confidence)||confidence<0.78){skipped.push("invalid task update");continue}
-      const fresh=cited.filter(source=>!(task.aiSources||[]).includes(source.id));
+      if(!task.aiSourceHashes||typeof task.aiSourceHashes!=='object')task.aiSourceHashes={};
+      const fresh=cited.filter(source=>task.aiSourceHashes[source.id]!==aiOrganiserHash(source.title+'|'+source.when+'|'+source.text));
       if(!fresh.length)continue;
       const updateText=aiOrganiserClean(proposal.updateText||"",650);
       if(!updateText){skipped.push("empty update");continue}
@@ -2283,7 +2284,8 @@ async function runAIOrganiser(){
       task.aiHistory.push({date,detail:updateText,sourceIds:fresh.map(source=>source.id),sources:sourceSummary});
       task.aiHistory=task.aiHistory.slice(-80);
       task.aiSources=Array.from(new Set([...task.aiSources,...fresh.map(source=>source.id)])).slice(-300);
-      task.notes=String(task.notes||"").slice(-12000)+"\n\n[AI update · "+new Date(date).toLocaleString()+"] "+updateText+"\nSources: "+sourceSummary;
+      fresh.forEach(source=>task.aiSourceHashes[source.id]=aiOrganiserHash(source.title+"|"+source.when+"|"+source.text));
+      task.notes=String(task.notes||"")+"\n\n[AI update · "+new Date(date).toLocaleString()+"] "+updateText+"\nSources: "+sourceSummary;
       if(due&&task.aiManaged&&!task.priorityManual&&due!==task.due){task.aiPreviousDue=task.due||"";task.due=due}
       if(["High","Medium","Low"].includes(proposal.priority)&&task.aiManaged&&!task.priorityManual)task.pri=proposal.priority;
       fresh.filter(source=>source.url).forEach(source=>{if(!Array.isArray(task.links))task.links=[];if(!task.links.some(link=>link.u===source.url))task.links.push({t:(source.service+": "+source.title).slice(0,100),u:source.url})});
@@ -2309,7 +2311,7 @@ async function runAIOrganiser(){
       const steps=Array.isArray(proposal.steps)?proposal.steps.map(step=>aiOrganiserClean(step,180)).filter(Boolean).slice(0,4):[];
       const task=addTask({title,src:"AI · "+services.join(" + "),pri:priority,due,sid:fingerprint});
       if(!task){skipped.push("task could not be saved");continue}
-      task.aiManaged=true;task.priorityManual=false;task.aiSources=sourceIds;
+      task.aiManaged=true;task.priorityManual=false;task.aiSources=sourceIds;task.aiSourceHashes=Object.fromEntries(cited.map(source=>[source.id,aiOrganiserHash(source.title+'|'+source.when+'|'+source.text)]));
       task.notes=[rationale,steps.length?"Suggested next steps:\n- "+steps.join("\n- "):"", "Source records:\n"+cited.map(source=>source.service+": "+source.title).join("\n")].filter(Boolean).join("\n\n");
       task.aiHistory=[{date:new Date().toISOString(),detail:rationale,sourceIds,sources:cited.map(source=>source.service+": "+source.title).join("; ")}];
       task.links=cited.filter(source=>source.url).map(source=>({t:(source.service+": "+source.title).slice(0,100),u:source.url})).slice(0,8);
@@ -2338,7 +2340,7 @@ function startAIOrganiserLoop(){
       if(S?.loggedIn&&S.aiOrganizer?.enabled!==false){if(!document.hidden)await runAIOrganiser();schedule()}
     },seconds*1000);
   };
-  if(S?.loggedIn&&S.aiOrganizer?.enabled!==false){setTimeout(()=>{if(S?.loggedIn&&S.aiOrganizer?.enabled!==false)runAIOrganiser()},1500);schedule()}
+  if(S?.loggedIn&&supabaseSession?.access_token&&S.aiOrganizer?.enabled!==false){setTimeout(()=>{if(S?.loggedIn&&supabaseSession?.access_token&&S.aiOrganizer?.enabled!==false)runAIOrganiser()},1500);schedule()}
 }
 
 function googleServiceMarkup(){
