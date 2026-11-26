@@ -2286,7 +2286,7 @@ async function runAIOrganiser(){
       task.aiSources=Array.from(new Set([...task.aiSources,...fresh.map(source=>source.id)])).slice(-300);
       fresh.forEach(source=>task.aiSourceHashes[source.id]=aiOrganiserHash(source.title+"|"+source.when+"|"+source.text));
       task.notes=String(task.notes||"")+"\n\n[AI update · "+new Date(date).toLocaleString()+"] "+updateText+"\nSources: "+sourceSummary;
-      if(due&&task.aiManaged&&!task.priorityManual&&due!==task.due){task.aiPreviousDue=task.due||"";task.due=due}
+      if(due&&task.aiManaged&&!task.dueManual&&due!==task.due){task.aiPreviousDue=task.due||"";task.due=due}
       if(["High","Medium","Low"].includes(proposal.priority)&&task.aiManaged&&!task.priorityManual)task.pri=proposal.priority;
       fresh.filter(source=>source.url).forEach(source=>{if(!Array.isArray(task.links))task.links=[];if(!task.links.some(link=>link.u===source.url))task.links.push({t:(source.service+": "+source.title).slice(0,100),u:source.url})});
       task.links=(task.links||[]).slice(-12);
@@ -3715,7 +3715,7 @@ const X=(i,b)=>{const t=S.tasks.find(x=>x.id==i),delT=()=>{S.tasks=S.tasks.filte
  tick2:()=>{t.done=!t.done;if(t.done)t.prog=100;save();render()},
  newtask:()=>ask('New task',F,{pri:S.p.dPri},o=>{addTask(o);render()}),
  organise:()=>runAIOrganiser(),
- edit:()=>ask('Edit task',F,t,o=>{if(t.aiManaged&&o.pri!==t.pri)t.priorityManual=true;Object.assign(t,o);save();render()},delT),
+ edit:()=>ask('Edit task',F,t,o=>{if(t.aiManaged&&o.pri!==t.pri)t.priorityManual=true;if(t.aiManaged&&o.due!==t.due)t.dueManual=true;Object.assign(t,o);save();render()},delT),
  del:()=>{if(S.p.confirmDel)askConfirm('Delete task',`Remove "${t.title}" permanently?`,delT);else delT()},
  addlink:()=>ask('Add link',[['t','Label*','text'],['u','URL*','text']],{},o=>{t.links.push({t:o.t,u:/^https?:\/\//i.test(o.u)?o.u:'https://'+o.u});save();render()}),
  addlinkhome:()=>ask('Add Quick Link',[['t','Label*','text'],['u','URL*','text']],{},o=>{S.links.push({t:o.t,u:/^https?:\/\//i.test(o.u)?o.u:'https://'+o.u});save();render()}),
