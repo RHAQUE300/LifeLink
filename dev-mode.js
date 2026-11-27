@@ -1,7 +1,7 @@
 /* LifeLink Developer Mode: additive, lazy-loaded, browser-native workspace. */
 (function () {
   'use strict';
-  const VERSION = '0.8.0', PREFIX = 'lifelink.dev.workspace.v1:', MAX_FILE = 250000, MAX_LOG = 350, SAVE_DELAY = 800, MAX_LOG_LINE = 12000;
+  const VERSION = '0.9.0', PREFIX = 'lifelink.dev.workspace.v1:', MAX_FILE = 250000, MAX_LOG = 350, SAVE_DELAY = 800, MAX_LOG_LINE = 12000;
   const $ = (s, r) => (r || document).querySelector(s);
   const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
   const svg = path => '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' + path + '</svg>';
@@ -23,6 +23,7 @@
   };
   let root = null, editor = null, workspace = null, activeFile = 'index.html';
   let opened = false, outputMode = 'console', aiBusy = false, aiMessages = [], latestCodeBlocks = [], previewToken = '';
+  let runtimeCatalog = [], runtimeCatalogPromise = null, selectedRuntime = 'auto', diagnosticToken = 0, diagnosticBusy = false, dialogResolver = null, themeObserver = null;
   let saveTimer = null, logFrame = 0, logQueue = [], lastErrorText = '', cursorTimer = null;
 
   function key() {
@@ -211,13 +212,13 @@
       '<p class="dev-explorer-foot">Saved locally in this browser. Folder sync and GitHub integration will be added separately.</p></aside>'+
       '<div class="dev-resize-handle" id="dev-explorer-resize" role="separator" aria-orientation="vertical" aria-label="Resize Project Files panel" aria-valuemin="170" aria-valuemax="420" tabindex="0"></div>'+
       '<main id="dev-center"><section id="dev-editor-panel"><div id="dev-editor-toolbar"><span id="dev-active-file-label">index.html</span>'+
-      '<span class="dev-editor-actions"><select id="dev-language-mode" class="dev-language-select" aria-label="Syntax highlighting language"><option value="auto">Auto detect</option><option value="htmlmixed">HTML</option><option value="javascript">JavaScript</option><option value="jsx">JSX</option><option value="css">CSS</option><option value="python">Python</option><option value="clike">C-like</option><option value="sql">SQL</option><option value="yaml">YAML</option><option value="markdown">Markdown</option><option value="xml">XML</option><option value="shell">Shell</option><option value="powershell">PowerShell</option><option value="rust">Rust</option><option value="go">Go</option><option value="php">PHP</option><option value="ruby">Ruby</option><option value="swift">Swift</option><option value="plain">Plain Text</option></select><button class="dev-tool-btn" id="dev-save">'+I.save+' Save</button><button class="dev-tool-btn" id="dev-preview-button">'+I.play+' Preview</button></span></div>'+
+      '<span class="dev-editor-actions"><select id="dev-runtime-choice" class="dev-runtime-select" aria-label="Execution runtime"><option value="auto">Runtime: Auto</option></select><select id="dev-language-mode" class="dev-language-select" aria-label="Syntax highlighting language"><option value="auto">Auto detect</option><option value="htmlmixed">HTML</option><option value="javascript">JavaScript</option><option value="jsx">JSX</option><option value="css">CSS</option><option value="python">Python</option><option value="clike">C-like</option><option value="sql">SQL</option><option value="yaml">YAML</option><option value="markdown">Markdown</option><option value="xml">XML</option><option value="shell">Shell</option><option value="powershell">PowerShell</option><option value="rust">Rust</option><option value="go">Go</option><option value="php">PHP</option><option value="ruby">Ruby</option><option value="swift">Swift</option><option value="plain">Plain Text</option></select><button class="dev-tool-btn" id="dev-save">'+I.save+' Save</button><button class="dev-tool-btn" id="dev-preview-button">'+I.play+' Preview</button></span></div>'+
       '<div class="dev-editor-wrap"><textarea id="dev-editor" spellcheck="false" autocapitalize="off" autocomplete="off" aria-label="Code editor"></textarea></div>'+
       '<div id="dev-editor-status"><span id="dev-cursor-status">Ln 1, Col 1</span><span id="dev-language-status">HTML · UTF-8</span></div></section>'+
       '<section id="dev-output-panel"><div id="dev-output-toolbar"><button class="dev-output-tab active" data-dev-output="console">Terminal</button>'+
-      '<button class="dev-output-tab" data-dev-output="preview">Preview</button><span id="dev-output-spacer"></span>'+
+      '<button class="dev-output-tab" data-dev-output="preview">Preview</button><button class="dev-output-tab" data-dev-output="diagnostics">Diagnostics</button><button id="dev-stdin-toggle" class="dev-output-tab" type="button">Input</button><span id="dev-output-spacer"></span>'+
       '<button id="dev-send-error" class="dev-output-tab" title="Send latest error to AI">Send Error to AI ↗</button><button id="dev-output-clear">Clear</button></div>'+
-      '<div id="dev-output-lines" aria-live="polite"></div><iframe id="dev-preview-frame" title="Sandboxed project preview" sandbox="allow-scripts" referrerpolicy="no-referrer"></iframe>'+
+      '<div id="dev-output-lines" aria-live="polite"></div><div id="dev-diagnostics-output" hidden aria-live="polite"></div><textarea id="dev-stdin" rows="2" placeholder="Optional standard input (stdin)…" hidden></textarea><iframe id="dev-preview-frame" title="Sandboxed project preview" sandbox="allow-scripts" referrerpolicy="no-referrer"></iframe>'+
       '<div id="dev-terminal-bar"><span id="dev-terminal-prompt">dev&gt;</span><input id="dev-terminal-command" autocomplete="off" spellcheck="false" aria-label="Terminal command" placeholder="help · run · preview · ls">'+
       '<button id="dev-terminal-run">Run</button></div></section></main>'+
       '<div class="dev-resize-handle" id="dev-assistant-resize" role="separator" aria-orientation="vertical" aria-label="Resize AI Assistant panel" aria-valuemin="240" aria-valuemax="500" tabindex="0"></div>'+
@@ -226,7 +227,7 @@
       '<form id="dev-ai-composer"><textarea id="dev-ai-input" placeholder="Ask AI to build, debug or explain code…" maxlength="12000"></textarea>'+
       '<div id="dev-ai-send-row"><span id="dev-ai-hint">AI uses your connected LifeLink provider.</span><button id="dev-ai-send" type="submit">Ask AI ↗</button></div></form></aside></div>'+
       '<button class="dev-panel-reopen" id="dev-explorer-reopen" type="button" title="Show Project Files panel" aria-label="Show Project Files panel" hidden>'+I.explorerShow+'</button>'+
-      '<button class="dev-panel-reopen" id="dev-assistant-reopen" type="button" title="Show AI Assistant panel" aria-label="Show AI Assistant panel" hidden>'+I.assistantShow+'</button>';
+      '<button class="dev-panel-reopen" id="dev-assistant-reopen" type="button" title="Show AI Assistant panel" aria-label="Show AI Assistant panel" hidden>'+I.assistantShow+'</button>'+\n      '<div id="dev-modal" class="dev-modal" hidden role="presentation"><section class="dev-modal-card" role="dialog" aria-modal="true" aria-labelledby="dev-modal-title" aria-describedby="dev-modal-message"><h2 id="dev-modal-title">Confirm action</h2><p id="dev-modal-message"></p><label id="dev-modal-check-row" hidden><input id="dev-modal-check" type="checkbox"><span id="dev-modal-check-label"></span></label><div class="dev-modal-actions"><button id="dev-modal-cancel" type="button">Cancel</button><button id="dev-modal-confirm" type="button">Continue</button></div></section></div>';
     document.body.appendChild(root);
     editor=$('#dev-editor');
     wire();
@@ -386,7 +387,7 @@
     $('#dev-terminal-run').addEventListener('click',terminal);
     $('#dev-terminal-command').addEventListener('keydown',e=>{if(e.key==='Enter'){e.preventDefault();terminal();}});
     $('#dev-ai-composer').addEventListener('submit',e=>{e.preventDefault();askAI($('#dev-ai-input').value);});
-    $('#dev-ai-model').addEventListener('change',e=>{if(typeof window.selectAIModel==='function')window.selectAIModel(e.target.value);syncAIModel();});
+    $('#dev-ai-model').addEventListener('change',e=>{if(typeof window.selectAIModel==='function')window.selectAIModel(e.target.value);syncAIModel();});\n    $('#dev-runtime-choice').addEventListener('change',e=>{selectedRuntime=e.target.value;try{localStorage.setItem(key()+':runtime',selectedRuntime)}catch(err){};});\n    $('#dev-stdin-toggle').addEventListener('click',()=>{$('#dev-stdin').hidden=!$('#dev-stdin').hidden;if(!$('#dev-stdin').hidden)$('#dev-stdin').focus();});\n    $('#dev-modal-cancel').addEventListener('click',()=>finishDialog(false));\n    $('#dev-modal-confirm').addEventListener('click',()=>finishDialog(true));\n    $('#dev-modal').addEventListener('click',e=>{if(e.target.id==='dev-modal')finishDialog(false)});
     root.addEventListener('click',e=>{
       const tab=e.target.closest('[data-dev-output]'); if(tab)setOutput(tab.dataset.devOutput);
       const exportButton=e.target.closest('[data-dev-export]');if(exportButton){e.preventDefault();e.stopPropagation();downloadFile(exportButton.dataset.devExport);return;}
@@ -401,7 +402,7 @@
       }
     });
     window.addEventListener('message',previewMessage);
-    document.addEventListener('keydown',e=>{if(opened&&e.key==='Escape'){e.preventDefault();close();}});
+    document.addEventListener('keydown',e=>{if(opened&&e.key==='Escape'){if(!$('#dev-modal').hidden){e.preventDefault();finishDialog(false);return;}e.preventDefault();close();}});
   }
   function renderFiles() {
     const list=$('#dev-file-list'); if(!list||!workspace)return;
