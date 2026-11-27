@@ -85,13 +85,13 @@
       '<input id="dev-new-file-name" placeholder="filename.js" aria-label="New file name" maxlength="100"><button type="submit" aria-label="Create file">+</button></form>'+
       '<p class="dev-explorer-foot">Saved locally in this browser. Folder sync and GitHub integration will be added separately.</p></aside>'+
       '<main id="dev-center"><section id="dev-editor-panel"><div id="dev-editor-toolbar"><span id="dev-active-file-label">index.html</span>'+
-      '<span class="dev-editor-actions"><button class="dev-tool-btn" id="dev-save">'+I.save+' Save</button><button class="dev-tool-btn" id="dev-preview">'+I.play+' Preview</button></span></div>'+
+      '<span class="dev-editor-actions"><button class="dev-tool-btn" id="dev-save">'+I.save+' Save</button><button class="dev-tool-btn" id="dev-preview-button">'+I.play+' Preview</button></span></div>'+
       '<div class="dev-editor-wrap"><textarea id="dev-editor" spellcheck="false" autocapitalize="off" autocomplete="off" aria-label="Code editor"></textarea></div>'+
       '<div id="dev-editor-status"><span id="dev-cursor-status">Ln 1, Col 1</span><span id="dev-language-status">HTML · UTF-8</span></div></section>'+
       '<section id="dev-output-panel"><div id="dev-output-toolbar"><button class="dev-output-tab active" data-dev-output="console">Terminal</button>'+
       '<button class="dev-output-tab" data-dev-output="preview">Preview</button><span id="dev-output-spacer"></span>'+
       '<button id="dev-send-error" class="dev-output-tab" title="Send latest error to AI">Send Error to AI ↗</button><button id="dev-output-clear">Clear</button></div>'+
-      '<div id="dev-output-lines" aria-live="polite"></div><iframe id="dev-preview" title="Sandboxed project preview" sandbox="allow-scripts" referrerpolicy="no-referrer"></iframe>'+
+      '<div id="dev-output-lines" aria-live="polite"></div><iframe id="dev-preview-frame" title="Sandboxed project preview" sandbox="allow-scripts" referrerpolicy="no-referrer"></iframe>'+
       '<div id="dev-terminal-bar"><span id="dev-terminal-prompt">dev&gt;</span><input id="dev-terminal-command" autocomplete="off" spellcheck="false" aria-label="Terminal command" placeholder="help · run · preview · ls">'+
       '<button id="dev-terminal-run">Run</button></div></section></main>'+
       '<aside id="dev-assistant"><div id="dev-assistant-head"><strong>'+I.bot+' &nbsp; AI Coding Assistant</strong><span id="dev-ai-provider">LifeLink AI</span></div>'+
@@ -105,7 +105,7 @@
   function wire() {
     $('#dev-close').addEventListener('click',close);
     $('#dev-run').addEventListener('click',runActive);
-    $('#dev-preview').addEventListener('click',showPreview);
+    $('#dev-preview-button').addEventListener('click',showPreview);
     $('#dev-save').addEventListener('click',()=>save(true));
     $('#dev-output-clear').addEventListener('click',()=>{$('#dev-output-lines').textContent='';});
     $('#dev-send-error').addEventListener('click',sendError);
@@ -192,11 +192,11 @@
     outputMode=mode==='preview'?'preview':'console';
     root.querySelectorAll('[data-dev-output]').forEach(t=>t.classList.toggle('active',t.dataset.devOutput===outputMode));
     $('#dev-output-lines').style.display=outputMode==='console'?'block':'none';
-    $('#dev-preview').style.display=outputMode==='preview'?'block':'none';
+    $('#dev-preview-frame').style.display=outputMode==='preview'?'block':'none';
   }
 
   function previewMessage(event) {
-    const frame=$('#dev-preview'), data=event.data;
+    const frame=$('#dev-preview-frame'), data=event.data;
     if(!frame||event.source!==frame.contentWindow||!data||data.__lifelinkDev!==true||data.token!==previewToken)return;
     const kind=data.type==='error'?'error':data.type==='warn'?'warn':data.type==='system'?'system':'normal';
     log((data.args||[]).join(' '),kind);
@@ -222,7 +222,7 @@
     const jsFile=workspace.files.find(f=>['js','mjs'].includes(ext(f.name)));
     const html=htmlFile?htmlFile.content:'<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>LifeLink preview</title></head><body><main><h1>Preview</h1></main></body></html>';
     const built=makePreview(html,cssFile?cssFile.content:'',jsFile?jsFile.content:'');
-    const frame=$('#dev-preview'); frame.setAttribute('sandbox','allow-scripts'); frame.srcdoc=built.page;
+    const frame=$('#dev-preview-frame'); frame.setAttribute('sandbox','allow-scripts'); frame.srcdoc=built.page;
     setOutput('preview'); log('Starting isolated preview…','system');
   }
   function showPreview() {
