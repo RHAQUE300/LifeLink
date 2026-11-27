@@ -227,6 +227,10 @@
     vb:'Visual Basic',vbs:'Visual Basic',jl:'Julia',m:'Objective-C',mm:'Objective-C++',
     wasm:'WebAssembly',wat:'WebAssembly'
   };
+  function redactPotentialSecrets(value) {
+    return String(value||'').replace(/\b(?:sk-[A-Za-z0-9_-]{18,}|AKIA[0-9A-Z]{16}|AIza[0-9A-Za-z_-]{30,}|gh[pousr]_[A-Za-z0-9]{30,}|xox[baprs]-[A-Za-z0-9-]{20,}|eyJ[A-Za-z0-9_-]{10,}\.eyJ[A-Za-z0-9_-]{10,}(?:\.[A-Za-z0-9_-]{10,})?)\b/g,'[REDACTED CREDENTIAL]');
+  }
+  function containsPotentialSecrets(value) { return redactPotentialSecrets(value)!==String(value||''); }
   function runtimeLanguage(fileName) {
     const name=String(fileName||'').toLowerCase(), extension=ext(name);
     if(name==='dockerfile')return 'Bash';
@@ -319,6 +323,8 @@
     if(value)log(value,kind||'normal');
   }
   async function runWithWandbox(file) {
+    const credentialFile=workspace.files.find(x=>containsPotentialSecrets(x.content));
+    if(credentialFile)throw new Error('Remote execution was blocked because a possible credential was detected in '+credentialFile.name+'. Remove the secret from the project and rotate it before using a hosted compiler.');
     const allowed=await allowRemoteExecution();
     if(!allowed)return 'Remote execution was cancelled. No project code was sent.';
     status('Loading compiler…','pending');
@@ -409,7 +415,7 @@
           if(local&&!allNames.has(local)&&!local.startsWith('../'))add('warning',name,1,'Local asset reference not found in project: '+raw,'Import the missing file or correct the relative path.');
         });
       }
-      const secret=/\b(?:sk-[A-Za-z0-9_-]{18,}|AKIA[0-9A-Z]{16}|AIza[0-9A-Za-z_-]{30,}|gh[pousr]_[A-Za-z0-9]{30,})\b/;
+      const secret=/\b(?:sk-[A-Za-z0-9_-]{18,}|AKIA[0-9A-Z]{16}|AIza[0-9A-Za-z_-]{30,}|gh[pousr]_[A-Za-z0-9]{30,}|xox[baprs]-[A-Za-z0-9-]{20,}|eyJ[A-Za-z0-9_-]{10,}\.eyJ[A-Za-z0-9_-]{10,}(?:\.[A-Za-z0-9_-]{10,})?)\b/;
       if(secret.test(code))add('critical',name,1,'Possible API key or access token detected. Its value has been hidden.','Remove the credential from source files, rotate it, and load it from a secure server-side secret store.');
       if(/\beval\s*\(/.test(code)||/\bnew Function\s*\(/.test(code))add('warning',name,1,'Dynamic code execution pattern detected.','Avoid evaluating untrusted strings; use explicit parsing or a constrained command map.');
       if(/\bTODO\b|\bFIXME\b/.test(code))add('info',name,1,'This file contains TODO/FIXME markers.','Review outstanding markers before treating the feature as complete.');
@@ -438,7 +444,7 @@
     const ordered=[current(),...workspace.files.filter(file=>file.name!==activeFile)];
     return ordered.map(file=>{
       if(remaining<=0)return '';
-      const content=file.content.slice(0,Math.min(6500,remaining));remaining-=content.length;
+      const content=redactPotentialSecrets(file.content.slice(0,Math.min(6500,remaining)));remaining-=content.length;
       return '\n\n--- FILE: '+file.name+' ---\n'+content;
     }).join('');
   }
@@ -948,7 +954,7 @@
     log('AI code applied to '+file.name+'. Review it before running.','result');
   }
   function context() {
-    return 'Project: '+workspace.name+'\nFiles: '+workspace.files.map(f=>f.name).join(', ')+'\nActive file: '+activeFile+'\n\nActive file contents:\n'+String(current()?.content||'').slice(0,18000);
+    return 'Project: '+workspace.name+'\nFiles: '+workspace.files.map(f=>f.name).join(', ')+'\nActive file: '+activeFile+'\n\nActive file contents:\n'+redactPotentialSecrets(String(current()?.content||'').slice(0,18000));
   }
   async function askAI(value) {
     const prompt=String(value||'').trim(); if(!prompt||aiBusy)return;
