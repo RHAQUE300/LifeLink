@@ -1,11 +1,21 @@
 /* LifeLink Developer Mode — additive, lazy-loaded workspace */
 #dev-mode-launcher svg{width:18px;height:18px;display:block}
 #dev-full{
-  position:fixed;inset:0;z-index:120;display:none;grid-template-rows:62px minmax(0,1fr);
+  position:fixed;inset:0;z-index:120;display:grid;grid-template-rows:62px minmax(0,1fr);
   color:#202738;background:rgba(239,243,251,.98);overflow:hidden;
-  opacity:0;transform:translateY(8px);transition:opacity .28s ease,transform .28s ease;
+  visibility:hidden;pointer-events:none;opacity:0;
+  transform:translate3d(0,14px,0) scale(.992);
+  transform-origin:50% 50%;
+  transition:opacity .28s cubic-bezier(.2,.8,.2,1),transform .38s cubic-bezier(.16,1,.3,1),visibility 0s linear .38s;
 }
-#dev-full.open{display:grid;opacity:1;transform:none}
+#dev-full.open{
+  visibility:visible;pointer-events:auto;opacity:1;transform:translate3d(0,0,0) scale(1);
+  transition:opacity .28s cubic-bezier(.2,.8,.2,1),transform .38s cubic-bezier(.16,1,.3,1),visibility 0s;
+  will-change:opacity,transform;
+}
+@starting-style{
+  #dev-full.open{opacity:0;transform:translate3d(0,18px,0) scale(.985)}
+}
 #dev-full *{box-sizing:border-box}
 #dev-head{
   display:flex;align-items:center;gap:12px;padding:10px 16px;min-width:0;
@@ -106,8 +116,8 @@
 }
 @media(max-width:900px){
   #dev-body{grid-template-columns:180px minmax(0,1fr)}
-  #dev-assistant{position:absolute;right:0;top:62px;bottom:0;width:min(360px,88vw);z-index:4;box-shadow:-14px 0 35px rgba(20,30,50,.15);transform:translateX(102%);transition:transform .25s}
-  #dev-full.ai-open #dev-assistant{transform:translateX(0)}
+  #dev-assistant{position:absolute;right:0;top:62px;bottom:0;width:min(360px,88vw);z-index:4;box-shadow:-14px 0 35px rgba(20,30,50,.15);transform:translate3d(102%,0,0);opacity:.92;transition:transform .34s cubic-bezier(.16,1,.3,1),opacity .24s ease;will-change:transform}
+  #dev-full.ai-open #dev-assistant{transform:translate3d(0,0,0);opacity:1}
   #dev-ai-toggle{display:inline-flex!important}
 }
 @media(max-width:620px){
@@ -146,3 +156,33 @@
 /* Reset a few broad v20 element selectors inside the full-screen add-on. */
 #dev-head{position:relative;top:auto;left:auto;right:auto;bottom:auto;transform:none;width:100%;max-width:none;min-height:62px;border-radius:0;z-index:auto}
 #dev-center{max-width:none;width:100%;margin:0}
+
+/* Motion and rendering polish: animate composited properties, keep typing work off the hot path. */
+#dev-full.open #dev-explorer{animation:devPaneIn .42s cubic-bezier(.16,1,.3,1) both}
+#dev-full.open #dev-assistant{animation:devPaneIn .46s cubic-bezier(.16,1,.3,1) both;animation-delay:.025s}
+#dev-full.open #dev-editor-panel{animation:devEditorIn .38s cubic-bezier(.16,1,.3,1) both}
+#dev-full.open #dev-output-panel{animation:devOutputIn .42s cubic-bezier(.16,1,.3,1) both;animation-delay:.035s}
+@keyframes devPaneIn{from{opacity:0;transform:translate3d(0,8px,0)}to{opacity:1;transform:translate3d(0,0,0)}}
+@keyframes devEditorIn{from{opacity:0;transform:translate3d(0,5px,0)}to{opacity:1;transform:translate3d(0,0,0)}}
+@keyframes devOutputIn{from{opacity:0;transform:translate3d(0,7px,0)}to{opacity:1;transform:translate3d(0,0,0)}}
+#dev-full.open .dev-head-btn:active,#dev-full.open .dev-tool-btn:active,#dev-full.open .dev-icon-btn:active{transform:scale(.96)}
+.dev-head-btn:focus-visible,.dev-tool-btn:focus-visible,.dev-icon-btn:focus-visible,.dev-output-tab:focus-visible{outline:2px solid #7394ee;outline-offset:2px}
+#dev-status[data-state="pending"]{color:#b37a21}
+#dev-status[data-state="pending"]:before{background:#e5a43b;animation:devStatusPulse 1s ease-in-out infinite}
+#dev-status[data-state="error"]{color:#c94a5b}
+#dev-status[data-state="error"]:before{background:#d84d61}
+#dev-status[data-state="saved"]:before{background:#32b879}
+@keyframes devStatusPulse{50%{opacity:.35;transform:scale(.78)}}
+#dev-output-lines,#dev-ai-messages,#dev-file-list{overscroll-behavior:contain;scrollbar-gutter:stable}
+#dev-output-lines{contain:content}
+#dev-ai-messages{contain:layout style}
+.dev-ai-message{animation:devMessageIn .26s cubic-bezier(.16,1,.3,1) both}
+@keyframes devMessageIn{from{opacity:0;transform:translate3d(0,7px,0)}to{opacity:1;transform:translate3d(0,0,0)}}
+#dev-editor{font-variant-ligatures:none;font-feature-settings:"liga" 0,"calt" 0;overscroll-behavior:contain}
+#dev-terminal-command,#dev-ai-input{overscroll-behavior:contain}
+#dev-output-lines{overflow-wrap:anywhere}
+@media(prefers-reduced-motion:reduce){
+  #dev-full,#dev-assistant{transition:none!important}
+  #dev-full.open #dev-explorer,#dev-full.open #dev-assistant,#dev-full.open #dev-editor-panel,#dev-full.open #dev-output-panel,.dev-ai-message{animation:none!important}
+  #dev-status[data-state="pending"]:before{animation:none!important}
+}
