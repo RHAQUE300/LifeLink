@@ -326,12 +326,13 @@
     buildUI();workspace=load();
     if(!workspace.files.some(f=>f.name===activeFile))activeFile=workspace.files[0].name;
     $('#dev-project-name').value=workspace.name||'Untitled project';
-    renderFiles();openFile(activeFile);root.classList.add('open');opened=true;
-    document.body.dataset.devPreviousOverflow=document.body.style.overflow;
-    document.body.style.overflow='hidden';setOutput('console');
-    log('LifeLink Dev '+VERSION+' ready.','system');log('Browser-native workspace · type help for terminal commands.','system');
+    renderFiles();openFile(activeFile);
     if(typeof window.closeIsland==='function')window.closeIsland();
     if(typeof window.closeAIFull==='function')window.closeAIFull(true);
+    document.body.dataset.devPreviousOverflow=document.body.style.overflow;
+    document.body.style.overflow='hidden';
+    root.classList.add('open');opened=true;setOutput('console');
+    log('LifeLink Dev '+VERSION+' ready.','system');log('Browser-native workspace · type help for terminal commands.','system');
     setTimeout(()=>editor&&editor.focus(),80);
   }
   function close() {
