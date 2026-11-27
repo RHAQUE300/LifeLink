@@ -159,9 +159,10 @@
 
 /* Motion and rendering polish: animate composited properties, keep typing work off the hot path. */
 #dev-full.open #dev-explorer{animation:devPaneIn .42s cubic-bezier(.16,1,.3,1) both}
-#dev-full.open #dev-assistant{animation:devPaneIn .46s cubic-bezier(.16,1,.3,1) both;animation-delay:.025s}
+#dev-full.open #dev-assistant{animation:devAssistantFadeIn .32s ease both;animation-delay:.025s}
 #dev-full.open #dev-editor-panel{animation:devEditorIn .38s cubic-bezier(.16,1,.3,1) both}
 #dev-full.open #dev-output-panel{animation:devOutputIn .42s cubic-bezier(.16,1,.3,1) both;animation-delay:.035s}
+@keyframes devAssistantFadeIn{from{opacity:0}to{opacity:1}}
 @keyframes devPaneIn{from{opacity:0;transform:translate3d(0,8px,0)}to{opacity:1;transform:translate3d(0,0,0)}}
 @keyframes devEditorIn{from{opacity:0;transform:translate3d(0,5px,0)}to{opacity:1;transform:translate3d(0,0,0)}}
 @keyframes devOutputIn{from{opacity:0;transform:translate3d(0,7px,0)}to{opacity:1;transform:translate3d(0,0,0)}}
