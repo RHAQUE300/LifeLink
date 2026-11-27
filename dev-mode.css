@@ -186,3 +186,20 @@
   #dev-full.open #dev-explorer,#dev-full.open #dev-assistant,#dev-full.open #dev-editor-panel,#dev-full.open #dev-output-panel,.dev-ai-message{animation:none!important}
   #dev-status[data-state="pending"]:before{animation:none!important}
 }
+
+/* The assistant can slide over the editor on narrow screens without squeezing it. */
+#dev-ai-toggle{display:none}
+@media(max-width:900px){
+  #dev-full.ai-open:after{
+    content:"";position:absolute;inset:62px 0 0;z-index:3;
+    background:rgba(13,19,31,.22);backdrop-filter:blur(2px);
+    animation:devDrawerShadeIn .22s ease both;
+  }
+  #dev-assistant{z-index:4}
+}
+@keyframes devDrawerShadeIn{from{opacity:0}to{opacity:1}}
+[data-theme=dark] #dev-full.ai-open:after{background:rgba(0,0,0,.38)}
+@media(max-width:620px){
+  #dev-head{flex-wrap:nowrap}
+  #dev-ai-toggle{padding:7px 8px}
+}
