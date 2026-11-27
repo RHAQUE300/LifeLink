@@ -4595,7 +4595,7 @@ window.loadDeveloperMode = async function(button) {
     if (document.querySelector('link[data-lifelink-dev-css]')) { resolve(); return; }
     const link = document.createElement('link');
     link.rel = 'stylesheet';
-    link.href = 'dev-mode.css?v=0.6.0';
+    link.href = 'dev-mode.css?v=0.6.1';
     link.dataset.lifelinkDevCss = 'true';
     link.onload = resolve;
     link.onerror = () => reject(new Error('Developer Mode styles could not be loaded.'));
