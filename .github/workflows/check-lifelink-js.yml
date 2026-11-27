@@ -4,6 +4,8 @@ on:
   push:
     paths:
       - 'index.html'
+      - 'dev-mode.js'
+      - 'dev-mode.css'
       - 'cloudflare-worker.js'
       - '.github/workflows/check-lifelink-js.yml'
   workflow_dispatch:
@@ -23,6 +25,8 @@ jobs:
           node-version: 22
       - name: Check Cloudflare Worker JavaScript
         run: node --check cloudflare-worker.js
+      - name: Check LifeLink Developer Mode JavaScript
+        run: node --check dev-mode.js
       - name: Parse inline JavaScript in index.html
         run: |
           node <<'NODE'
