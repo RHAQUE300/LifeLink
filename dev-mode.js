@@ -1,7 +1,7 @@
 /* LifeLink Developer Mode: additive, lazy-loaded, browser-native workspace. */
 (function () {
   'use strict';
-  const VERSION = '0.9.3', PREFIX = 'lifelink.dev.workspace.v1:', MAX_FILE = 250000, MAX_LOG = 350, SAVE_DELAY = 800, MAX_LOG_LINE = 12000;
+  const VERSION = '0.9.4', PREFIX = 'lifelink.dev.workspace.v1:', MAX_FILE = 250000, MAX_LOG = 350, SAVE_DELAY = 800, MAX_LOG_LINE = 12000;
   const $ = (s, r) => (r || document).querySelector(s);
   const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
   const svg = path => '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' + path + '</svg>';
@@ -304,7 +304,7 @@
   function localWebProject() {
     const activeExt=ext(activeFile);
     if(['html','htm','css'].includes(activeExt))return true;
-    return ['js','mjs','cjs','jsx','ts','tsx'].includes(activeExt) && workspace.files.some(f=>['html','htm'].includes(ext(f.name)));
+    return selectedRuntime==='auto' && ['js','mjs','cjs'].includes(activeExt) && workspace.files.some(f=>['html','htm'].includes(ext(f.name)));
   }
   function hasRemoteConsent() {
     try{return localStorage.getItem(key()+':wandbox-consent')==='yes'}catch(e){return false}
@@ -899,7 +899,7 @@
   function projectPreview() {
     const htmlFile=workspace.files.find(f=>['html','htm'].includes(ext(f.name)));
     const cssFile=workspace.files.find(f=>ext(f.name)==='css');
-    const jsFile=workspace.files.find(f=>['js','mjs'].includes(ext(f.name)));
+    const jsFile=workspace.files.find(f=>['js','mjs','cjs'].includes(ext(f.name)));
     const html=htmlFile?htmlFile.content:'<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>LifeLink preview</title></head><body><main><h1>Preview</h1></main></body></html>';
     const built=makePreview(html,cssFile?cssFile.content:'',jsFile?jsFile.content:'');
     const frame=$('#dev-preview-frame'); frame.setAttribute('sandbox','allow-scripts'); frame.srcdoc=built.page;
