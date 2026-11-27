@@ -42,5 +42,6 @@
       "short_name": "Notes",
       "url": "./#/notes"
     }
-  ]
+  ],
+  "prefer_related_applications": false
 }
