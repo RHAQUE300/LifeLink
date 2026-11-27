@@ -19,7 +19,7 @@
 #dev-full *{box-sizing:border-box}
 #dev-head{
   display:flex;align-items:center;gap:12px;padding:10px 16px;min-width:0;
-  background:rgba(255,255,255,.84);backdrop-filter:blur(22px);border-bottom:1px solid rgba(30,40,65,.1);
+  background:rgba(255,255,255,.84);backdrop-filter:blur(14px);border-bottom:1px solid rgba(30,40,65,.1);
 }
 .dev-brand{display:flex;align-items:center;gap:10px;font-weight:750;white-space:nowrap}
 .dev-brand-mark{width:34px;height:34px;display:grid;place-items:center;border-radius:11px;background:linear-gradient(140deg,#688fff,#9a83ff);color:#fff}
@@ -193,7 +193,7 @@
 @media(max-width:900px){
   #dev-full.ai-open:after{
     content:"";position:absolute;inset:62px 0 0;z-index:3;
-    background:rgba(13,19,31,.22);backdrop-filter:blur(2px);
+    background:rgba(13,19,31,.22);
     animation:devDrawerShadeIn .22s ease both;
   }
   #dev-assistant{z-index:4}
