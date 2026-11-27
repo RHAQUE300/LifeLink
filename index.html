@@ -4578,6 +4578,13 @@ document.addEventListener("click",async e=>{
 })();
 </script><script>
 /* Developer Mode resources are fetched only after the user opens the feature. */
+document.addEventListener('keydown', function(event) {
+  if (event.altKey && !event.ctrlKey && !event.metaKey && !event.shiftKey && event.key.toLowerCase() === 'd') {
+    event.preventDefault();
+    const button = document.getElementById('dev-mode-launcher');
+    if (button && !button.disabled) window.loadDeveloperMode(button);
+  }
+});
 window.loadDeveloperMode = async function(button) {
   if (window.LifeLinkDevMode) { window.LifeLinkDevMode.open(); return; }
   if (window.__lifeLinkDevLoading) return;
