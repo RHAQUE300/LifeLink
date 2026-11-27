@@ -1,7 +1,7 @@
 /* LifeLink Developer Mode: additive, lazy-loaded, browser-native workspace. */
 (function () {
   'use strict';
-  const VERSION = '0.5.0', PREFIX = 'lifelink.dev.workspace.v1:', MAX_FILE = 250000, MAX_LOG = 350, SAVE_DELAY = 800, MAX_LOG_LINE = 12000;
+  const VERSION = '0.6.0', PREFIX = 'lifelink.dev.workspace.v1:', MAX_FILE = 250000, MAX_LOG = 350, SAVE_DELAY = 800, MAX_LOG_LINE = 12000;
   const $ = (s, r) => (r || document).querySelector(s);
   const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
   const svg = path => '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' + path + '</svg>';
@@ -15,7 +15,8 @@
     download:svg('<path d="M12 3v12m-5-5 5 5 5-5M4 20h16"/>'),
     bot:svg('<rect x="4" y="7" width="16" height="13" rx="3"/><path d="M12 3v4m-4 5h.01M16 12h.01M8 16h8"/>'),
     refresh:svg('<path d="M20 7v5h-5M4 17v-5h5"/><path d="M5.6 9A7 7 0 0 1 18 6l2 6M4 12l2 6a7 7 0 0 0 12.4-3"/>'),
-    trash:svg('<path d="M3 6h18M8 6V4h8v2m3 0-1 14H6L5 6m4 4v6m6-6v6"/>')
+    trash:svg('<path d="M3 6h18M8 6V4h8v2m3 0-1 14H6L5 6m4 4v6m6-6v6"/>'),
+    hide:svg('<path d="M5 12h14"/>')
   };
   let root = null, editor = null, workspace = null, activeFile = 'index.html';
   let opened = false, outputMode = 'console', aiBusy = false, aiMessages = [], latestCodeBlocks = [], previewToken = '';
@@ -95,11 +96,13 @@
       '<button class="dev-head-btn" id="dev-close" title="Exit Developer Mode" aria-label="Exit Developer Mode">'+I.close+'</button>'+
       '<input id="dev-file-picker" type="file" multiple hidden></header>'+
       '<div id="dev-body"><aside id="dev-explorer"><div class="dev-section-label"><span>PROJECT FILES</span><span class="dev-section-actions">'+
+      '<button class="dev-pane-hide" id="dev-explorer-hide" type="button" title="Hide Project Files panel" aria-label="Hide Project Files panel">'+I.hide+'<span>Hide</span></button>'+
       '<button class="dev-icon-btn" id="dev-new-file-toggle" title="New file" aria-label="New file">'+I.plus+'</button>'+
       '<button class="dev-icon-btn" id="dev-refresh-files" title="Refresh files" aria-label="Refresh files">'+I.refresh+'</button></span></div>'+
       '<div id="dev-file-list" role="list"></div><form class="dev-new-file" id="dev-new-file-form" hidden>'+
       '<input id="dev-new-file-name" placeholder="filename.js" aria-label="New file name" maxlength="100"><button type="submit" aria-label="Create file">+</button></form>'+
       '<p class="dev-explorer-foot">Saved locally in this browser. Folder sync and GitHub integration will be added separately.</p></aside>'+
+      '<div class="dev-resize-handle" id="dev-explorer-resize" role="separator" aria-orientation="vertical" aria-label="Resize Project Files panel" aria-valuemin="170" aria-valuemax="420" tabindex="0"></div>'+
       '<main id="dev-center"><section id="dev-editor-panel"><div id="dev-editor-toolbar"><span id="dev-active-file-label">index.html</span>'+
       '<span class="dev-editor-actions"><button class="dev-tool-btn" id="dev-save">'+I.save+' Save</button><button class="dev-tool-btn" id="dev-preview-button">'+I.play+' Preview</button></span></div>'+
       '<div class="dev-editor-wrap"><textarea id="dev-editor" spellcheck="false" autocapitalize="off" autocomplete="off" aria-label="Code editor"></textarea></div>'+
@@ -110,7 +113,8 @@
       '<div id="dev-output-lines" aria-live="polite"></div><iframe id="dev-preview-frame" title="Sandboxed project preview" sandbox="allow-scripts" referrerpolicy="no-referrer"></iframe>'+
       '<div id="dev-terminal-bar"><span id="dev-terminal-prompt">dev&gt;</span><input id="dev-terminal-command" autocomplete="off" spellcheck="false" aria-label="Terminal command" placeholder="help · run · preview · ls">'+
       '<button id="dev-terminal-run">Run</button></div></section></main>'+
-      '<aside id="dev-assistant"><div id="dev-assistant-head"><strong>'+I.bot+' &nbsp; AI Coding Assistant</strong><span id="dev-ai-provider">LifeLink AI</span></div>'+
+      '<div class="dev-resize-handle" id="dev-assistant-resize" role="separator" aria-orientation="vertical" aria-label="Resize AI Assistant panel" aria-valuemin="240" aria-valuemax="500" tabindex="0"></div>'+
+      '<aside id="dev-assistant"><div id="dev-assistant-head"><strong>'+I.bot+' &nbsp; AI Coding Assistant</strong><span id="dev-ai-provider">LifeLink AI</span><button class="dev-pane-hide" id="dev-assistant-hide" type="button" title="Hide AI Assistant panel" aria-label="Hide AI Assistant panel">'+I.hide+'<span>Hide</span></button></div>'+
       '<div id="dev-ai-model-row"><label for="dev-ai-model">Model</label><select id="dev-ai-model" aria-label="AI model"></select></div>'+
       '<div id="dev-ai-messages"><div class="dev-empty">Describe what you want to build, ask for an explanation, or send an error to AI. The assistant can use your active file and project structure as context.</div></div>'+
       '<form id="dev-ai-composer"><textarea id="dev-ai-input" placeholder="Ask AI to build, debug or explain code…" maxlength="12000"></textarea>'+
@@ -119,28 +123,108 @@
     editor=$('#dev-editor');
     wire();
   }
+  function updatePanelToggleStates() {
+    const compact=window.matchMedia('(max-width: 620px)').matches;
+    const drawer=window.matchMedia('(max-width: 900px)').matches;
+    const explorerVisible=compact?root.classList.contains('explorer-open'):!root.classList.contains('explorer-collapsed');
+    const assistantVisible=drawer?root.classList.contains('ai-open'):!root.classList.contains('assistant-collapsed');
+    const explorerToggle=$('#dev-explorer-toggle'),aiToggle=$('#dev-ai-toggle');
+    explorerToggle.setAttribute('aria-expanded',String(explorerVisible));
+    explorerToggle.setAttribute('aria-label',explorerVisible?'Hide Project Files panel':'Show Project Files panel');
+    explorerToggle.title=explorerVisible?'Hide Project Files panel':'Show Project Files panel';
+    aiToggle.setAttribute('aria-expanded',String(assistantVisible));
+    aiToggle.setAttribute('aria-label',assistantVisible?'Hide AI Assistant panel':'Show AI Assistant panel');
+    aiToggle.title=assistantVisible?'Hide AI Assistant panel':'Show AI Assistant panel';
+  }
+  function toggleExplorerPanel(force) {
+    const compact=window.matchMedia('(max-width: 620px)').matches;
+    const className=compact?'explorer-open':'explorer-collapsed';
+    const visible=force===undefined?!root.classList.contains(className):!!force;
+    root.classList.toggle(className,visible);
+    if(visible)root.classList.remove('ai-open','assistant-collapsed');
+    updatePanelToggleStates();
+  }
+  function toggleAssistantPanel(force) {
+    const drawer=window.matchMedia('(max-width: 900px)').matches;
+    const className=drawer?'ai-open':'assistant-collapsed';
+    const visible=force===undefined?(drawer?!root.classList.contains(className):root.classList.contains(className)):!!force;
+    root.classList.toggle(className,visible);
+    if(visible)root.classList.remove('explorer-open','explorer-collapsed');
+    updatePanelToggleStates();
+  }
+  function panelWidth(which) {
+    const property=which==='explorer'?'--dev-explorer-width':'--dev-assistant-width';
+    const fallback=which==='explorer'?226:328;
+    const value=parseFloat(getComputedStyle(root).getPropertyValue(property));
+    return Number.isFinite(value)&&value>0?value:fallback;
+  }
+  function applyPanelWidth(which,width) {
+    const property=which==='explorer'?'--dev-explorer-width':'--dev-assistant-width';
+    root.style.setProperty(property,Math.round(width)+'px');
+    const handle=$('#dev-'+which+'-resize');
+    if(handle)handle.setAttribute('aria-valuenow',String(Math.round(width)));
+  }
+  function savePanelLayout() {
+    try{localStorage.setItem(key()+':layout',JSON.stringify({explorer:panelWidth('explorer'),assistant:panelWidth('assistant')}));}catch(e){}
+  }
+  function loadPanelLayout() {
+    try{
+      const saved=JSON.parse(localStorage.getItem(key()+':layout')||'null');
+      if(saved&&Number.isFinite(saved.explorer))applyPanelWidth('explorer',Math.max(170,Math.min(420,saved.explorer)));
+      if(saved&&Number.isFinite(saved.assistant))applyPanelWidth('assistant',Math.max(240,Math.min(500,saved.assistant)));
+    }catch(e){}
+  }
+  function setupPanelResizing() {
+    const handles=[['explorer',$('#dev-explorer-resize')],['assistant',$('#dev-assistant-resize')]];
+    handles.forEach(([which,handle])=>{
+      if(!handle)return;
+      const resizeTo=clientX=>{
+        const rect=$('#dev-body').getBoundingClientRect();
+        const explorerWidth=which==='explorer'?clientX-rect.left:panelWidth('explorer');
+        const assistantWidth=which==='assistant'?rect.right-clientX:panelWidth('assistant');
+        if(which==='explorer'){
+          const max=Math.max(170,Math.min(420,rect.width-assistantWidth-360-14));
+          applyPanelWidth('explorer',Math.max(170,Math.min(max,explorerWidth)));
+        }else{
+          const max=Math.max(240,Math.min(500,rect.width-explorerWidth-360-14));
+          applyPanelWidth('assistant',Math.max(240,Math.min(max,assistantWidth)));
+        }
+      };
+      handle.addEventListener('pointerdown',event=>{
+        if(window.matchMedia('(max-width: 900px)').matches)return;
+        event.preventDefault();handle.setPointerCapture(event.pointerId);
+        root.classList.add('resizing');
+        const move=e=>resizeTo(e.clientX);
+        const stop=()=>{
+          handle.removeEventListener('pointermove',move);
+          handle.removeEventListener('pointerup',stop);
+          handle.removeEventListener('pointercancel',stop);
+          root.classList.remove('resizing');savePanelLayout();
+        };
+        handle.addEventListener('pointermove',move);
+        handle.addEventListener('pointerup',stop,{once:true});
+        handle.addEventListener('pointercancel',stop,{once:true});
+      });
+      handle.addEventListener('keydown',event=>{
+        if(!['ArrowLeft','ArrowRight','Home','End'].includes(event.key))return;
+        event.preventDefault();
+        const direction=which==='explorer'?1:-1,step=event.shiftKey?40:16;
+        let width=panelWidth(which);
+        if(event.key==='Home')width=which==='explorer'?170:240;
+        else if(event.key==='End')width=which==='explorer'?420:500;
+        else width+=((event.key==='ArrowRight'?1:-1)*step*direction);
+        applyPanelWidth(which,Math.max(which==='explorer'?170:240,Math.min(which==='explorer'?420:500,width)));
+        savePanelLayout();
+      });
+    });
+  }
   function wire() {
     $('#dev-close').addEventListener('click',close);
-    $('#dev-explorer-toggle').addEventListener('click',()=>{
-      const drawer=window.matchMedia('(max-width: 620px)').matches;
-      const className=drawer?'explorer-open':'explorer-collapsed';
-      const expanded=!root.classList.contains(className);
-      root.classList.toggle(className,expanded);
-      root.classList.remove('ai-open','assistant-collapsed');
-      $('#dev-explorer-toggle').setAttribute('aria-expanded',String(expanded));
-      $('#dev-explorer-toggle').setAttribute('aria-label',expanded?'Collapse Explorer':'Expand Explorer');
-      $('#dev-ai-toggle').setAttribute('aria-expanded','false');
-    });
-    $('#dev-ai-toggle').addEventListener('click',()=>{
-      const drawer=window.matchMedia('(max-width: 900px)').matches;
-      const expanded=drawer?!root.classList.contains('ai-open'):root.classList.contains('assistant-collapsed');
-      if(drawer)root.classList.toggle('ai-open',expanded);
-      else root.classList.toggle('assistant-collapsed',!expanded);
-      root.classList.remove('explorer-open','explorer-collapsed');
-      $('#dev-ai-toggle').setAttribute('aria-expanded',String(expanded));
-      $('#dev-explorer-toggle').setAttribute('aria-expanded','false');
-      $('#dev-explorer-toggle').setAttribute('aria-label','Expand Explorer');
-    });
+    $('#dev-explorer-toggle').addEventListener('click',()=>toggleExplorerPanel());
+    $('#dev-ai-toggle').addEventListener('click',()=>toggleAssistantPanel());
+    $('#dev-explorer-hide').addEventListener('click',()=>toggleExplorerPanel(false));
+    $('#dev-assistant-hide').addEventListener('click',()=>toggleAssistantPanel(false));
+    setupPanelResizing();
     $('#dev-run').addEventListener('click',runActive);
     $('#dev-preview-button').addEventListener('click',showPreview);
     $('#dev-save').addEventListener('click',()=>save(true));
@@ -422,11 +506,13 @@
     if(opened)return;
     buildUI();workspace=load();
     root.classList.remove('closing','ai-open','explorer-open','explorer-collapsed','assistant-collapsed');
+    loadPanelLayout();
     const compact=window.matchMedia('(max-width: 620px)').matches;
     const mobile=window.matchMedia('(max-width: 900px)').matches;
     $('#dev-ai-toggle').setAttribute('aria-expanded',String(!mobile));
     $('#dev-explorer-toggle').setAttribute('aria-expanded',String(!compact));
-    $('#dev-explorer-toggle').setAttribute('aria-label',compact?'Expand Explorer':'Collapse Explorer');
+    $('#dev-explorer-toggle').setAttribute('aria-label',compact?'Show Project Files panel':'Hide Project Files panel');
+    updatePanelToggleStates();
     if(!workspace.files.some(f=>f.name===activeFile))activeFile=workspace.files[0].name;
     $('#dev-project-name').value=workspace.name||'Untitled project';
     renderFiles();openFile(activeFile);
