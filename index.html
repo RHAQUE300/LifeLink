@@ -495,6 +495,49 @@ body::-webkit-scrollbar,
 .home-task-bubbles-head{margin-bottom:3px!important}
 .home-task-bubbles-head+.bub{margin-top:0!important}
 </style>
+<style id="lifelink-narrow-dock-v2">
+/* Compact the main LifeLink dock instead of squeezing five text labels onto narrow screens. */
+@media(max-width:440px){
+  #dock{
+    width:min(var(--dock-open-width,max-content),calc(100vw - 12px));
+    max-width:calc(100vw - 12px);
+    padding:5px;
+    gap:2px;
+  }
+  #dock .it{
+    width:min(var(--dock-items-width,0px),calc(100vw - 58px));
+    max-width:calc(100vw - 58px);
+    min-width:0;
+    flex:0 1 auto;
+    gap:2px;
+  }
+  #dock .dk{
+    display:inline-flex;
+    width:34px;
+    min-width:34px;
+    max-width:34px;
+    flex:0 0 34px;
+    padding:7px 5px;
+    gap:0;
+    font-size:15px;
+  }
+  #dock .dk span{display:none!important}
+  #dock .vd{display:none!important}
+  #dock #dt{width:36px;height:36px;min-width:36px;flex:0 0 36px}
+}
+@media(max-width:360px){
+  #dock{--dock-open-padding:5px;--dock-open-gap:1px;padding:5px;gap:1px}
+  #dock .it{width:min(var(--dock-items-width,0px),calc(100vw - 54px));max-width:calc(100vw - 54px);gap:1px}
+  #dock .dk{width:30px;min-width:30px;max-width:30px;flex-basis:30px;padding:6px 4px;font-size:14px}
+  #dock #dt{width:34px;height:34px;min-width:34px;flex-basis:34px}
+}
+@media(max-width:280px){
+  #dock{padding:4px;gap:1px}
+  #dock .it{width:min(var(--dock-items-width,0px),calc(100vw - 48px));max-width:calc(100vw - 48px)}
+  #dock .dk{width:27px;min-width:27px;max-width:27px;flex-basis:27px;padding:5px 3px;font-size:13px}
+  #dock #dt{width:32px;height:32px;min-width:32px;flex-basis:32px}
+}
+</style>
 </head><body>
 
 <header class="glass" id="app-header" style="display:none">
@@ -515,7 +558,7 @@ body::-webkit-scrollbar,
   <button class="ib" id="av" onclick="openIsland('account')" title="Account" aria-label="Account"></button>
 </header>
 <main></main>
-<nav id="dock" class="glass" aria-label="Dock" style="display:none"><button class="ib" id="dt" aria-label="Hide dock" aria-expanded="true"></button><div class="it"><span class="vd"></span><a class="dk" data-r="todo" href="#/todo" aria-keyshortcuts="Alt+1" title="To Do · Alt+1 (Option+1 on Mac; Ctrl+Alt+1 on Chromebook)">☑ <span>To Do</span></a><a class="dk" data-r="calendar" href="#/calendar" aria-keyshortcuts="Alt+2" title="Calendar · Alt+2 (Option+2 on Mac; Ctrl+Alt+2 on Chromebook)">▦ <span>Calendar</span></a><a class="dk" data-r="notes" href="#/notes" aria-keyshortcuts="Alt+3" title="Notes · Alt+3 (Option+3 on Mac; Ctrl+Alt+3 on Chromebook)">✎ <span>Notes</span></a><a class="dk" data-r="apps" href="#/apps" aria-keyshortcuts="Alt+4" title="Apps · Alt+4 (Option+4 on Mac; Ctrl+Alt+4 on Chromebook)">⊞ <span>Apps</span></a><a class="dk go" href="#/recovery" aria-keyshortcuts="Alt+5" title="Recovery · Alt+5 (Option+5 on Mac; Ctrl+Alt+5 on Chromebook)">▶ <span>Start Recovery</span></a></div></nav>
+<nav id="dock" class="glass" aria-label="Dock" style="display:none"><button class="ib" id="dt" aria-label="Hide dock" aria-expanded="true"></button><div class="it"><span class="vd"></span><a class="dk" data-r="todo" href="#/todo" aria-label="To Do" aria-keyshortcuts="Alt+1" title="To Do · Alt+1 (Option+1 on Mac; Ctrl+Alt+1 on Chromebook)">☑ <span>To Do</span></a><a class="dk" data-r="calendar" href="#/calendar" aria-label="Calendar" aria-keyshortcuts="Alt+2" title="Calendar · Alt+2 (Option+2 on Mac; Ctrl+Alt+2 on Chromebook)">▦ <span>Calendar</span></a><a class="dk" data-r="notes" href="#/notes" aria-label="Notes" aria-keyshortcuts="Alt+3" title="Notes · Alt+3 (Option+3 on Mac; Ctrl+Alt+3 on Chromebook)">✎ <span>Notes</span></a><a class="dk" data-r="apps" href="#/apps" aria-label="Apps" aria-keyshortcuts="Alt+4" title="Apps · Alt+4 (Option+4 on Mac; Ctrl+Alt+4 on Chromebook)">⊞ <span>Apps</span></a><a class="dk go" href="#/recovery" aria-label="Start Recovery" aria-keyshortcuts="Alt+5" title="Recovery · Alt+5 (Option+5 on Mac; Ctrl+Alt+5 on Chromebook)">▶ <span>Start Recovery</span></a></div></nav>
 
 <div id="modal-backdrop" onclick="if(event.target===this)closeModal()">
   <div id="modal-card" role="dialog" aria-modal="true"></div>
@@ -4595,7 +4638,7 @@ window.loadDeveloperMode = async function(button) {
     if (document.querySelector('link[data-lifelink-dev-css]')) { resolve(); return; }
     const link = document.createElement('link');
     link.rel = 'stylesheet';
-    link.href = 'dev-mode.css?v=0.7.0';
+    link.href = 'dev-mode.css?v=0.7.2';
     link.dataset.lifelinkDevCss = 'true';
     link.onload = resolve;
     link.onerror = () => reject(new Error('Developer Mode styles could not be loaded.'));
@@ -4603,7 +4646,7 @@ window.loadDeveloperMode = async function(button) {
   });
   const loadScript = new Promise((resolve, reject) => {
     const script = document.createElement('script');
-    script.src = 'dev-mode.js?v=0.7.1';
+    script.src = 'dev-mode.js?v=0.7.2';
     script.async = true;
     script.onload = resolve;
     script.onerror = () => reject(new Error('Developer Mode module could not be loaded.'));
