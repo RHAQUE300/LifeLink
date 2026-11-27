@@ -1,7 +1,7 @@
 /* LifeLink Developer Mode: additive, lazy-loaded, browser-native workspace. */
 (function () {
   'use strict';
-  const VERSION = '0.1.0', PREFIX = 'lifelink.dev.workspace.v1:', MAX_FILE = 250000, MAX_LOG = 350;
+  const VERSION = '0.2.0', PREFIX = 'lifelink.dev.workspace.v1:', MAX_FILE = 250000, MAX_LOG = 350, SAVE_DELAY = 520, MAX_LOG_LINE = 12000;
   const $ = (s, r) => (r || document).querySelector(s);
   const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
   const svg = path => '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' + path + '</svg>';
@@ -18,6 +18,7 @@
   };
   let root = null, editor = null, workspace = null, activeFile = 'index.html';
   let opened = false, outputMode = 'console', aiBusy = false, aiMessages = [], latestCodeBlocks = [], previewToken = '';
+  let saveTimer = null, logFrame = 0, logQueue = [], lastErrorText = '';
 
   function key() {
     const owner = typeof S !== 'undefined' && S && S.ownerEmail ? S.ownerEmail :
@@ -46,21 +47,33 @@
     if (typeof window.toast === 'function') window.toast(message);
     else console.info('[LifeLink Dev] ' + message);
   }
-  function status(message) { const el=$('#dev-status'); if(el) el.textContent=message; }
+  function status(message, state) {
+    const el=$('#dev-status');
+    if(!el)return;
+    el.textContent=message;
+    el.dataset.state=state || (message==='All changes saved'?'saved':'normal');
+  }
   function save(showMessage) {
     if (!workspace) return false;
+    if(saveTimer){clearTimeout(saveTimer);saveTimer=null;}
     try {
       localStorage.setItem(key(),JSON.stringify(workspace));
-      status('All changes saved');
+      status('All changes saved','saved');
       if (showMessage) tell('Developer workspace saved');
       return true;
     } catch (e) {
-      status('Storage full');
+      status('Storage full','error');
       log('Could not save locally. Download files as a backup.','warn');
       if (showMessage) tell('Could not save: browser storage may be full');
       return false;
     }
   }
+  function scheduleSave() {
+    status('Unsaved changes','pending');
+    if(saveTimer)clearTimeout(saveTimer);
+    saveTimer=setTimeout(()=>{saveTimer=null;save(false);},SAVE_DELAY);
+  }
+  function flushSave(showMessage) { return save(!!showMessage); }
   function ext(name) { return String(name || '').split('.').pop().toLowerCase(); }
   function current() { return workspace && workspace.files.find(f=>f.name===activeFile); }
   function glyph(name) { return ({html:'◇',htm:'◇',css:'#',js:'JS',mjs:'JS',json:'{}',md:'M',py:'Py',sql:'DB'})[ext(name)] || '·'; }
@@ -107,7 +120,12 @@
     $('#dev-run').addEventListener('click',runActive);
     $('#dev-preview-button').addEventListener('click',showPreview);
     $('#dev-save').addEventListener('click',()=>save(true));
-    $('#dev-output-clear').addEventListener('click',()=>{$('#dev-output-lines').textContent='';});
+    $('#dev-output-clear').addEventListener('click',()=>{
+      logQueue.length=0;
+      if(logFrame){cancelAnimationFrame(logFrame);logFrame=0;}
+      lastErrorText='';
+      $('#dev-output-lines').textContent='';
+    });
     $('#dev-send-error').addEventListener('click',sendError);
     $('#dev-open-files').addEventListener('click',()=>$('#dev-file-picker').click());
     $('#dev-file-picker').addEventListener('change',importFiles);
@@ -117,10 +135,10 @@
     });
     $('#dev-new-file-form').addEventListener('submit',newFile);
     $('#dev-refresh-files').addEventListener('click',renderFiles);
-    $('#dev-project-name').addEventListener('input',e=>{workspace.name=e.target.value.slice(0,60);save(false);});
+    $('#dev-project-name').addEventListener('input',e=>{workspace.name=e.target.value.slice(0,60);scheduleSave();});
     editor.addEventListener('input',()=>{
       const file=current(); if(file)file.content=editor.value.slice(0,MAX_FILE);
-      save(false); updateCursor();
+      scheduleSave(); updateCursor();
     });
     editor.addEventListener('keydown',e=>{
       if(e.key==='Tab'){e.preventDefault();editor.setRangeText('  ',editor.selectionStart,editor.selectionEnd,'end');editor.dispatchEvent(new Event('input',{bubbles:true}));}
@@ -145,6 +163,7 @@
   }
   function openFile(name) {
     const file=workspace.files.find(f=>f.name===name); if(!file)return;
+    if(name!==activeFile)flushSave(false);
     activeFile=name; editor.value=file.content;
     $('#dev-active-file-label').textContent=name;
     $('#dev-language-status').textContent=ext(name).toUpperCase()+' · UTF-8';
@@ -184,9 +203,28 @@
     setTimeout(()=>URL.revokeObjectURL(url),1200); log('Downloaded '+file.name,'result');
   }
   function log(message,kind) {
-    const out=$('#dev-output-lines'); if(!out)return;
-    const line=document.createElement('div'); line.className='dev-output-line '+(kind||'normal'); line.textContent=String(message);
-    out.appendChild(line); while(out.children.length>MAX_LOG)out.firstElementChild.remove(); out.scrollTop=out.scrollHeight;
+    const value=String(message==null?'':message);
+    const type=kind||'normal';
+    if(type==='error')lastErrorText=value.slice(0,MAX_LOG_LINE);
+    logQueue.push({text:value.slice(0,MAX_LOG_LINE),kind:type});
+    if(!logFrame)logFrame=requestAnimationFrame(flushLogs);
+  }
+  function flushLogs() {
+    logFrame=0;
+    const out=$('#dev-output-lines');
+    if(!out||!logQueue.length)return;
+    const keepAtBottom=out.scrollHeight-out.scrollTop-out.clientHeight<48;
+    const fragment=document.createDocumentFragment();
+    for(const item of logQueue.splice(0)){
+      const line=document.createElement('div');
+      line.className='dev-output-line '+item.kind;
+      line.textContent=item.text;
+      fragment.appendChild(line);
+    }
+    out.appendChild(fragment);
+    while(out.children.length>MAX_LOG)out.firstElementChild.remove();
+    if(keepAtBottom)out.scrollTop=out.scrollHeight;
+    if(logQueue.length&&!logFrame)logFrame=requestAnimationFrame(flushLogs);
   }
   function setOutput(mode) {
     outputMode=mode==='preview'?'preview':'console';
@@ -317,13 +355,15 @@
   }
   function sendError() {
     const lines=Array.from($('#dev-output-lines').children), item=[...lines].reverse().find(el=>el.classList.contains('error'));
-    if(!item){tell('There is no recent error to send');return;}
-    const prompt='Please diagnose this error and suggest a fix for my active file:\n\n'+item.textContent;
+    const errorText=lastErrorText||(item&&item.textContent);
+    if(!errorText){tell('There is no recent error to send');return;}
+    const prompt='Please diagnose this error and suggest a fix for my active file:\n\n'+errorText;
     $('#dev-ai-input').value=prompt;askAI(prompt);
   }
   function open() {
     if(opened)return;
     buildUI();workspace=load();
+    root.classList.remove('closing');
     if(!workspace.files.some(f=>f.name===activeFile))activeFile=workspace.files[0].name;
     $('#dev-project-name').value=workspace.name||'Untitled project';
     renderFiles();openFile(activeFile);
@@ -337,9 +377,13 @@
   }
   function close() {
     if(!opened||!root)return;
+    flushSave(false);
+    root.classList.add('closing');
     root.classList.remove('open');opened=false;
     document.body.style.overflow=document.body.dataset.devPreviousOverflow||'';
     const button=$('#dev-mode-launcher');if(button)button.focus();
   }
+  window.addEventListener('pagehide',()=>{if(workspace)flushSave(false);});
+  document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='hidden'&&workspace)flushSave(false);});
   window.LifeLinkDevMode={open:open,close:close,version:VERSION};
 })();
