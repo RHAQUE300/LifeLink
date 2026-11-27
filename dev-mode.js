@@ -1,7 +1,7 @@
 /* LifeLink Developer Mode: additive, lazy-loaded, browser-native workspace. */
 (function () {
   'use strict';
-  const VERSION = '0.7.0', PREFIX = 'lifelink.dev.workspace.v1:', MAX_FILE = 250000, MAX_LOG = 350, SAVE_DELAY = 800, MAX_LOG_LINE = 12000;
+  const VERSION = '0.7.1', PREFIX = 'lifelink.dev.workspace.v1:', MAX_FILE = 250000, MAX_LOG = 350, SAVE_DELAY = 800, MAX_LOG_LINE = 12000;
   const $ = (s, r) => (r || document).querySelector(s);
   const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
   const svg = path => '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' + path + '</svg>';
@@ -138,8 +138,10 @@
   }
   function toggleExplorerPanel(force) {
     const compact=window.matchMedia('(max-width: 620px)').matches;
-    const className=compact?'explorer-open':'explorer-collapsed';
-    const visible=force===undefined?!root.classList.contains(className):!!force;
+    // Compute the desired next state: mobile uses an open class; desktop uses a collapsed class.
+    const visible=force===undefined
+      ? (compact ? !root.classList.contains('explorer-open') : root.classList.contains('explorer-collapsed'))
+      : !!force;
     if(compact)root.classList.toggle('explorer-open',visible);
     else root.classList.toggle('explorer-collapsed',!visible);
     if(visible)root.classList.remove('ai-open','assistant-collapsed');
@@ -147,8 +149,10 @@
   }
   function toggleAssistantPanel(force) {
     const drawer=window.matchMedia('(max-width: 900px)').matches;
-    const className=drawer?'ai-open':'assistant-collapsed';
-    const visible=force===undefined?(drawer?!root.classList.contains(className):root.classList.contains(className)):!!force;
+    // Compute the desired next state: mobile/tablet uses an open class; desktop uses a collapsed class.
+    const visible=force===undefined
+      ? (drawer ? !root.classList.contains('ai-open') : root.classList.contains('assistant-collapsed'))
+      : !!force;
     if(drawer)root.classList.toggle('ai-open',visible);
     else root.classList.toggle('assistant-collapsed',!visible);
     if(visible)root.classList.remove('explorer-open','explorer-collapsed');
