@@ -875,6 +875,7 @@
   async function runActive() {
     const file=current();if(!file)return;
     save(false);
+    clearLogs();
     const token=++diagnosticToken,report=scanProject();
     renderDiagnostics(report,'','AI project inspection is running…');
     setOutput('diagnostics');
@@ -884,7 +885,9 @@
       if(localWebProject()){
         projectPreview();
         runtimeText='Browser preview launched in the isolated iframe. Check Terminal for console output and runtime exceptions.';
-        await new Promise(resolve=>setTimeout(resolve,700));
+        await new Promise(resolve=>setTimeout(resolve,1200));
+        const previewLines=Array.from($('#dev-output-lines').children).slice(-50).map(x=>x.textContent);
+        if(previewLines.length)runtimeText+='\nBrowser console output:\n'+previewLines.join('\n');
         if(lastErrorText)runtimeText+='\nCaptured preview error: '+lastErrorText;
       }else{
         runtimeText=await runWithWandbox(file);
