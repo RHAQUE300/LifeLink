@@ -85,7 +85,8 @@
     root.innerHTML =
       '<header id="dev-head"><div class="dev-brand"><span class="dev-brand-mark">'+I.code+'</span><span>LifeLink Dev</span></div>'+
       '<input id="dev-project-name" class="dev-project-name" aria-label="Project name" value="Untitled project" maxlength="60">'+
-      '<span id="dev-status" class="dev-status" role="status">Ready</span><span class="dev-head-spacer"></span>'+
+      '<span id="dev-status" class="dev-status" role="status">Ready</span>'+
+      '<button class="dev-head-btn" id="dev-ai-toggle" aria-label="Toggle AI assistant" aria-expanded="false">'+I.bot+'<span class="dev-btn-label">AI</span></button><span class="dev-head-spacer"></span>'+
       '<button class="dev-head-btn" id="dev-open-files" title="Import files">'+I.folder+'<span class="dev-btn-label">Import</span></button>'+
       '<button class="dev-head-btn" id="dev-download-file" title="Download active file">'+I.download+'<span class="dev-btn-label">Export</span></button>'+
       '<button class="dev-head-btn primary" id="dev-run">'+I.play+'<span class="dev-btn-label">Run</span></button>'+
@@ -117,15 +118,14 @@
   }
   function wire() {
     $('#dev-close').addEventListener('click',close);
+    $('#dev-ai-toggle').addEventListener('click',()=>{
+      const expanded=root.classList.toggle('ai-open');
+      $('#dev-ai-toggle').setAttribute('aria-expanded',String(expanded));
+    });
     $('#dev-run').addEventListener('click',runActive);
     $('#dev-preview-button').addEventListener('click',showPreview);
     $('#dev-save').addEventListener('click',()=>save(true));
-    $('#dev-output-clear').addEventListener('click',()=>{
-      logQueue.length=0;
-      if(logFrame){cancelAnimationFrame(logFrame);logFrame=0;}
-      lastErrorText='';
-      $('#dev-output-lines').textContent='';
-    });
+    $('#dev-output-clear').addEventListener('click',clearLogs);
     $('#dev-send-error').addEventListener('click',sendError);
     $('#dev-open-files').addEventListener('click',()=>$('#dev-file-picker').click());
     $('#dev-file-picker').addEventListener('change',importFiles);
@@ -152,6 +152,9 @@
     root.addEventListener('click',e=>{
       const tab=e.target.closest('[data-dev-output]'); if(tab)setOutput(tab.dataset.devOutput);
       const apply=e.target.closest('[data-dev-apply]'); if(apply)applyBlock(Number(apply.dataset.devApply));
+      if(root.classList.contains('ai-open')&&!e.target.closest('#dev-assistant')&&!e.target.closest('#dev-ai-toggle')){
+        root.classList.remove('ai-open');$('#dev-ai-toggle').setAttribute('aria-expanded','false');
+      }
     });
     window.addEventListener('message',previewMessage);
     document.addEventListener('keydown',e=>{if(opened&&e.key==='Escape'){e.preventDefault();close();}});
@@ -201,6 +204,12 @@
     const url=URL.createObjectURL(new Blob([file.content],{type:'text/plain;charset=utf-8'}));
     const a=document.createElement('a'); a.href=url; a.download=file.name; a.click();
     setTimeout(()=>URL.revokeObjectURL(url),1200); log('Downloaded '+file.name,'result');
+  }
+  function clearLogs() {
+    logQueue.length=0;
+    if(logFrame){cancelAnimationFrame(logFrame);logFrame=0;}
+    lastErrorText='';
+    const out=$('#dev-output-lines');if(out)out.textContent='';
   }
   function log(message,kind) {
     const value=String(message==null?'':message);
@@ -278,7 +287,7 @@
     const parts=command.split(/\s+/), verb=parts.shift().toLowerCase(), arg=parts.join(' ');
     switch(verb){
       case 'help': log('Commands: help, clear, pwd, ls, cat <file>, open <file>, new <file>, echo <text>, date, run, preview, download, version'); log('Browser-native project console, not a Windows/Linux shell.','warn');break;
-      case 'clear': $('#dev-output-lines').textContent='';break;
+      case 'clear': clearLogs();break;
       case 'pwd': log('/lifelink/'+(workspace.name||'project'));break;
       case 'ls': workspace.files.forEach(f=>log(f.name));break;
       case 'cat': {const f=workspace.files.find(x=>x.name===arg);if(f)log(f.content);else log('File not found: '+arg,'error');break;}
@@ -363,7 +372,8 @@
   function open() {
     if(opened)return;
     buildUI();workspace=load();
-    root.classList.remove('closing');
+    root.classList.remove('closing','ai-open');
+    $('#dev-ai-toggle').setAttribute('aria-expanded','false');
     if(!workspace.files.some(f=>f.name===activeFile))activeFile=workspace.files[0].name;
     $('#dev-project-name').value=workspace.name||'Untitled project';
     renderFiles();openFile(activeFile);
@@ -378,6 +388,8 @@
   function close() {
     if(!opened||!root)return;
     flushSave(false);
+    root.classList.remove('ai-open');
+    $('#dev-ai-toggle').setAttribute('aria-expanded','false');
     root.classList.add('closing');
     root.classList.remove('open');opened=false;
     document.body.style.overflow=document.body.dataset.devPreviousOverflow||'';
