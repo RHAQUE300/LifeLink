@@ -1,7 +1,7 @@
 /* LifeLink Developer Mode: additive, lazy-loaded, browser-native workspace. */
 (function () {
   'use strict';
-  const VERSION = '0.4.0', PREFIX = 'lifelink.dev.workspace.v1:', MAX_FILE = 250000, MAX_LOG = 350, SAVE_DELAY = 800, MAX_LOG_LINE = 12000;
+  const VERSION = '0.5.0', PREFIX = 'lifelink.dev.workspace.v1:', MAX_FILE = 250000, MAX_LOG = 350, SAVE_DELAY = 800, MAX_LOG_LINE = 12000;
   const $ = (s, r) => (r || document).querySelector(s);
   const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
   const svg = path => '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' + path + '</svg>';
@@ -14,7 +14,8 @@
     folder:svg('<path d="M3 6a2 2 0 0 1 2-2h5l2 2h7a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/>'),
     download:svg('<path d="M12 3v12m-5-5 5 5 5-5M4 20h16"/>'),
     bot:svg('<rect x="4" y="7" width="16" height="13" rx="3"/><path d="M12 3v4m-4 5h.01M16 12h.01M8 16h8"/>'),
-    refresh:svg('<path d="M20 7v5h-5M4 17v-5h5"/><path d="M5.6 9A7 7 0 0 1 18 6l2 6M4 12l2 6a7 7 0 0 0 12.4-3"/>')
+    refresh:svg('<path d="M20 7v5h-5M4 17v-5h5"/><path d="M5.6 9A7 7 0 0 1 18 6l2 6M4 12l2 6a7 7 0 0 0 12.4-3"/>'),
+    trash:svg('<path d="M3 6h18M8 6V4h8v2m3 0-1 14H6L5 6m4 4v6m6-6v6"/>')
   };
   let root = null, editor = null, workspace = null, activeFile = 'index.html';
   let opened = false, outputMode = 'console', aiBusy = false, aiMessages = [], latestCodeBlocks = [], previewToken = '';
@@ -93,7 +94,7 @@
       '<button class="dev-head-btn primary" id="dev-run">'+I.play+'<span class="dev-btn-label">Run</span></button>'+
       '<button class="dev-head-btn" id="dev-close" title="Exit Developer Mode" aria-label="Exit Developer Mode">'+I.close+'</button>'+
       '<input id="dev-file-picker" type="file" multiple hidden></header>'+
-      '<div id="dev-body"><aside id="dev-explorer"><div class="dev-section-label"><span>EXPLORER</span><span class="dev-section-actions">'+
+      '<div id="dev-body"><aside id="dev-explorer"><div class="dev-section-label"><span>PROJECT FILES</span><span class="dev-section-actions">'+
       '<button class="dev-icon-btn" id="dev-new-file-toggle" title="New file" aria-label="New file">'+I.plus+'</button>'+
       '<button class="dev-icon-btn" id="dev-refresh-files" title="Refresh files" aria-label="Refresh files">'+I.refresh+'</button></span></div>'+
       '<div id="dev-file-list" role="list"></div><form class="dev-new-file" id="dev-new-file-form" hidden>'+
@@ -110,6 +111,7 @@
       '<div id="dev-terminal-bar"><span id="dev-terminal-prompt">dev&gt;</span><input id="dev-terminal-command" autocomplete="off" spellcheck="false" aria-label="Terminal command" placeholder="help · run · preview · ls">'+
       '<button id="dev-terminal-run">Run</button></div></section></main>'+
       '<aside id="dev-assistant"><div id="dev-assistant-head"><strong>'+I.bot+' &nbsp; AI Coding Assistant</strong><span id="dev-ai-provider">LifeLink AI</span></div>'+
+      '<div id="dev-ai-model-row"><label for="dev-ai-model">Model</label><select id="dev-ai-model" aria-label="AI model"></select></div>'+
       '<div id="dev-ai-messages"><div class="dev-empty">Describe what you want to build, ask for an explanation, or send an error to AI. The assistant can use your active file and project structure as context.</div></div>'+
       '<form id="dev-ai-composer"><textarea id="dev-ai-input" placeholder="Ask AI to build, debug or explain code…" maxlength="12000"></textarea>'+
       '<div id="dev-ai-send-row"><span id="dev-ai-hint">AI uses your connected LifeLink provider.</span><button id="dev-ai-send" type="submit">Ask AI ↗</button></div></form></aside></div>';
@@ -166,8 +168,11 @@
     $('#dev-terminal-run').addEventListener('click',terminal);
     $('#dev-terminal-command').addEventListener('keydown',e=>{if(e.key==='Enter'){e.preventDefault();terminal();}});
     $('#dev-ai-composer').addEventListener('submit',e=>{e.preventDefault();askAI($('#dev-ai-input').value);});
+    $('#dev-ai-model').addEventListener('change',e=>{if(typeof window.selectAIModel==='function')window.selectAIModel(e.target.value);syncAIModel();});
     root.addEventListener('click',e=>{
       const tab=e.target.closest('[data-dev-output]'); if(tab)setOutput(tab.dataset.devOutput);
+      const exportButton=e.target.closest('[data-dev-export]');if(exportButton){e.preventDefault();e.stopPropagation();downloadFile(exportButton.dataset.devExport);return;}
+      const deleteButton=e.target.closest('[data-dev-delete]');if(deleteButton){e.preventDefault();e.stopPropagation();deleteFile(deleteButton.dataset.devDelete);return;}
       const apply=e.target.closest('[data-dev-apply]'); if(apply)applyBlock(Number(apply.dataset.devApply));
       if(root.classList.contains('ai-open')&&!e.target.closest('#dev-assistant')&&!e.target.closest('#dev-ai-toggle')){
         root.classList.remove('ai-open');$('#dev-ai-toggle').setAttribute('aria-expanded','false');
@@ -182,7 +187,7 @@
   }
   function renderFiles() {
     const list=$('#dev-file-list'); if(!list||!workspace)return;
-    list.innerHTML=workspace.files.map(f=>'<button class="dev-file'+(f.name===activeFile?' active':'')+'" type="button" data-dev-file="'+esc(f.name)+'" title="'+esc(f.name)+'"><span class="dev-file-icon">'+esc(glyph(f.name))+'</span><span>'+esc(f.name)+'</span></button>').join('');
+    list.innerHTML=workspace.files.map(f=>'<div class="dev-file-row"><button class="dev-file'+(f.name===activeFile?' active':'')+'" type="button" data-dev-file="'+esc(f.name)+'" title="'+esc(f.name)+'"><span class="dev-file-icon">'+esc(glyph(f.name))+'</span><span>'+esc(f.name)+'</span></button><span class="dev-file-actions"><button type="button" class="dev-file-action" data-dev-export="'+esc(f.name)+'" title="Export '+esc(f.name)+'" aria-label="Export '+esc(f.name)+'">'+I.download+'</button><button type="button" class="dev-file-action delete" data-dev-delete="'+esc(f.name)+'" title="Delete '+esc(f.name)+'" aria-label="Delete '+esc(f.name)+'">'+I.trash+'</button></span></div>').join('');
     list.querySelectorAll('[data-dev-file]').forEach(b=>b.addEventListener('click',()=>openFile(b.dataset.devFile)));
   }
   function openFile(name) {
@@ -227,11 +232,27 @@
     if(files[0])openFile(files[0].name.replace(/[^\w.-]/g,'_').slice(0,100));
     log('Imported '+files.length+' file(s).','result');
   }
-  function downloadFile() {
-    const file=current(); if(!file)return;
+  function downloadFile(name) {
+    const file=name?workspace.files.find(f=>f.name===name):current();if(!file)return;
     const url=URL.createObjectURL(new Blob([file.content],{type:'text/plain;charset=utf-8'}));
-    const a=document.createElement('a'); a.href=url; a.download=file.name; a.click();
-    setTimeout(()=>URL.revokeObjectURL(url),1200); log('Downloaded '+file.name,'result');
+    const a=document.createElement('a');a.href=url;a.download=file.name;a.click();
+    setTimeout(()=>URL.revokeObjectURL(url),1200);log('Exported '+file.name,'result');
+  }
+  function deleteFile(name) {
+    const index=workspace.files.findIndex(f=>f.name===name);if(index<0)return;
+    if(workspace.files.length===1){tell('A project must keep at least one file.');return;}
+    if(!window.confirm('Delete '+name+' from this project? This cannot be undone.'))return;
+    flushSave(false);workspace.files.splice(index,1);
+    if(activeFile===name)openFile(workspace.files[Math.min(index,workspace.files.length-1)].name);else renderFiles();
+    save(false);tell('Deleted '+name);
+  }
+  function syncAIModel() {
+    const source=$('#af-model'),target=$('#dev-ai-model');if(!source||!target)return;
+    const selected=source.value||'auto';
+    target.innerHTML=Array.from(source.options).map(option=>'<option value="'+esc(option.value)+'">'+esc(option.textContent)+'</option>').join('');
+    target.value=selected;
+    const provider=$('#dev-ai-provider'),availability=window.aiModelAvailability||{};
+    if(provider)provider.textContent=selected==='auto'?'Auto · connected models':(availability[selected]?'Connected · '+target.selectedOptions[0].textContent:'Not connected');
   }
   function clearLogs() {
     logQueue.length=0;
@@ -414,6 +435,8 @@
     document.body.dataset.devPreviousOverflow=document.body.style.overflow;
     document.body.style.overflow='hidden';
     root.classList.add('open');opened=true;setOutput('console');
+    syncAIModel();
+    if(typeof window.refreshAIModelStatus==='function')Promise.resolve(window.refreshAIModelStatus()).then(syncAIModel).catch(syncAIModel);
     log('LifeLink Dev '+VERSION+' ready.','system');log('Browser-native workspace · type help for terminal commands.','system');
     setTimeout(()=>editor&&editor.focus(),80);
   }
