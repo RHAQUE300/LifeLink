@@ -142,3 +142,7 @@
 [data-theme=dark] .dev-ai-apply button{background:rgba(132,162,255,.13);color:#c8d6ff;border-color:rgba(132,162,255,.25)}
 [data-theme=dark] .dev-new-file button{background:#dce5f5;color:#1b2433}
 @media(max-width:620px){[data-theme=dark] #dev-assistant{background:rgba(17,19,23,.98)}}
+
+/* Reset a few broad v20 element selectors inside the full-screen add-on. */
+#dev-head{position:relative;top:auto;left:auto;right:auto;bottom:auto;transform:none;width:100%;max-width:none;min-height:62px;border-radius:0;z-index:auto}
+#dev-center{max-width:none;width:100%;margin:0}
