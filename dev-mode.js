@@ -1,7 +1,7 @@
 /* LifeLink Developer Mode: additive, lazy-loaded, browser-native workspace. */
 (function () {
   'use strict';
-  const VERSION = '0.3.0', PREFIX = 'lifelink.dev.workspace.v1:', MAX_FILE = 250000, MAX_LOG = 350, SAVE_DELAY = 800, MAX_LOG_LINE = 12000;
+  const VERSION = '0.4.0', PREFIX = 'lifelink.dev.workspace.v1:', MAX_FILE = 250000, MAX_LOG = 350, SAVE_DELAY = 800, MAX_LOG_LINE = 12000;
   const $ = (s, r) => (r || document).querySelector(s);
   const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
   const svg = path => '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' + path + '</svg>';
@@ -86,7 +86,8 @@
       '<header id="dev-head"><div class="dev-brand"><span class="dev-brand-mark">'+I.code+'</span><span>LifeLink Dev</span></div>'+
       '<input id="dev-project-name" class="dev-project-name" aria-label="Project name" value="Untitled project" maxlength="60">'+
       '<span id="dev-status" class="dev-status" role="status">Ready</span>'+
-      '<button class="dev-head-btn" id="dev-ai-toggle" aria-label="Toggle AI assistant" aria-expanded="false">'+I.bot+'<span class="dev-btn-label">AI</span></button><span class="dev-head-spacer"></span>'+
+      '<button class="dev-head-btn" id="dev-explorer-toggle" aria-label="Collapse Explorer" aria-expanded="true" title="Toggle Explorer">'+I.folder+'<span class="dev-btn-label">Files</span></button>'+
+      '<button class="dev-head-btn" id="dev-ai-toggle" aria-label="Toggle AI assistant" aria-expanded="false" title="Toggle AI assistant">'+I.bot+'<span class="dev-btn-label">AI</span></button><span class="dev-head-spacer"></span>'+
       '<button class="dev-head-btn" id="dev-open-files" title="Import files">'+I.folder+'<span class="dev-btn-label">Import</span></button>'+
       '<button class="dev-head-btn" id="dev-download-file" title="Download active file">'+I.download+'<span class="dev-btn-label">Export</span></button>'+
       '<button class="dev-head-btn primary" id="dev-run">'+I.play+'<span class="dev-btn-label">Run</span></button>'+
@@ -118,9 +119,19 @@
   }
   function wire() {
     $('#dev-close').addEventListener('click',close);
+    $('#dev-explorer-toggle').addEventListener('click',()=>{
+      const expanded=root.classList.toggle('explorer-open');
+      root.classList.remove('ai-open');
+      $('#dev-explorer-toggle').setAttribute('aria-expanded',String(expanded));
+      $('#dev-explorer-toggle').setAttribute('aria-label',expanded?'Collapse Explorer':'Expand Explorer');
+      $('#dev-ai-toggle').setAttribute('aria-expanded','false');
+    });
     $('#dev-ai-toggle').addEventListener('click',()=>{
       const expanded=root.classList.toggle('ai-open');
+      root.classList.remove('explorer-open');
       $('#dev-ai-toggle').setAttribute('aria-expanded',String(expanded));
+      $('#dev-explorer-toggle').setAttribute('aria-expanded','false');
+      $('#dev-explorer-toggle').setAttribute('aria-label','Expand Explorer');
     });
     $('#dev-run').addEventListener('click',runActive);
     $('#dev-preview-button').addEventListener('click',showPreview);
@@ -154,6 +165,10 @@
       const apply=e.target.closest('[data-dev-apply]'); if(apply)applyBlock(Number(apply.dataset.devApply));
       if(root.classList.contains('ai-open')&&!e.target.closest('#dev-assistant')&&!e.target.closest('#dev-ai-toggle')){
         root.classList.remove('ai-open');$('#dev-ai-toggle').setAttribute('aria-expanded','false');
+      }
+      if(root.classList.contains('explorer-open')&&!e.target.closest('#dev-explorer')&&!e.target.closest('#dev-explorer-toggle')){
+        root.classList.remove('explorer-open');$('#dev-explorer-toggle').setAttribute('aria-expanded','false');
+        $('#dev-explorer-toggle').setAttribute('aria-label','Expand Explorer');
       }
     });
     window.addEventListener('message',previewMessage);
@@ -379,8 +394,10 @@
   function open() {
     if(opened)return;
     buildUI();workspace=load();
-    root.classList.remove('closing','ai-open');
+    root.classList.remove('closing','ai-open','explorer-open','explorer-collapsed','assistant-collapsed');
     $('#dev-ai-toggle').setAttribute('aria-expanded','false');
+    $('#dev-explorer-toggle').setAttribute('aria-expanded','true');
+    $('#dev-explorer-toggle').setAttribute('aria-label','Collapse Explorer');
     if(!workspace.files.some(f=>f.name===activeFile))activeFile=workspace.files[0].name;
     $('#dev-project-name').value=workspace.name||'Untitled project';
     renderFiles();openFile(activeFile);
@@ -395,8 +412,9 @@
   function close() {
     if(!opened||!root)return;
     flushSave(false);
-    root.classList.remove('ai-open');
+    root.classList.remove('ai-open','explorer-open');
     $('#dev-ai-toggle').setAttribute('aria-expanded','false');
+    $('#dev-explorer-toggle').setAttribute('aria-expanded','false');
     root.classList.add('closing');
     root.classList.remove('open');opened=false;
     document.body.style.overflow=document.body.dataset.devPreviousOverflow||'';
