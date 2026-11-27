@@ -522,16 +522,11 @@
 
   function syncDevTheme() {
     if(!root)return;
-    const htmlStyle=getComputedStyle(document.documentElement), bodyStyle=getComputedStyle(document.body);
-    const dark=document.documentElement.dataset.theme==='dark';
-    const gradient=dark
-      ? 'radial-gradient(55% 45% at 12% 8%,rgba(92,113,168,.24),transparent),radial-gradient(48% 44% at 88% 16%,rgba(130,88,122,.18),transparent),radial-gradient(60% 52% at 55% 100%,rgba(55,116,105,.16),transparent)'
-      : (bodyStyle.backgroundImage&&bodyStyle.backgroundImage!=='none'?bodyStyle.backgroundImage:'none');
-    root.dataset.devTheme=dark?'dark':'light';
-    root.style.setProperty('--dev-theme-gradient',gradient);
-    root.style.setProperty('--dev-glass',htmlStyle.getPropertyValue('--g').trim()||(dark?'rgba(22,22,24,.62)':'rgba(255,255,255,.72)'));
-    root.style.setProperty('--dev-glass-blur',htmlStyle.getPropertyValue('--bl').trim()||'18px');
-    root.style.setProperty('--dev-glass-opacity',dark?'.58':'.62');
+    root.dataset.devTheme=document.documentElement.dataset.theme==='dark'?'dark':'light';
+    root.style.removeProperty('--dev-theme-gradient');
+    root.style.removeProperty('--dev-glass');
+    root.style.removeProperty('--dev-glass-blur');
+    root.style.removeProperty('--dev-glass-opacity');
   }
   function observeDevTheme() {
     if(themeObserver||typeof MutationObserver==='undefined')return;
