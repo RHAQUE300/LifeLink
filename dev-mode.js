@@ -353,7 +353,9 @@
       });
       const result=await response.json();
       if(!response.ok)throw new Error(result.message||('Compiler returned HTTP '+response.status));
-      const compilerOutput=String(result.compiler_message||result.compiler_output||'');\n      const programOutput=String(result.program_message||result.program_output||'');\n      if(compilerOutput)appendRuntimeOutput('Compiler output:\n'+compilerOutput,result.compiler_error?'error':'warn');
+      const compilerOutput=String(result.compiler_message||result.compiler_output||'');
+      const programOutput=String(result.program_message||result.program_output||'');
+      if(compilerOutput)appendRuntimeOutput('Compiler output:\n'+compilerOutput,result.compiler_error?'error':'warn');
       if(result.compiler_error)appendRuntimeOutput(result.compiler_error,'error');
       if(programOutput)appendRuntimeOutput('Program output:\n'+programOutput,'result');
       if(result.program_error)appendRuntimeOutput('Runtime error:\n'+result.program_error,'error');
