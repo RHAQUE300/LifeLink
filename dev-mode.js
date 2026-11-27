@@ -325,9 +325,9 @@
     const catalog=await ensureRuntimeCatalog();
     const compiler=preferredCompiler(file.name);
     if(!compiler)throw new Error('No hosted compiler is currently listed for '+(runtimeLanguage(file.name)||ext(file.name))+'. Choose another file or select a compiler manually.');
-    const total=workspace.files.reduce((n,x)=>n+x.content.length,0);
+    const total=file.content.length+workspace.files.filter(x=>x.name!==file.name&&x.content.length>0).filter(x=>runtimeLanguage(x.name)===runtimeLanguage(file.name)||(['C','C++'].includes(runtimeLanguage(file.name))&&['h','hpp','hh','hxx'].includes(ext(x.name)))).slice(0,20).reduce((n,x)=>n+x.content.length,0);
     if(total>180000)throw new Error('This shared compiler accepts only small projects here. Reduce the combined source size below 180 KB.');
-    const sourceFiles=workspace.files.filter(x=>x.name!==file.name).filter(x=>x.content.length>0).slice(0,20);
+    const mainLanguage=runtimeLanguage(file.name);\n    const sourceFiles=workspace.files.filter(x=>x.name!==file.name&&x.content.length>0).filter(x=>runtimeLanguage(x.name)===mainLanguage||(['C','C++'].includes(mainLanguage)&&['h','hpp','hh','hxx'].includes(ext(x.name)))).slice(0,20);
     const payload={compiler:compiler.name,code:file.content,stdin:$('#dev-stdin').value||''};
     if(sourceFiles.length)payload.codes=sourceFiles.map(x=>({file:x.name,code:x.content}));
     log('$ Wandbox · '+compiler.language+' · '+compiler.version,'system');
@@ -433,7 +433,7 @@
   }
   function projectSourceForAI() {
     let remaining=34000;
-    return workspace.files.slice(0,16).map(file=>{
+    const ordered=[current(),...workspace.files.filter(file=>file.name!==activeFile)];\n    return ordered.map(file=>{
       if(remaining<=0)return '';
       const content=file.content.slice(0,Math.min(6500,remaining));remaining-=content.length;
       return '\n\n--- FILE: '+file.name+' ---\n'+content;
@@ -451,7 +451,7 @@
       const prompt=[
         'Review this exact project after the user pressed Run.',
         'Classify its observed coding level as Beginner, Developing, Intermediate or Advanced. This is a description of the project’s current implementation complexity, never a judgement of the person.',
-        'Inspect every supplied file for syntax, runtime, logic, security, accessibility, performance, dependency and project-structure errors. Correlate cross-file references. Avoid generic advice and do not invent files or line numbers.',
+        'Inspect every supplied file for syntax, runtime, logic, security, accessibility, performance, dependency and project-structure errors. Correlate cross-file references. Avoid generic advice and do not invent files or line numbers. The source context is size-limited; explicitly identify files not supplied if the project is too large to fit and never claim they were reviewed.',
         'Use the run/compiler output and static findings as evidence. Prioritise real defects over style preferences. Explain why each issue matters and give a concrete fix or a safe short code example.',
         'Tailor explanation depth to the detected project level: teach fundamentals with clear steps for beginner projects; be concise and precise for advanced projects.',
         'Do not claim a check passed if the supplied tools did not perform it. Distinguish confirmed errors from possible risks. Do not automatically rewrite files.',
