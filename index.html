@@ -4603,7 +4603,7 @@ window.loadDeveloperMode = async function(button) {
   });
   const loadScript = new Promise((resolve, reject) => {
     const script = document.createElement('script');
-    script.src = 'dev-mode.js?v=0.7.0';
+    script.src = 'dev-mode.js?v=0.7.1';
     script.async = true;
     script.onload = resolve;
     script.onerror = () => reject(new Error('Developer Mode module could not be loaded.'));
