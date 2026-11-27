@@ -120,15 +120,21 @@
   function wire() {
     $('#dev-close').addEventListener('click',close);
     $('#dev-explorer-toggle').addEventListener('click',()=>{
-      const expanded=root.classList.toggle('explorer-open');
-      root.classList.remove('ai-open');
+      const drawer=window.matchMedia('(max-width: 620px)').matches;
+      const className=drawer?'explorer-open':'explorer-collapsed';
+      const expanded=!root.classList.contains(className);
+      root.classList.toggle(className,expanded);
+      root.classList.remove('ai-open','assistant-collapsed');
       $('#dev-explorer-toggle').setAttribute('aria-expanded',String(expanded));
       $('#dev-explorer-toggle').setAttribute('aria-label',expanded?'Collapse Explorer':'Expand Explorer');
       $('#dev-ai-toggle').setAttribute('aria-expanded','false');
     });
     $('#dev-ai-toggle').addEventListener('click',()=>{
-      const expanded=root.classList.toggle('ai-open');
-      root.classList.remove('explorer-open');
+      const drawer=window.matchMedia('(max-width: 900px)').matches;
+      const className=drawer?'ai-open':'assistant-collapsed';
+      const expanded=drawer?!root.classList.contains(className):root.classList.contains(className);
+      root.classList.toggle(className,drawer?expanded:!expanded);
+      root.classList.remove('explorer-open','explorer-collapsed');
       $('#dev-ai-toggle').setAttribute('aria-expanded',String(expanded));
       $('#dev-explorer-toggle').setAttribute('aria-expanded','false');
       $('#dev-explorer-toggle').setAttribute('aria-label','Expand Explorer');
