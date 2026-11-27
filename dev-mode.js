@@ -659,7 +659,7 @@
     $('#dev-send-error').addEventListener('click',sendError);
     $('#dev-open-files').addEventListener('click',()=>$('#dev-file-picker').click());
     $('#dev-file-picker').addEventListener('change',importFiles);
-    $('#dev-download-file').addEventListener('click',downloadFile);
+    $('#dev-download-file').addEventListener('click',()=>downloadFile());
     $('#dev-new-file-toggle').addEventListener('click',()=>{
       const form=$('#dev-new-file-form'); form.hidden=!form.hidden; if(!form.hidden)$('#dev-new-file-name').focus();
     });
@@ -709,7 +709,7 @@
     activeFile=name; if(codeMirror)codeMirror.setValue(file.content);else editor.value=file.content;
     $('#dev-active-file-label').textContent=name;
     $('#dev-language-status').textContent=ext(name).toUpperCase()+' · UTF-8';
-    renderFiles(); setLanguageMode(name); updateCursor(); if(codeMirror)codeMirror.focus();else editor.focus();
+    renderFiles(); setLanguageMode(name); updateCursor(); if(codeMirror)codeMirror.focus();else editor.focus();\n    const runtime=$('#dev-runtime-choice');if(runtime)runtime.title='Detected runtime: '+(runtimeLanguage(name)||'not available locally');
   }
   function scheduleCursorUpdate() {
     if(cursorTimer)return;
@@ -745,16 +745,19 @@
     if(files[0])openFile(files[0].name.replace(/[^\w.-]/g,'_').slice(0,100));
     log('Imported '+files.length+' file(s).','result');
   }
-  function downloadFile(name) {
+  async function downloadFile(name) {
     const file=name?workspace.files.find(f=>f.name===name):current();if(!file)return;
+    const result=await showDialog({title:'Download project file?',message:'LifeLink will prepare '+file.name+' ('+file.content.length.toLocaleString()+' characters) and send it to your browser downloads. The file remains in this project.',confirmLabel:'Download file'});
+    if(!result.confirmed)return;
     const url=URL.createObjectURL(new Blob([file.content],{type:'text/plain;charset=utf-8'}));
     const a=document.createElement('a');a.href=url;a.download=file.name;a.click();
     setTimeout(()=>URL.revokeObjectURL(url),1200);log('Exported '+file.name,'result');
   }
-  function deleteFile(name) {
+  async function deleteFile(name) {
     const index=workspace.files.findIndex(f=>f.name===name);if(index<0)return;
     if(workspace.files.length===1){tell('A project must keep at least one file.');return;}
-    if(!window.confirm('Delete '+name+' from this project? This cannot be undone.'))return;
+    const result=await showDialog({title:'Delete this project file?',message:'Delete '+name+' from this project? This cannot be undone.',confirmLabel:'Delete file',danger:true});
+    if(!result.confirmed)return;
     flushSave(false);workspace.files.splice(index,1);
     if(activeFile===name)openFile(workspace.files[Math.min(index,workspace.files.length-1)].name);else renderFiles();
     save(false);tell('Deleted '+name);
@@ -798,9 +801,10 @@
     if(logQueue.length&&!logFrame)logFrame=requestAnimationFrame(flushLogs);
   }
   function setOutput(mode) {
-    outputMode=mode==='preview'?'preview':'console';
+    outputMode=['preview','diagnostics'].includes(mode)?mode:'console';
     root.querySelectorAll('[data-dev-output]').forEach(t=>t.classList.toggle('active',t.dataset.devOutput===outputMode));
     $('#dev-output-lines').style.display=outputMode==='console'?'block':'none';
+    $('#dev-diagnostics-output').hidden=outputMode!=='diagnostics';
     $('#dev-preview-frame').style.display=outputMode==='preview'?'block':'none';
   }
 
@@ -848,7 +852,7 @@
     log('dev> '+command,'system');
     const parts=command.split(/\s+/), verb=parts.shift().toLowerCase(), arg=parts.join(' ');
     switch(verb){
-      case 'help': log('Commands: help, clear, pwd, ls, cat <file>, open <file>, new <file>, echo <text>, date, run, preview, download, version'); log('Browser-native project console, not a Windows/Linux shell.','warn');break;
+      case 'help': log('Commands: help, clear, pwd, ls, cat <file>, open <file>, new <file>, echo <text>, date, run, preview, download, runtimes, version'); log('This project terminal is not a Windows/Linux shell. Language execution uses the selected runtime.','warn');break;
       case 'clear': clearLogs();break;
       case 'pwd': log('/lifelink/'+(workspace.name||'project'));break;
       case 'ls': workspace.files.forEach(f=>log(f.name));break;
@@ -864,7 +868,7 @@
       case 'date':log(new Date().toString());break;
       case 'run':runActive();break;
       case 'preview':showPreview();break;
-      case 'download':downloadFile();break;
+      case 'download':downloadFile();break;\n      case 'runtimes':ensureRuntimeCatalog().then(items=>log(items.map(x=>x.language+' · '+x.displayName).join('\\n'))).catch(e=>log(e.message,'error'));break;
       case 'version':log('LifeLink Dev '+VERSION);break;
       default:log('Unknown command: '+verb+' · type help for commands.','error');
     }
@@ -883,9 +887,10 @@
     }
     $('#dev-ai-messages').appendChild(box); $('#dev-ai-messages').scrollTop=$('#dev-ai-messages').scrollHeight;
   }
-  function applyBlock(index) {
+  async function applyBlock(index) {
     const code=latestCodeBlocks[index], file=current(); if(typeof code!=='string'||!file)return;
-    if(!window.confirm('Replace the contents of '+file.name+' with this AI code block?'))return;
+    const result=await showDialog({title:'Apply AI-generated code?',message:'Replace the contents of '+file.name+' with this code block? Your current file contents will be overwritten.',confirmLabel:'Replace file',danger:true});
+    if(!result.confirmed)return;
     file.content=code.slice(0,MAX_FILE); if(codeMirror)codeMirror.setValue(file.content);else editor.value=file.content;save(false);updateCursor();
     log('AI code applied to '+file.name+'. Review it before running.','result');
   }
@@ -949,7 +954,7 @@
     if(typeof window.closeAIFull==='function')window.closeAIFull(true);
     document.body.dataset.devPreviousOverflow=document.body.style.overflow;
     document.body.style.overflow='hidden';
-    root.classList.add('open');opened=true;setOutput('console');
+    root.classList.add('open');opened=true;setOutput('console');\n    try{selectedRuntime=localStorage.getItem(key()+':runtime')||'auto'}catch(e){selectedRuntime='auto'}\n    if($('#dev-runtime-choice'))$('#dev-runtime-choice').value=selectedRuntime;\n    ensureRuntimeCatalog().catch(error=>log('Compiler catalogue unavailable: '+error.message,'warn'));\n    syncDevTheme();
     syncAIModel();
     if(typeof window.refreshAIModelStatus==='function')Promise.resolve(window.refreshAIModelStatus()).then(syncAIModel).catch(syncAIModel);
     log('LifeLink Dev '+VERSION+' ready.','system');log('Browser-native workspace · type help for terminal commands.','system');
