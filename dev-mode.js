@@ -188,6 +188,298 @@
     return match||null;
   }
 
+  function showDialog(options) {
+    const modal=$('#dev-modal'), title=$('#dev-modal-title'), message=$('#dev-modal-message');
+    if(!modal)return Promise.resolve({confirmed:false,checked:false});
+    if(dialogResolver)finishDialog(false);
+    title.textContent=options.title||'Confirm action';
+    message.textContent=options.message||'';
+    const row=$('#dev-modal-check-row'), check=$('#dev-modal-check');
+    row.hidden=!options.checkboxLabel;
+    check.checked=!!options.checked;
+    $('#dev-modal-check-label').textContent=options.checkboxLabel||'';
+    const yes=$('#dev-modal-confirm'), no=$('#dev-modal-cancel');
+    yes.textContent=options.confirmLabel||'Continue';
+    no.textContent=options.cancelLabel||'Cancel';
+    yes.classList.toggle('danger',!!options.danger);
+    yes.disabled=false;modal.hidden=false;
+    return new Promise(resolve=>{
+      dialogResolver=resolve;
+      setTimeout(()=>yes.focus(),0);
+    });
+  }
+  function finishDialog(confirmed) {
+    if(!dialogResolver)return;
+    const resolve=dialogResolver;dialogResolver=null;
+    const checked=$('#dev-modal-check')?$('#dev-modal-check').checked:false;
+    $('#dev-modal').hidden=true;
+    resolve({confirmed:!!confirmed,checked:checked});
+  }
+  const WANDBOX_LANGUAGES = {
+    py:'Python',pyw:'Python',py3:'Python',js:'JavaScript',mjs:'JavaScript',cjs:'JavaScript',
+    ts:'TypeScript',tsx:'TypeScript',jsx:'JavaScript',c:'C',h:'C',cc:'C++',cpp:'C++',cxx:'C++',hpp:'C++',hh:'C++',
+    cs:'C#',go:'Go',rs:'Rust',java:'Java',kt:'Kotlin',kts:'Kotlin',swift:'Swift',dart:'Dart',
+    rb:'Ruby',php:'PHP',lua:'Lua',r:'R',jl:'Julia',pl:'Perl',pm:'Perl',sh:'Bash',bash:'Bash',zsh:'Bash',
+    hs:'Haskell',lhs:'Haskell',scala:'Scala',sc:'Scala',clj:'Clojure',cljs:'Clojure',
+    ex:'Elixir',exs:'Elixir',erl:'Erlang',hrl:'Erlang',fs:'F#',fsx:'F#',ml:'OCaml',mli:'OCaml',
+    pas:'Pascal',pp:'Pascal',f:'Fortran',for:'Fortran',f90:'Fortran',f95:'Fortran',
+    d:'D',nim:'Nim',zig:'Zig',v:'V',cr:'Crystal',elm:'Elm',plsql:'SQL',sql:'SQL',
+    vb:'Visual Basic',vbs:'Visual Basic',jl:'Julia',m:'Objective-C',mm:'Objective-C++',
+    wasm:'WebAssembly',wat:'WebAssembly'
+  };
+  function runtimeLanguage(fileName) {
+    const name=String(fileName||'').toLowerCase(), extension=ext(name);
+    if(name==='dockerfile')return 'Bash';
+    if(name==='makefile'||name==='gnumakefile')return 'Bash';
+    return WANDBOX_LANGUAGES[extension]||null;
+  }
+  function compilerSort(a,b) {
+    const ah=/head|trunk|experimental/i.test((a.name||'')+' '+(a.version||''));
+    const bh=/head|trunk|experimental/i.test((b.name||'')+' '+(b.version||''));
+    if(ah!==bh)return ah?1:-1;
+    return String(b.version||'').localeCompare(String(a.version||''),undefined,{numeric:true});
+  }
+  async function ensureRuntimeCatalog() {
+    if(runtimeCatalog.length)return runtimeCatalog;
+    if(runtimeCatalogPromise)return runtimeCatalogPromise;
+    runtimeCatalogPromise=(async()=>{
+      try{
+        const cached=JSON.parse(localStorage.getItem('lifelink.dev.runtime.catalog')||'null');
+        if(cached&&Array.isArray(cached.items)&&Date.now()-cached.time<86400000)runtimeCatalog=cached.items;
+      }catch(e){}
+      if(!runtimeCatalog.length){
+        const controller=new AbortController(),timer=setTimeout(()=>controller.abort(),18000);
+        try{
+          const response=await fetch('https://wandbox.org/api/list.json',{method:'GET',mode:'cors',credentials:'omit',referrerPolicy:'no-referrer',signal:controller.signal});
+          if(!response.ok)throw new Error('Compiler catalogue returned HTTP '+response.status);
+          const items=await response.json();
+          if(!Array.isArray(items)||!items.length)throw new Error('Compiler catalogue was empty');
+          runtimeCatalog=items.filter(x=>x&&x.name&&x.language).map(x=>({name:String(x.name),language:String(x.language),version:String(x.version||''),displayName:String(x['display-name']||x.name)}));
+          try{localStorage.setItem('lifelink.dev.runtime.catalog',JSON.stringify({time:Date.now(),items:runtimeCatalog}))}catch(e){}
+        }finally{clearTimeout(timer)}
+      }
+      syncRuntimeOptions();
+      return runtimeCatalog;
+    })().catch(error=>{runtimeCatalogPromise=null;throw error;});
+    return runtimeCatalogPromise;
+  }
+  function syncRuntimeOptions() {
+    const select=$('#dev-runtime-choice');if(!select)return;
+    const keep=selectedRuntime||'auto';
+    const groups={};
+    runtimeCatalog.forEach(item=>{
+      const language=item.language||'Other';
+      (groups[language]||(groups[language]=[])).push(item);
+    });
+    const html=['<option value="auto">Auto · detected language</option>'];
+    Object.keys(groups).sort().forEach(language=>{
+      html.push('<optgroup label="'+esc(language)+'">');
+      groups[language].sort(compilerSort).forEach(item=>{
+        html.push('<option value="'+esc(item.name)+'">'+esc(item.displayName+' · '+item.version)+'</option>');
+      });
+      html.push('</optgroup>');
+    });
+    select.innerHTML=html.join('');
+    if(keep!=='auto'&&runtimeCatalog.some(x=>x.name===keep))select.value=keep;
+    else{selectedRuntime='auto';select.value='auto';}
+    select.title=runtimeCatalog.length+' compiler versions available from Wandbox';
+  }
+  function preferredCompiler(fileName) {
+    if(selectedRuntime!=='auto'){
+      const chosen=runtimeCatalog.find(x=>x.name===selectedRuntime);
+      if(chosen)return chosen;
+    }
+    const language=runtimeLanguage(fileName);
+    if(!language)return null;
+    const candidates=runtimeCatalog.filter(x=>String(x.language).toLowerCase()===language.toLowerCase()).sort(compilerSort);
+    return candidates[0]||null;
+  }
+  function localWebProject() {
+    return workspace.files.some(f=>['html','htm'].includes(ext(f.name))) ||
+      ['html','htm','css'].includes(ext(activeFile));
+  }
+  function hasRemoteConsent() {
+    try{return localStorage.getItem(key()+':wandbox-consent')==='yes'}catch(e){return false}
+  }
+  async function allowRemoteExecution() {
+    if(hasRemoteConsent())return true;
+    const result=await showDialog({
+      title:'Run code with an external compiler?',
+      message:'This language needs a remote compiler. LifeLink will send the project source files and optional standard input to Wandbox (wandbox.org) so its hosted compiler can build and run them. Do not send passwords, API keys, personal data or private source code. This is a shared third-party service, not a private LifeLink server.',
+      checkboxLabel:'Remember my approval on this browser',
+      confirmLabel:'Allow & run',
+      cancelLabel:'Keep code here'
+    });
+    if(result.confirmed&&result.checked){try{localStorage.setItem(key()+':wandbox-consent','yes')}catch(e){}}
+    return result.confirmed;
+  }
+  function appendRuntimeOutput(textValue,kind) {
+    const value=String(textValue||'').trim();
+    if(value)log(value,kind||'normal');
+  }
+  async function runWithWandbox(file) {
+    const allowed=await allowRemoteExecution();
+    if(!allowed)return 'Remote execution was cancelled. No project code was sent.';
+    status('Loading compiler…','pending');
+    const catalog=await ensureRuntimeCatalog();
+    const compiler=preferredCompiler(file.name);
+    if(!compiler)throw new Error('No hosted compiler is currently listed for '+(runtimeLanguage(file.name)||ext(file.name))+'. Choose another file or select a compiler manually.');
+    const total=workspace.files.reduce((n,x)=>n+x.content.length,0);
+    if(total>180000)throw new Error('This shared compiler accepts only small projects here. Reduce the combined source size below 180 KB.');
+    const sourceFiles=workspace.files.filter(x=>x.name!==file.name).filter(x=>x.content.length>0).slice(0,20);
+    const payload={compiler:compiler.name,code:file.content,stdin:$('#dev-stdin').value||''};
+    if(sourceFiles.length)payload.codes=sourceFiles.map(x=>({file:x.name,code:x.content}));
+    log('$ Wandbox · '+compiler.language+' · '+compiler.version,'system');
+    log('Sending '+(sourceFiles.length+1)+' source file(s) to the external compiler.','system');
+    const controller=new AbortController(),timer=setTimeout(()=>controller.abort(),90000);
+    status('Compiling & running…','pending');
+    try{
+      const response=await fetch('https://wandbox.org/api/compile.json',{
+        method:'POST',mode:'cors',credentials:'omit',referrerPolicy:'no-referrer',
+        headers:{'Content-Type':'application/json','Accept':'application/json'},
+        body:JSON.stringify(payload),signal:controller.signal
+      });
+      const result=await response.json();
+      if(!response.ok)throw new Error(result.message||('Compiler returned HTTP '+response.status));
+      if(result.compiler_message)appendRuntimeOutput('Compiler output:\n'+result.compiler_message,result.compiler_error?'error':'warn');
+      if(result.compiler_error)appendRuntimeOutput(result.compiler_error,'error');
+      if(result.program_message)appendRuntimeOutput('Program output:\n'+result.program_message,'result');
+      if(result.program_error)appendRuntimeOutput('Runtime error:\n'+result.program_error,'error');
+      if(result.signal)appendRuntimeOutput('Process signal: '+result.signal,'warn');
+      if(result.status!==undefined&&String(result.status)!=='0'){
+        const detail=result.program_error||result.compiler_error||result.compiler_message||'The compiler returned status '+result.status;
+        appendRuntimeOutput('Execution failed (status '+result.status+'). '+detail,'error');
+        return 'Compiler result: failed.\n'+detail;
+      }
+      if(!result.compiler_message&&!result.program_message&&!result.program_error&&!result.compiler_error)appendRuntimeOutput('Compiler completed with no output.','result');
+      status('Execution finished','saved');
+      return 'Compiler: '+compiler.language+' ('+compiler.version+').\n'+
+        'Compiler diagnostics:\n'+String(result.compiler_message||result.compiler_error||'None')+'\n'+
+        'Program stdout:\n'+String(result.program_message||'')+'\n'+
+        'Program stderr:\n'+String(result.program_error||'')+'\n'+
+        'Exit status: '+String(result.status===undefined?'unknown':result.status);
+    }catch(error){
+      const message=error&&error.name==='AbortError'?'The compiler timed out after 90 seconds.':String(error.message||error);
+      log('Remote compile failed: '+message,'error');status('Runtime unavailable','error');
+      return 'Remote compiler failed: '+message+'\nCheck your connection or select a different compiler. No local code was changed.';
+    }finally{clearTimeout(timer)}
+  }
+  function projectMetrics() {
+    const files=workspace.files, text=files.map(f=>f.content).join('\n');
+    const count=(re)=>((text.match(re)||[]).length);
+    const lines=files.reduce((n,f)=>n+f.content.split('\n').length,0);
+    const languages=[...new Set(files.map(f=>languageFor(f.name).label).filter(x=>x!=='Plain Text'))];
+    const functions=count(/\bfunction\b|\bdef\s+\w+|\bfn\s+\w+|\bfunc\s+\w+|=>/g);
+    const classes=count(/\bclass\s+\w+/g), modules=count(/\bimport\b|\brequire\s*\(/g);
+    const tests=files.some(f=>/(^|\/)(__tests__|tests?|spec)($|\/|\.)/i.test(f.name))||/\b(describe|it|test)\s*\(/.test(text);
+    const typed=files.some(f=>['ts','tsx','cs','java','kt','rs','go'].includes(ext(f.name)));
+    const build=files.some(f=>/(package\.json|tsconfig\.json|vite\.config|webpack|cargo\.toml|go\.mod|pom\.xml|build\.gradle|makefile)/i.test(f.name));
+    const asyncCount=count(/\basync\b|\bawait\b|\bPromise\b|\bthread\b|\basync\s+def\b/g);
+    const complexity=functions+classes*2+modules+asyncCount*2+(tests?4:0)+(typed?4:0)+(build?3:0)+Math.min(files.length,12);
+    const level=complexity<8?'Beginner':complexity<18?'Developing':complexity<34?'Intermediate':'Advanced';
+    return {files:files.length,lines,characters:text.length,languages,functions,classes,modules,tests,typed,build,asyncCount,complexity,level};
+  }
+  function scanProject() {
+    const issues=[], metrics=projectMetrics();
+    const add=(severity,file,line,message,tip)=>issues.push({severity,file,line,message,tip});
+    const allNames=new Set(workspace.files.map(f=>f.name.toLowerCase()));
+    workspace.files.forEach(file=>{
+      const name=file.name, extension=ext(name), code=file.content;
+      if(['json','jsonc'].includes(extension)){
+        try{JSON.parse(code)}catch(error){const m=String(error.message||error).match(/position\s+(\d+)/i);const line=m?code.slice(0,Number(m[1])).split('\n').length:1;add('error',name,line,'Invalid JSON: '+String(error.message||error),'Check commas, quotation marks, brackets and trailing commas.')}
+      }
+      if(['js','mjs','cjs'].includes(extension)&&!(/^\s*(?:import|export)\s/m.test(code)||/\bawait\s/.test(code))){
+        try{new Function(code)}catch(error){add('error',name,1,'JavaScript parse error: '+String(error.message||error),'Check the reported syntax area, matching brackets and string/template delimiters.')}
+      }
+      if(['css','scss','less'].includes(extension)&&typeof CSSStyleSheet!=='undefined'&&extension==='css'){
+        try{const sheet=new CSSStyleSheet();sheet.replaceSync(code)}catch(error){add('error',name,1,'CSS parser reported: '+String(error.message||error),'Check selector braces, property separators and unclosed comments.')}
+      }
+      if(['html','htm'].includes(extension)){
+        const doc=new DOMParser().parseFromString(code,'text/html');
+        const ids=Array.from(doc.querySelectorAll('[id]')).map(x=>x.id),seen=new Set();
+        ids.forEach(id=>{if(seen.has(id))add('warning',name,1,'Duplicate HTML id: '+id,'Give each element a unique id so selectors and scripts target the intended element.');seen.add(id)});
+        doc.querySelectorAll('img:not([alt])').forEach(()=>add('warning',name,1,'An image is missing alternative text.','Add descriptive alt text, or alt="" for a decorative image.'));
+        doc.querySelectorAll('script[src],link[href]').forEach(node=>{
+          const raw=node.getAttribute(node.tagName==='SCRIPT'?'src':'href')||'';
+          if(!raw||/^(?:[a-z]+:|\/\/|#|data:)/i.test(raw))return;
+          const local=raw.split(/[?#]/)[0].replace(/^\.?\//,'').toLowerCase();
+          if(local&&!allNames.has(local)&&!local.startsWith('../'))add('warning',name,1,'Local asset reference not found in project: '+raw,'Import the missing file or correct the relative path.');
+        });
+      }
+      const secret=/\b(?:sk-[A-Za-z0-9_-]{18,}|AKIA[0-9A-Z]{16}|AIza[0-9A-Za-z_-]{30,}|gh[pousr]_[A-Za-z0-9]{30,})\b/;
+      if(secret.test(code))add('critical',name,1,'Possible API key or access token detected. Its value has been hidden.','Remove the credential from source files, rotate it, and load it from a secure server-side secret store.');
+      if(/\beval\s*\(/.test(code)||/\bnew Function\s*\(/.test(code))add('warning',name,1,'Dynamic code execution pattern detected.','Avoid evaluating untrusted strings; use explicit parsing or a constrained command map.');
+      if(/\bTODO\b|\bFIXME\b/.test(code))add('info',name,1,'This file contains TODO/FIXME markers.','Review outstanding markers before treating the feature as complete.');
+      if(/catch\s*(?:\([^)]*\))?\s*\{\s*\}/.test(code))add('warning',name,1,'An empty catch block may hide failures.','Log, surface or deliberately handle the error instead of silently discarding it.');
+      if(/\bconsole\.log\s*\(/.test(code))add('info',name,1,'Console logging remains in this file.','Remove temporary debug output or route it through a deliberate logger before release.');
+    });
+    const severities={critical:0,error:1,warning:2,info:3};
+    issues.sort((a,b)=>severities[a.severity]-severities[b.severity]);
+    return {metrics,issues,createdAt:new Date().toISOString()};
+  }
+  function renderDiagnostics(report,runtimeText,aiText) {
+    const box=$('#dev-diagnostics-output');if(!box)return;
+    const m=report.metrics;
+    let html='<div class="dev-diagnostic-summary"><strong>Project complexity estimate: '+esc(m.level)+'</strong><span>'+m.files+' files · '+m.lines+' lines · '+esc(m.languages.join(', ')||'Unclassified files')+'</span><small>Estimate describes code structure, not the developer’s ability.</small></div>';
+    html+='<h3>Automatic checks ('+report.issues.length+' findings)</h3>';
+    if(report.issues.length){
+      html+='<div class="dev-diagnostic-list">'+report.issues.map(x=>'<article class="dev-diagnostic-item '+esc(x.severity)+'"><b>'+esc(x.severity.toUpperCase())+' · '+esc(x.file)+(x.line?':'+x.line:'')+'</b><p>'+esc(x.message)+'</p><small>'+esc(x.tip)+'</small></article>').join('')+'</div>';
+    }else html+='<p class="dev-diagnostic-good">No obvious static issues were detected by the quick checks.</p>';
+    if(runtimeText)html+='<h3>Run result</h3><pre class="dev-diagnostic-pre">'+esc(runtimeText)+'</pre>';
+    if(aiText)html+='<h3>AI project review</h3><div class="dev-diagnostic-ai">'+(typeof window.formatMarkdownBasic==='function'?window.formatMarkdownBasic(aiText):'<pre>'+esc(aiText)+'</pre>')+'</div>';
+    box.innerHTML=html;
+    setOutput('diagnostics');
+  }
+  function projectSourceForAI() {
+    let remaining=34000;
+    return workspace.files.slice(0,16).map(file=>{
+      if(remaining<=0)return '';
+      const content=file.content.slice(0,Math.min(6500,remaining));remaining-=content.length;
+      return '\n\n--- FILE: '+file.name+' ---\n'+content;
+    }).join('');
+  }
+  async function runProjectAIReview(report,runtimeText,token) {
+    if(diagnosticBusy)return;
+    diagnosticBusy=true;
+    let answer='';
+    try{
+      if(typeof window.ensureSupabaseClient==='function'){
+        const ready=await window.ensureSupabaseClient();
+        if(!ready)throw new Error('LifeLink sign-in service is unavailable.');
+      }
+      if(typeof window.callLLM!=='function')throw new Error('The connected LifeLink AI service is unavailable.');
+      const prompt=[
+        'Review this exact project after the user pressed Run.',
+        'Classify its observed coding level as Beginner, Developing, Intermediate or Advanced. This is a description of the project’s current implementation complexity, never a judgement of the person.',
+        'Inspect every supplied file for syntax, runtime, logic, security, accessibility, performance, dependency and project-structure errors. Correlate cross-file references. Avoid generic advice and do not invent files or line numbers.',
+        'Use the run/compiler output and static findings as evidence. Prioritise real defects over style preferences. Explain why each issue matters and give a concrete fix or a safe short code example.',
+        'Tailor explanation depth to the detected project level: teach fundamentals with clear steps for beginner projects; be concise and precise for advanced projects.',
+        'Do not claim a check passed if the supplied tools did not perform it. Distinguish confirmed errors from possible risks. Do not automatically rewrite files.',
+        'Return sections: Project level and evidence; Critical errors; Other issues; Helpful improvements; Suggested fixes (name the exact file for every change).',
+        'Project metrics: '+JSON.stringify(report.metrics),
+        'Static checks: '+JSON.stringify(report.issues),
+        'Execution output: '+String(runtimeText||'No execution output was available.'),
+        'Project source files:'+projectSourceForAI()
+      ].join('\n\n');
+      const model=$('#af-model'),selected=model?model.value:'auto';
+      answer=String(await window.callLLM([{role:'user',text:prompt}],{
+        sys:'You are LifeLink Dev Project Inspector, a meticulous code reviewer. Be specific to the submitted project. Never guess that code runs. Flag uncertainty. Do not expose secrets if any appear in code; refer to their file and recommend rotation.',
+        webSearch:false,timeout:90000
+      })||'').trim();
+      if(!answer)answer='The AI review returned an empty response.';
+      if(token===diagnosticToken){
+        renderDiagnostics(report,runtimeText,answer);
+        log('AI project review completed for '+report.metrics.level+'-level code.','result');
+        const provider=typeof S!=='undefined'&&S&&S.aiLastProvider?S.aiLastProvider:selected;
+        const hint=$('#dev-ai-hint');if(hint)hint.textContent='AI review complete · '+(provider||'LifeLink AI');
+      }
+    }catch(error){
+      answer='AI review could not complete: '+String(error.message||error)+'. The static checks above are still available.';
+      if(token===diagnosticToken)renderDiagnostics(report,runtimeText,answer);
+      log(answer,'warn');
+    }finally{diagnosticBusy=false}
+  }
+
   function buildUI() {
     if (root) return;
     root=document.createElement('section');
