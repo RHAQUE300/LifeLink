@@ -1,7 +1,7 @@
 /* LifeLink Developer Mode: additive, lazy-loaded, browser-native workspace. */
 (function () {
   'use strict';
-  const VERSION = '0.6.0', PREFIX = 'lifelink.dev.workspace.v1:', MAX_FILE = 250000, MAX_LOG = 350, SAVE_DELAY = 800, MAX_LOG_LINE = 12000;
+  const VERSION = '0.7.0', PREFIX = 'lifelink.dev.workspace.v1:', MAX_FILE = 250000, MAX_LOG = 350, SAVE_DELAY = 800, MAX_LOG_LINE = 12000;
   const $ = (s, r) => (r || document).querySelector(s);
   const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
   const svg = path => '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' + path + '</svg>';
@@ -16,7 +16,8 @@
     bot:svg('<rect x="4" y="7" width="16" height="13" rx="3"/><path d="M12 3v4m-4 5h.01M16 12h.01M8 16h8"/>'),
     refresh:svg('<path d="M20 7v5h-5M4 17v-5h5"/><path d="M5.6 9A7 7 0 0 1 18 6l2 6M4 12l2 6a7 7 0 0 0 12.4-3"/>'),
     trash:svg('<path d="M3 6h18M8 6V4h8v2m3 0-1 14H6L5 6m4 4v6m6-6v6"/>'),
-    hide:svg('<path d="M5 12h14"/>')
+    explorerHide:svg('<rect x="3" y="3" width="18" height="18" rx="2"/><path d="M9 3v18M15 8l-3 4 3 4"/>'),
+    assistantHide:svg('<rect x="3" y="3" width="18" height="18" rx="2"/><path d="M15 3v18M9 8l3 4-3 4"/>')
   };
   let root = null, editor = null, workspace = null, activeFile = 'index.html';
   let opened = false, outputMode = 'console', aiBusy = false, aiMessages = [], latestCodeBlocks = [], previewToken = '';
@@ -96,7 +97,7 @@
       '<button class="dev-head-btn" id="dev-close" title="Exit Developer Mode" aria-label="Exit Developer Mode">'+I.close+'</button>'+
       '<input id="dev-file-picker" type="file" multiple hidden></header>'+
       '<div id="dev-body"><aside id="dev-explorer"><div class="dev-section-label"><span>PROJECT FILES</span><span class="dev-section-actions">'+
-      '<button class="dev-pane-hide" id="dev-explorer-hide" type="button" title="Hide Project Files panel" aria-label="Hide Project Files panel">'+I.hide+'<span>Hide</span></button>'+
+      '<button class="dev-pane-hide" id="dev-explorer-hide" type="button" title="Hide Project Files panel" aria-label="Hide Project Files panel">'+I.explorerHide+'</button>'+
       '<button class="dev-icon-btn" id="dev-new-file-toggle" title="New file" aria-label="New file">'+I.plus+'</button>'+
       '<button class="dev-icon-btn" id="dev-refresh-files" title="Refresh files" aria-label="Refresh files">'+I.refresh+'</button></span></div>'+
       '<div id="dev-file-list" role="list"></div><form class="dev-new-file" id="dev-new-file-form" hidden>'+
@@ -114,8 +115,7 @@
       '<div id="dev-terminal-bar"><span id="dev-terminal-prompt">dev&gt;</span><input id="dev-terminal-command" autocomplete="off" spellcheck="false" aria-label="Terminal command" placeholder="help · run · preview · ls">'+
       '<button id="dev-terminal-run">Run</button></div></section></main>'+
       '<div class="dev-resize-handle" id="dev-assistant-resize" role="separator" aria-orientation="vertical" aria-label="Resize AI Assistant panel" aria-valuemin="240" aria-valuemax="500" tabindex="0"></div>'+
-      '<aside id="dev-assistant"><div id="dev-assistant-head"><strong>'+I.bot+' &nbsp; AI Coding Assistant</strong><span id="dev-ai-provider">LifeLink AI</span><button class="dev-pane-hide" id="dev-assistant-hide" type="button" title="Hide AI Assistant panel" aria-label="Hide AI Assistant panel">'+I.hide+'<span>Hide</span></button></div>'+
-      '<div id="dev-ai-model-row"><label for="dev-ai-model">Model</label><select id="dev-ai-model" aria-label="AI model"></select></div>'+
+      '<aside id="dev-assistant"><div id="dev-ai-model-row"><label for="dev-ai-model">Model</label><select id="dev-ai-model" aria-label="AI model"></select><button class="dev-pane-hide" id="dev-assistant-hide" type="button" title="Hide AI Assistant panel" aria-label="Hide AI Assistant panel">'+I.assistantHide+'</button></div>'+
       '<div id="dev-ai-messages"><div class="dev-empty">Describe what you want to build, ask for an explanation, or send an error to AI. The assistant can use your active file and project structure as context.</div></div>'+
       '<form id="dev-ai-composer"><textarea id="dev-ai-input" placeholder="Ask AI to build, debug or explain code…" maxlength="12000"></textarea>'+
       '<div id="dev-ai-send-row"><span id="dev-ai-hint">AI uses your connected LifeLink provider.</span><button id="dev-ai-send" type="submit">Ask AI ↗</button></div></form></aside></div>';
@@ -140,7 +140,8 @@
     const compact=window.matchMedia('(max-width: 620px)').matches;
     const className=compact?'explorer-open':'explorer-collapsed';
     const visible=force===undefined?!root.classList.contains(className):!!force;
-    root.classList.toggle(className,visible);
+    if(compact)root.classList.toggle('explorer-open',visible);
+    else root.classList.toggle('explorer-collapsed',!visible);
     if(visible)root.classList.remove('ai-open','assistant-collapsed');
     updatePanelToggleStates();
   }
@@ -148,7 +149,8 @@
     const drawer=window.matchMedia('(max-width: 900px)').matches;
     const className=drawer?'ai-open':'assistant-collapsed';
     const visible=force===undefined?(drawer?!root.classList.contains(className):root.classList.contains(className)):!!force;
-    root.classList.toggle(className,visible);
+    if(drawer)root.classList.toggle('ai-open',visible);
+    else root.classList.toggle('assistant-collapsed',!visible);
     if(visible)root.classList.remove('explorer-open','explorer-collapsed');
     updatePanelToggleStates();
   }
