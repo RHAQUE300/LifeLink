@@ -73,7 +73,7 @@
 .dev-output-line.warn{color:#f4ca75}
 .dev-output-line.error{color:#ff929d}
 .dev-output-line.result{color:#a6e7bb}
-#dev-preview{display:none;flex:1;min-height:0;width:100%;border:0;background:#fff}
+#dev-preview-frame{display:none;flex:1;min-height:0;width:100%;border:0;background:#fff}
 #dev-runtime-frame{display:none;width:0;height:0;border:0}
 #dev-terminal-bar{display:flex;align-items:center;gap:7px;padding:7px 9px;border-top:1px solid rgba(255,255,255,.08);background:#171f2d}
 #dev-terminal-prompt{color:#84c99b;font:12px ui-monospace,monospace}
