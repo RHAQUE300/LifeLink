@@ -4594,7 +4594,7 @@ window.loadDeveloperMode = async function(button) {
     if (document.querySelector('link[data-lifelink-dev-css]')) { resolve(); return; }
     const link = document.createElement('link');
     link.rel = 'stylesheet';
-    link.href = 'dev-mode.css?v=0.3.0';
+    link.href = 'dev-mode.css?v=0.4.0';
     link.dataset.lifelinkDevCss = 'true';
     link.onload = resolve;
     link.onerror = () => reject(new Error('Developer Mode styles could not be loaded.'));
@@ -4602,7 +4602,7 @@ window.loadDeveloperMode = async function(button) {
   });
   const loadScript = new Promise((resolve, reject) => {
     const script = document.createElement('script');
-    script.src = 'dev-mode.js?v=0.3.0';
+    script.src = 'dev-mode.js?v=0.4.0';
     script.async = true;
     script.onload = resolve;
     script.onerror = () => reject(new Error('Developer Mode module could not be loaded.'));
