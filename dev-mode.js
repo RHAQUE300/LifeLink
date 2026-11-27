@@ -1,7 +1,7 @@
 /* LifeLink Developer Mode: additive, lazy-loaded, browser-native workspace. */
 (function () {
   'use strict';
-  const VERSION = '0.7.1', PREFIX = 'lifelink.dev.workspace.v1:', MAX_FILE = 250000, MAX_LOG = 350, SAVE_DELAY = 800, MAX_LOG_LINE = 12000;
+  const VERSION = '0.7.2', PREFIX = 'lifelink.dev.workspace.v1:', MAX_FILE = 250000, MAX_LOG = 350, SAVE_DELAY = 800, MAX_LOG_LINE = 12000;
   const $ = (s, r) => (r || document).querySelector(s);
   const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
   const svg = path => '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' + path + '</svg>';
@@ -17,7 +17,9 @@
     refresh:svg('<path d="M20 7v5h-5M4 17v-5h5"/><path d="M5.6 9A7 7 0 0 1 18 6l2 6M4 12l2 6a7 7 0 0 0 12.4-3"/>'),
     trash:svg('<path d="M3 6h18M8 6V4h8v2m3 0-1 14H6L5 6m4 4v6m6-6v6"/>'),
     explorerHide:svg('<rect x="3" y="3" width="18" height="18" rx="2"/><path d="M9 3v18M15 8l-3 4 3 4"/>'),
-    assistantHide:svg('<rect x="3" y="3" width="18" height="18" rx="2"/><path d="M15 3v18M9 8l3 4-3 4"/>')
+    assistantHide:svg('<rect x="3" y="3" width="18" height="18" rx="2"/><path d="M15 3v18M9 8l3 4-3 4"/>'),
+    explorerShow:svg('<rect x="3" y="3" width="18" height="18" rx="2"/><path d="M9 3v18M12 8l3 4-3 4"/>'),
+    assistantShow:svg('<rect x="3" y="3" width="18" height="18" rx="2"/><path d="M15 3v18M12 8l-3 4 3 4"/>')
   };
   let root = null, editor = null, workspace = null, activeFile = 'index.html';
   let opened = false, outputMode = 'console', aiBusy = false, aiMessages = [], latestCodeBlocks = [], previewToken = '';
@@ -118,7 +120,9 @@
       '<aside id="dev-assistant"><div id="dev-ai-model-row"><label for="dev-ai-model">Model</label><select id="dev-ai-model" aria-label="AI model"></select><button class="dev-pane-hide" id="dev-assistant-hide" type="button" title="Hide AI Assistant panel" aria-label="Hide AI Assistant panel">'+I.assistantHide+'</button></div>'+
       '<div id="dev-ai-messages"><div class="dev-empty">Describe what you want to build, ask for an explanation, or send an error to AI. The assistant can use your active file and project structure as context.</div></div>'+
       '<form id="dev-ai-composer"><textarea id="dev-ai-input" placeholder="Ask AI to build, debug or explain code…" maxlength="12000"></textarea>'+
-      '<div id="dev-ai-send-row"><span id="dev-ai-hint">AI uses your connected LifeLink provider.</span><button id="dev-ai-send" type="submit">Ask AI ↗</button></div></form></aside></div>';
+      '<div id="dev-ai-send-row"><span id="dev-ai-hint">AI uses your connected LifeLink provider.</span><button id="dev-ai-send" type="submit">Ask AI ↗</button></div></form></aside></div>'+
+      '<button class="dev-panel-reopen" id="dev-explorer-reopen" type="button" title="Show Project Files panel" aria-label="Show Project Files panel" hidden>'+I.explorerShow+'</button>'+
+      '<button class="dev-panel-reopen" id="dev-assistant-reopen" type="button" title="Show AI Assistant panel" aria-label="Show AI Assistant panel" hidden>'+I.assistantShow+'</button>';
     document.body.appendChild(root);
     editor=$('#dev-editor');
     wire();
@@ -135,6 +139,8 @@
     aiToggle.setAttribute('aria-expanded',String(assistantVisible));
     aiToggle.setAttribute('aria-label',assistantVisible?'Hide AI Assistant panel':'Show AI Assistant panel');
     aiToggle.title=assistantVisible?'Hide AI Assistant panel':'Show AI Assistant panel';
+    $('#dev-explorer-reopen').hidden=explorerVisible;
+    $('#dev-assistant-reopen').hidden=assistantVisible;
   }
   function toggleExplorerPanel(force) {
     const compact=window.matchMedia('(max-width: 620px)').matches;
@@ -230,6 +236,8 @@
     $('#dev-ai-toggle').addEventListener('click',()=>toggleAssistantPanel());
     $('#dev-explorer-hide').addEventListener('click',()=>toggleExplorerPanel(false));
     $('#dev-assistant-hide').addEventListener('click',()=>toggleAssistantPanel(false));
+    $('#dev-explorer-reopen').addEventListener('click',()=>toggleExplorerPanel(true));
+    $('#dev-assistant-reopen').addEventListener('click',()=>toggleAssistantPanel(true));
     setupPanelResizing();
     $('#dev-run').addEventListener('click',runActive);
     $('#dev-preview-button').addEventListener('click',showPreview);
