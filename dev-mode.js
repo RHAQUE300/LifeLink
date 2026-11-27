@@ -1,7 +1,7 @@
 /* LifeLink Developer Mode: additive, lazy-loaded, browser-native workspace. */
 (function () {
   'use strict';
-  const VERSION = '0.9.2', PREFIX = 'lifelink.dev.workspace.v1:', MAX_FILE = 250000, MAX_LOG = 350, SAVE_DELAY = 800, MAX_LOG_LINE = 12000;
+  const VERSION = '0.9.3', PREFIX = 'lifelink.dev.workspace.v1:', MAX_FILE = 250000, MAX_LOG = 350, SAVE_DELAY = 800, MAX_LOG_LINE = 12000;
   const $ = (s, r) => (r || document).querySelector(s);
   const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
   const svg = path => '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' + path + '</svg>';
@@ -378,6 +378,26 @@
       return 'Remote compiler failed: '+message+'\nCheck your connection or select a different compiler. No local code was changed.';
     }finally{clearTimeout(timer)}
   }
+
+  function hasAIReviewConsent() {
+    try{return localStorage.getItem(key()+':ai-review-consent')==='yes'||sessionStorage.getItem(key()+':ai-review-session-consent')==='yes'}catch(e){return false}
+  }
+  async function allowAIProjectReview() {
+    if(hasAIReviewConsent())return true;
+    const result=await showDialog({
+      title:'Send project context to your AI provider?',
+      message:'For a project-specific review, LifeLink sends up to 34,000 characters of your project source plus the run output to the AI provider selected in LifeLink. Recognised API-key and access-token patterns are masked first. This is separate from the hosted compiler. Choose Continue to request the AI review, or Use local checks only to keep the source out of the AI request.',
+      checkboxLabel:'Remember my approval on this browser',
+      confirmLabel:'Continue to AI review',
+      cancelLabel:'Use local checks only'
+    });
+    if(result.confirmed){
+      try{sessionStorage.setItem(key()+':ai-review-session-consent','yes')}catch(e){}
+      if(result.checked){try{localStorage.setItem(key()+':ai-review-consent','yes')}catch(e){}}
+    }
+    return result.confirmed;
+  }
+
   function projectMetrics() {
     const files=workspace.files, text=files.map(f=>f.content).join('\n');
     const count=(re)=>((text.match(re)||[]).length);
@@ -457,6 +477,12 @@
     diagnosticBusy=true;
     let answer='';
     try{
+      const permitted=await allowAIProjectReview();
+      if(!permitted){
+        if(token===diagnosticToken)renderDiagnostics(report,runtimeText,'AI review skipped. No project source was sent to your AI provider. The local checks and run output above are still available.');
+        log('AI project review skipped; local diagnostics remain available.','system');
+        return;
+      }
       if(typeof window.ensureSupabaseClient==='function'){
         const ready=await window.ensureSupabaseClient();
         if(!ready)throw new Error('LifeLink sign-in service is unavailable.');
