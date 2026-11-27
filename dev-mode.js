@@ -295,8 +295,9 @@
     return candidates[0]||null;
   }
   function localWebProject() {
-    return workspace.files.some(f=>['html','htm'].includes(ext(f.name))) ||
-      ['html','htm','css'].includes(ext(activeFile));
+    const activeExt=ext(activeFile);
+    if(['html','htm','css'].includes(activeExt))return true;
+    return ['js','mjs','cjs','jsx','ts','tsx'].includes(activeExt) && workspace.files.some(f=>['html','htm'].includes(ext(f.name)));
   }
   function hasRemoteConsent() {
     try{return localStorage.getItem(key()+':wandbox-consent')==='yes'}catch(e){return false}
@@ -439,7 +440,6 @@
     }).join('');
   }
   async function runProjectAIReview(report,runtimeText,token) {
-    if(diagnosticBusy)return;
     diagnosticBusy=true;
     let answer='';
     try{
@@ -478,6 +478,26 @@
       if(token===diagnosticToken)renderDiagnostics(report,runtimeText,answer);
       log(answer,'warn');
     }finally{diagnosticBusy=false}
+  }
+
+  function syncDevTheme() {
+    if(!root)return;
+    const htmlStyle=getComputedStyle(document.documentElement), bodyStyle=getComputedStyle(document.body);
+    const dark=document.documentElement.dataset.theme==='dark';
+    const gradient=dark
+      ? 'radial-gradient(55% 45% at 12% 8%,rgba(92,113,168,.24),transparent),radial-gradient(48% 44% at 88% 16%,rgba(130,88,122,.18),transparent),radial-gradient(60% 52% at 55% 100%,rgba(55,116,105,.16),transparent)'
+      : (bodyStyle.backgroundImage&&bodyStyle.backgroundImage!=='none'?bodyStyle.backgroundImage:'none');
+    root.dataset.devTheme=dark?'dark':'light';
+    root.style.setProperty('--dev-theme-gradient',gradient);
+    root.style.setProperty('--dev-glass',htmlStyle.getPropertyValue('--g').trim()||(dark?'rgba(22,22,24,.62)':'rgba(255,255,255,.72)'));
+    root.style.setProperty('--dev-glass-blur',htmlStyle.getPropertyValue('--bl').trim()||'18px');
+    root.style.setProperty('--dev-glass-opacity',dark?'.58':'.62');
+  }
+  function observeDevTheme() {
+    if(themeObserver||typeof MutationObserver==='undefined')return;
+    themeObserver=new MutationObserver(()=>{if(opened)syncDevTheme()});
+    themeObserver.observe(document.documentElement,{attributes:true,attributeFilter:['data-theme','style']});
+    themeObserver.observe(document.body,{attributes:true,attributeFilter:['style']});
   }
 
   function buildUI() {
@@ -524,6 +544,8 @@
     document.body.appendChild(root);
     editor=$('#dev-editor');
     wire();
+    observeDevTheme();
+    syncDevTheme();
   }
   function updatePanelToggleStates() {
     const compact=window.matchMedia('(max-width: 620px)').matches;
@@ -681,7 +703,11 @@
     $('#dev-terminal-command').addEventListener('keydown',e=>{if(e.key==='Enter'){e.preventDefault();terminal();}});
     $('#dev-ai-composer').addEventListener('submit',e=>{e.preventDefault();askAI($('#dev-ai-input').value);});
     $('#dev-ai-model').addEventListener('change',e=>{if(typeof window.selectAIModel==='function')window.selectAIModel(e.target.value);syncAIModel();});
-    $('#dev-runtime-choice').addEventListener('change',e=>{selectedRuntime=e.target.value;try{localStorage.setItem(key()+':runtime',selectedRuntime)}catch(err){};});\n    $('#dev-stdin-toggle').addEventListener('click',()=>{$('#dev-stdin').hidden=!$('#dev-stdin').hidden;if(!$('#dev-stdin').hidden)$('#dev-stdin').focus();});\n    $('#dev-modal-cancel').addEventListener('click',()=>finishDialog(false));\n    $('#dev-modal-confirm').addEventListener('click',()=>finishDialog(true));\n    $('#dev-modal').addEventListener('click',e=>{if(e.target.id==='dev-modal')finishDialog(false)});
+    $('#dev-runtime-choice').addEventListener('change',e=>{selectedRuntime=e.target.value;try{localStorage.setItem(key()+':runtime',selectedRuntime)}catch(err){};});
+    $('#dev-stdin-toggle').addEventListener('click',()=>{$('#dev-stdin').hidden=!$('#dev-stdin').hidden;if(!$('#dev-stdin').hidden)$('#dev-stdin').focus();});
+    $('#dev-modal-cancel').addEventListener('click',()=>finishDialog(false));
+    $('#dev-modal-confirm').addEventListener('click',()=>finishDialog(true));
+    $('#dev-modal').addEventListener('click',e=>{if(e.target.id==='dev-modal')finishDialog(false)});
     root.addEventListener('click',e=>{
       const tab=e.target.closest('[data-dev-output]'); if(tab)setOutput(tab.dataset.devOutput);
       const exportButton=e.target.closest('[data-dev-export]');if(exportButton){e.preventDefault();e.stopPropagation();downloadFile(exportButton.dataset.devExport);return;}
@@ -709,7 +735,8 @@
     activeFile=name; if(codeMirror)codeMirror.setValue(file.content);else editor.value=file.content;
     $('#dev-active-file-label').textContent=name;
     $('#dev-language-status').textContent=ext(name).toUpperCase()+' · UTF-8';
-    renderFiles(); setLanguageMode(name); updateCursor(); if(codeMirror)codeMirror.focus();else editor.focus();\n    const runtime=$('#dev-runtime-choice');if(runtime)runtime.title='Detected runtime: '+(runtimeLanguage(name)||'not available locally');
+    renderFiles(); setLanguageMode(name); updateCursor(); if(codeMirror)codeMirror.focus();else editor.focus();
+    const runtime=$('#dev-runtime-choice');if(runtime)runtime.title='Detected runtime: '+(runtimeLanguage(name)||'not available locally');
   }
   function scheduleCursorUpdate() {
     if(cursorTimer)return;
@@ -839,13 +866,32 @@
     setOutput('preview'); log('Starting isolated preview…','system');
   }
   function showPreview() {
-    if(['html','htm','css','js','mjs'].includes(ext(activeFile)))projectPreview();
-    else{setOutput('console');log('Preview currently supports HTML, CSS and JavaScript. Other runtimes will be added separately.','warn');}
+    if(localWebProject())projectPreview();
+    else{setOutput('console');log('This project is not a browser preview. Press Run to use its compiler/runtime.','warn');}
   }
-  function runActive() {
-    const file=current(); if(!file)return; save(false);
-    if(['html','htm','css','js','mjs'].includes(ext(file.name))){log('$ run '+file.name,'system');projectPreview();}
-    else log('No browser runtime is loaded for .'+ext(file.name)+' yet. Additional runtimes will be lazy-loaded in later modules.','warn');
+  async function runActive() {
+    const file=current();if(!file)return;
+    save(false);
+    const token=++diagnosticToken,report=scanProject();
+    renderDiagnostics(report,'','AI project inspection is running…');
+    setOutput('diagnostics');
+    log('$ run '+file.name,'system');
+    let runtimeText='';
+    try{
+      if(localWebProject()){
+        projectPreview();
+        runtimeText='Browser preview launched in the isolated iframe. Check Terminal for console output and runtime exceptions.';
+        await new Promise(resolve=>setTimeout(resolve,700));
+        if(lastErrorText)runtimeText+='\nCaptured preview error: '+lastErrorText;
+      }else{
+        runtimeText=await runWithWandbox(file);
+      }
+    }catch(error){
+      runtimeText='Run failed: '+String(error&&error.message||error);
+      log(runtimeText,'error');
+    }
+    if(token!==diagnosticToken)return;
+    runProjectAIReview(report,runtimeText,token);
   }
   function terminal() {
     const input=$('#dev-terminal-command'), command=String(input.value||'').trim(); if(!command)return; input.value='';
@@ -868,7 +914,8 @@
       case 'date':log(new Date().toString());break;
       case 'run':runActive();break;
       case 'preview':showPreview();break;
-      case 'download':downloadFile();break;\n      case 'runtimes':ensureRuntimeCatalog().then(items=>log(items.map(x=>x.language+' · '+x.displayName).join('\\n'))).catch(e=>log(e.message,'error'));break;
+      case 'download':downloadFile();break;
+      case 'runtimes':ensureRuntimeCatalog().then(items=>log(items.map(x=>x.language+' · '+x.displayName).join('\n'))).catch(e=>log(e.message,'error'));break;
       case 'version':log('LifeLink Dev '+VERSION);break;
       default:log('Unknown command: '+verb+' · type help for commands.','error');
     }
@@ -954,7 +1001,11 @@
     if(typeof window.closeAIFull==='function')window.closeAIFull(true);
     document.body.dataset.devPreviousOverflow=document.body.style.overflow;
     document.body.style.overflow='hidden';
-    root.classList.add('open');opened=true;setOutput('console');\n    try{selectedRuntime=localStorage.getItem(key()+':runtime')||'auto'}catch(e){selectedRuntime='auto'}\n    if($('#dev-runtime-choice'))$('#dev-runtime-choice').value=selectedRuntime;\n    ensureRuntimeCatalog().catch(error=>log('Compiler catalogue unavailable: '+error.message,'warn'));\n    syncDevTheme();
+    root.classList.add('open');opened=true;setOutput('console');
+    try{selectedRuntime=localStorage.getItem(key()+':runtime')||'auto'}catch(e){selectedRuntime='auto'}
+    if($('#dev-runtime-choice'))$('#dev-runtime-choice').value=selectedRuntime;
+    ensureRuntimeCatalog().catch(error=>log('Compiler catalogue unavailable: '+error.message,'warn'));
+    syncDevTheme();
     syncAIModel();
     if(typeof window.refreshAIModelStatus==='function')Promise.resolve(window.refreshAIModelStatus()).then(syncAIModel).catch(syncAIModel);
     log('LifeLink Dev '+VERSION+' ready.','system');log('Browser-native workspace · type help for terminal commands.','system');
