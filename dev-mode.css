@@ -326,3 +326,17 @@
   .dev-pane-hide span{display:none}
 }
 @media(prefers-reduced-motion:reduce){#dev-body{transition:none!important}.dev-pane-hide,.dev-resize-handle:after{transition:none!important}}
+
+/* v0.7.0 — icon-only hide controls; model picker is the first AI panel element. */
+.dev-pane-hide{
+  width:30px;height:30px;min-width:30px;padding:5px;display:inline-flex;
+  align-items:center;justify-content:center;border:1px solid rgba(100,115,145,.2);
+  border-radius:7px;background:rgba(255,255,255,.62);color:#68758c;cursor:pointer;
+}
+.dev-pane-hide svg{display:block;width:17px;height:17px}
+.dev-pane-hide:hover{background:rgba(83,119,205,.12);color:#3157a8;border-color:rgba(83,119,205,.28)}
+#dev-ai-model-row{flex:none;min-height:48px}
+#dev-ai-model-row .dev-pane-hide{margin-left:2px}
+#dev-assistant-head{display:none!important}
+[data-theme=dark] .dev-pane-hide{background:rgba(255,255,255,.07);color:#c1ccdd;border-color:rgba(255,255,255,.15)}
+@media(max-width:620px){.dev-pane-hide{width:28px;height:28px;min-width:28px;padding:4px}}
