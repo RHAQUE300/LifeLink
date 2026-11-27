@@ -1,7 +1,7 @@
 /* LifeLink Developer Mode: additive, lazy-loaded, browser-native workspace. */
 (function () {
   'use strict';
-  const VERSION = '0.7.3', PREFIX = 'lifelink.dev.workspace.v1:', MAX_FILE = 250000, MAX_LOG = 350, SAVE_DELAY = 800, MAX_LOG_LINE = 12000;
+  const VERSION = '0.8.0', PREFIX = 'lifelink.dev.workspace.v1:', MAX_FILE = 250000, MAX_LOG = 350, SAVE_DELAY = 800, MAX_LOG_LINE = 12000;
   const $ = (s, r) => (r || document).querySelector(s);
   const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
   const svg = path => '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' + path + '</svg>';
@@ -83,6 +83,110 @@
   function current() { return workspace && workspace.files.find(f=>f.name===activeFile); }
   function glyph(name) { return ({html:'◇',htm:'◇',css:'#',js:'JS',mjs:'JS',json:'{}',md:'M',py:'Py',sql:'DB'})[ext(name)] || '·'; }
 
+  const LANGUAGE_MODES = {
+    html:{label:'HTML',mode:'htmlmixed',mime:'text/html',files:['xml/xml','javascript/javascript','css/css','htmlmixed/htmlmixed']},
+    htm:{label:'HTML',mode:'htmlmixed',mime:'text/html',files:['xml/xml','javascript/javascript','css/css','htmlmixed/htmlmixed']},
+    css:{label:'CSS',mode:'css',mime:'text/css'},scss:{label:'SCSS',mode:'css',mime:'text/x-scss'},
+    less:{label:'Less',mode:'css',mime:'text/x-less'},js:{label:'JavaScript',mode:'javascript',mime:'text/javascript'},
+    mjs:{label:'JavaScript',mode:'javascript',mime:'text/javascript'},cjs:{label:'JavaScript',mode:'javascript',mime:'text/javascript'},
+    jsx:{label:'JSX',mode:'jsx',mime:'text/jsx',files:['javascript/javascript','xml/xml','jsx/jsx']},
+    ts:{label:'TypeScript',mode:'javascript',mime:'text/typescript'},tsx:{label:'TSX',mode:'jsx',mime:'text/typescript',files:['javascript/javascript','xml/xml','jsx/jsx']},
+    json:{label:'JSON',mode:'javascript',mime:'application/json'},jsonc:{label:'JSONC',mode:'javascript',mime:'text/javascript'},
+    py:{label:'Python',mode:'python',mime:'text/x-python'},pyw:{label:'Python',mode:'python',mime:'text/x-python'},
+    ipynb:{label:'Jupyter Notebook',mode:'javascript',mime:'application/json'},
+    java:{label:'Java',mode:'clike',mime:'text/x-java'},kt:{label:'Kotlin',mode:'clike',mime:'text/x-kotlin'},kts:{label:'Kotlin',mode:'clike',mime:'text/x-kotlin'},
+    scala:{label:'Scala',mode:'clike',mime:'text/x-scala'},groovy:{label:'Groovy',mode:'groovy',mime:'text/x-groovy'},
+    c:{label:'C',mode:'clike',mime:'text/x-csrc'},h:{label:'C/C++ Header',mode:'clike',mime:'text/x-c++src'},
+    cc:{label:'C++',mode:'clike',mime:'text/x-c++src'},cpp:{label:'C++',mode:'clike',mime:'text/x-c++src'},cxx:{label:'C++',mode:'clike',mime:'text/x-c++src'},
+    cs:{label:'C#',mode:'clike',mime:'text/x-csharp'},ino:{label:'Arduino',mode:'clike',mime:'text/x-c++src'},
+    go:{label:'Go',mode:'go',mime:'text/x-go'},rs:{label:'Rust',mode:'rust',mime:'text/x-rustsrc'},
+    rb:{label:'Ruby',mode:'ruby',mime:'text/x-ruby'},php:{label:'PHP',mode:'php',mime:'application/x-httpd-php',files:['xml/xml','javascript/javascript','css/css','htmlmixed/htmlmixed','php/php']},
+    swift:{label:'Swift',mode:'swift',mime:'text/x-swift'},dart:{label:'Dart',mode:'dart',mime:'application/dart'},
+    lua:{label:'Lua',mode:'lua',mime:'text/x-lua'},r:{label:'R',mode:'r',mime:'text/x-rsrc'},jl:{label:'Julia',mode:'julia',mime:'text/x-julia'},
+    pl:{label:'Perl',mode:'perl',mime:'text/x-perl'},pm:{label:'Perl',mode:'perl',mime:'text/x-perl'},
+    sh:{label:'Shell',mode:'shell',mime:'text/x-sh'},bash:{label:'Bash',mode:'shell',mime:'text/x-sh'},zsh:{label:'Zsh',mode:'shell',mime:'text/x-sh'},
+    ps1:{label:'PowerShell',mode:'powershell',mime:'application/x-powershell'},psm1:{label:'PowerShell',mode:'powershell',mime:'application/x-powershell'},
+    bat:{label:'Batch',mode:'dos',mime:'text/x-dos'},cmd:{label:'Batch',mode:'dos',mime:'text/x-dos'},
+    sql:{label:'SQL',mode:'sql',mime:'text/x-sql'},yaml:{label:'YAML',mode:'yaml',mime:'text/x-yaml'},yml:{label:'YAML',mode:'yaml',mime:'text/x-yaml'},
+    toml:{label:'TOML',mode:'toml',mime:'text/x-toml'},xml:{label:'XML',mode:'xml',mime:'application/xml'},xsd:{label:'XML Schema',mode:'xml',mime:'application/xml'},
+    svg:{label:'SVG',mode:'xml',mime:'image/svg+xml'},md:{label:'Markdown',mode:'markdown',mime:'text/x-markdown'},markdown:{label:'Markdown',mode:'markdown',mime:'text/x-markdown'},
+    rst:{label:'reStructuredText',mode:'rst',mime:'text/x-rst'},tex:{label:'LaTeX',mode:'stex',mime:'text/x-stex'},
+    diff:{label:'Diff',mode:'diff',mime:'text/x-diff'},patch:{label:'Patch',mode:'diff',mime:'text/x-diff'},
+    dockerfile:{label:'Dockerfile',mode:'dockerfile',mime:'text/x-dockerfile'},makefile:{label:'Makefile',mode:'cmake',mime:'text/x-cmake'},
+    cmake:{label:'CMake',mode:'cmake',mime:'text/x-cmake'},ini:{label:'INI',mode:'properties',mime:'text/x-properties'},
+    conf:{label:'Config',mode:'properties',mime:'text/x-properties'},properties:{label:'Properties',mode:'properties',mime:'text/x-properties'},
+    nginx:{label:'Nginx',mode:'nginx',mime:'text/x-nginx-conf'},vue:{label:'Vue',mode:'htmlmixed',mime:'text/html',files:['xml/xml','javascript/javascript','css/css','htmlmixed/htmlmixed']},
+    sqlx:{label:'SQL',mode:'sql',mime:'text/x-sql'},graphql:{label:'GraphQL',mode:'graphql',mime:'text/x-graphql'},gql:{label:'GraphQL',mode:'graphql',mime:'text/x-graphql'},
+    proto:{label:'Protocol Buffers',mode:'protobuf',mime:'text/x-protobuf'},pug:{label:'Pug',mode:'pug',mime:'text/x-pug'},
+    handlebars:{label:'Handlebars',mode:'handlebars',mime:'text/x-handlebars-template'},hbs:{label:'Handlebars',mode:'handlebars',mime:'text/x-handlebars-template'},
+    elm:{label:'Elm',mode:'elm',mime:'text/x-elm'},haskell:{label:'Haskell',mode:'haskell',mime:'text/x-haskell'},hs:{label:'Haskell',mode:'haskell',mime:'text/x-haskell'},
+    clj:{label:'Clojure',mode:'clojure',mime:'text/x-clojure'},ex:{label:'Elixir',mode:'elixir',mime:'text/x-elixir'},exs:{label:'Elixir',mode:'elixir',mime:'text/x-elixir'},
+    erl:{label:'Erlang',mode:'erlang',mime:'text/x-erlang'},fs:{label:'F#',mode:'mllike',mime:'text/x-fsharp'},ml:{label:'OCaml',mode:'mllike',mime:'text/x-ocaml'},
+    v:{label:'Verilog',mode:'verilog',mime:'text/x-verilog'},sv:{label:'SystemVerilog',mode:'verilog',mime:'text/x-systemverilog'},
+    vhd:{label:'VHDL',mode:'vhdl',mime:'text/x-vhdl'},plsql:{label:'PL/SQL',mode:'sql',mime:'text/x-plsql'},
+    wasm:{label:'WebAssembly text',mode:'wast',mime:'text/webassembly'},wat:{label:'WebAssembly text',mode:'wast',mime:'text/webassembly'}
+  };
+  let codeMirror = null, codeMirrorReady = null, selectedMode = 'auto';
+  function languageFor(name) { return LANGUAGE_MODES[ext(name)] || {label:'Plain Text',mode:'null',mime:'text/plain'}; }
+  function loadScriptOnce(src, test) {
+    if(test())return Promise.resolve();
+    return new Promise((resolve,reject)=>{
+      const existing=Array.from(document.scripts).find(x=>x.src===src);
+      if(existing){existing.addEventListener('load',resolve,{once:true});existing.addEventListener('error',reject,{once:true});return;}
+      const script=document.createElement('script');script.src=src;script.async=true;
+      script.onload=resolve;script.onerror=()=>reject(new Error('Could not load '+src));document.head.appendChild(script);
+    });
+  }
+  function loadStyleOnce(href, marker) {
+    if(document.querySelector('link['+marker+']'))return;
+    const link=document.createElement('link');link.rel='stylesheet';link.href=href;link.setAttribute(marker,'true');document.head.appendChild(link);
+  }
+  async function ensureCodeMirror() {
+    if(codeMirrorReady)return codeMirrorReady;
+    codeMirrorReady=(async()=>{
+      loadStyleOnce('https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/codemirror.min.css','data-lifelink-codemirror');
+      loadStyleOnce('https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/theme/material-darker.min.css','data-lifelink-codemirror-theme');
+      await loadScriptOnce('https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/codemirror.min.js',()=>!!window.CodeMirror);
+      const host=$('.dev-editor-wrap'), textarea=$('#dev-editor');
+      if(!host||!textarea||codeMirror)return;
+      codeMirror=window.CodeMirror.fromTextArea(textarea,{
+        mode:'htmlmixed',theme:'material-darker',lineNumbers:true,lineWrapping:false,indentUnit:2,tabSize:2,indentWithTabs:false,
+        autofocus:false,viewportMargin:30,matchBrackets:true,autoCloseBrackets:true,extraKeys:{
+          Tab:cm=>cm.execCommand('insertSoftTab'),
+          'Ctrl-S':()=>save(true),'Cmd-S':()=>save(true),
+          'Ctrl-Enter':()=>runActive(),'Cmd-Enter':()=>runActive()
+        }
+      });
+      codeMirror.on('change',()=>{
+        const file=current();if(file)file.content=codeMirror.getValue().slice(0,MAX_FILE);
+        scheduleSave();scheduleCursorUpdate();
+      });
+      codeMirror.on('cursorActivity',scheduleCursorUpdate);
+      codeMirror.setSize('100%','100%');
+      editor=textarea;
+      updateCursor();
+      setLanguageMode(activeFile);
+    })();
+    return codeMirrorReady;
+  }
+  function setLanguageMode(name) {
+    const info=languageFor(name), select=$('#dev-language-mode');
+    if(select&&selectedMode==='auto')select.value='auto';
+    const status=$('#dev-language-status');
+    const modeLabel=selectedMode==='auto'?info.label:(select&&select.selectedOptions[0]?select.selectedOptions[0].textContent:info.label);
+    if(!codeMirror){if(status)status.textContent=modeLabel+' · UTF-8';return;}
+    const chosen=selectedMode==='auto'?info:languageForMode(selectedMode);
+    if(!chosen){codeMirror.setOption('mode','text/plain');return;}
+    const files=chosen.files||[];
+    const loadModes=files.reduce((p,file)=>p.then(()=>loadScriptOnce('https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/mode/'+file+'.min.js',()=>!!(window.CodeMirror&&window.CodeMirror.modes&&window.CodeMirror.modes[chosen.mode]))),Promise.resolve());
+    loadModes.then(()=>codeMirror.setOption('mode',chosen.mime||chosen.mode)).catch(()=>{codeMirror.setOption('mode','text/plain');log('Syntax mode could not be loaded for '+modeLabel+'.','warn');});
+    if(status)status.textContent=modeLabel+' · '+codeMirror.getValue().length.toLocaleString()+' chars';
+  }
+  function languageForMode(mode) {
+    const match=Object.keys(LANGUAGE_MODES).map(k=>LANGUAGE_MODES[k]).find(v=>v.mode===mode);
+    return match||null;
+  }
+
   function buildUI() {
     if (root) return;
     root=document.createElement('section');
@@ -107,7 +211,7 @@
       '<p class="dev-explorer-foot">Saved locally in this browser. Folder sync and GitHub integration will be added separately.</p></aside>'+
       '<div class="dev-resize-handle" id="dev-explorer-resize" role="separator" aria-orientation="vertical" aria-label="Resize Project Files panel" aria-valuemin="170" aria-valuemax="420" tabindex="0"></div>'+
       '<main id="dev-center"><section id="dev-editor-panel"><div id="dev-editor-toolbar"><span id="dev-active-file-label">index.html</span>'+
-      '<span class="dev-editor-actions"><button class="dev-tool-btn" id="dev-save">'+I.save+' Save</button><button class="dev-tool-btn" id="dev-preview-button">'+I.play+' Preview</button></span></div>'+
+      '<span class="dev-editor-actions"><select id="dev-language-mode" class="dev-language-select" aria-label="Syntax highlighting language"><option value="auto">Auto detect</option><option value="htmlmixed">HTML</option><option value="javascript">JavaScript</option><option value="jsx">JSX</option><option value="css">CSS</option><option value="python">Python</option><option value="clike">C-like</option><option value="sql">SQL</option><option value="yaml">YAML</option><option value="markdown">Markdown</option><option value="xml">XML</option><option value="shell">Shell</option><option value="powershell">PowerShell</option><option value="rust">Rust</option><option value="go">Go</option><option value="php">PHP</option><option value="ruby">Ruby</option><option value="swift">Swift</option><option value="plain">Plain Text</option></select><button class="dev-tool-btn" id="dev-save">'+I.save+' Save</button><button class="dev-tool-btn" id="dev-preview-button">'+I.play+' Preview</button></span></div>'+
       '<div class="dev-editor-wrap"><textarea id="dev-editor" spellcheck="false" autocapitalize="off" autocomplete="off" aria-label="Code editor"></textarea></div>'+
       '<div id="dev-editor-status"><span id="dev-cursor-status">Ln 1, Col 1</span><span id="dev-language-status">HTML · UTF-8</span></div></section>'+
       '<section id="dev-output-panel"><div id="dev-output-toolbar"><button class="dev-output-tab active" data-dev-output="console">Terminal</button>'+
@@ -277,7 +381,7 @@
       if((e.ctrlKey||e.metaKey)&&e.key.toLowerCase()==='s'){e.preventDefault();save(true);}
       if((e.ctrlKey||e.metaKey)&&e.key==='Enter'){e.preventDefault();runActive();}
     });
-    editor.addEventListener('click',scheduleCursorUpdate); editor.addEventListener('keyup',scheduleCursorUpdate);
+    editor.addEventListener('click',scheduleCursorUpdate); editor.addEventListener('keyup',scheduleCursorUpdate);\n    $('#dev-language-mode').addEventListener('change',e=>{selectedMode=e.target.value;setLanguageMode(activeFile);});
     $('#dev-terminal-run').addEventListener('click',terminal);
     $('#dev-terminal-command').addEventListener('keydown',e=>{if(e.key==='Enter'){e.preventDefault();terminal();}});
     $('#dev-ai-composer').addEventListener('submit',e=>{e.preventDefault();askAI($('#dev-ai-input').value);});
@@ -306,17 +410,17 @@
   function openFile(name) {
     const file=workspace.files.find(f=>f.name===name); if(!file)return;
     if(name!==activeFile)flushSave(false);
-    activeFile=name; editor.value=file.content;
+    activeFile=name; if(codeMirror)codeMirror.setValue(file.content);else editor.value=file.content;
     $('#dev-active-file-label').textContent=name;
     $('#dev-language-status').textContent=ext(name).toUpperCase()+' · UTF-8';
-    renderFiles(); updateCursor(); editor.focus();
+    renderFiles(); setLanguageMode(name); updateCursor(); if(codeMirror)codeMirror.focus();else editor.focus();
   }
   function scheduleCursorUpdate() {
     if(cursorTimer)return;
     cursorTimer=setTimeout(()=>{cursorTimer=null;updateCursor();},80);
   }
   function updateCursor() {
-    const value=editor.value, position=editor.selectionStart;
+    const value=codeMirror?codeMirror.getValue():editor.value, position=codeMirror?codeMirror.indexFromPos(codeMirror.getCursor()):editor.selectionStart;
     let line=1;
     for(let i=0;i<position;i++)if(value.charCodeAt(i)===10)line++;
     const breakAt=value.lastIndexOf('\n',position-1);
@@ -486,7 +590,7 @@
   function applyBlock(index) {
     const code=latestCodeBlocks[index], file=current(); if(typeof code!=='string'||!file)return;
     if(!window.confirm('Replace the contents of '+file.name+' with this AI code block?'))return;
-    file.content=code.slice(0,MAX_FILE); editor.value=file.content;save(false);updateCursor();
+    file.content=code.slice(0,MAX_FILE); if(codeMirror)codeMirror.setValue(file.content);else editor.value=file.content;save(false);updateCursor();
     log('AI code applied to '+file.name+'. Review it before running.','result');
   }
   function context() {
@@ -553,7 +657,7 @@
     syncAIModel();
     if(typeof window.refreshAIModelStatus==='function')Promise.resolve(window.refreshAIModelStatus()).then(syncAIModel).catch(syncAIModel);
     log('LifeLink Dev '+VERSION+' ready.','system');log('Browser-native workspace · type help for terminal commands.','system');
-    setTimeout(()=>editor&&editor.focus(),80);
+    ensureCodeMirror().then(()=>setTimeout(()=>codeMirror&&codeMirror.focus(),80)).catch(error=>{log('Advanced editor unavailable; using basic editor. '+error.message,'warn');});
   }
   function close() {
     if(!opened||!root)return;
