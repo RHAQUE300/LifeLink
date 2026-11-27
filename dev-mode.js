@@ -131,9 +131,9 @@
     });
     $('#dev-ai-toggle').addEventListener('click',()=>{
       const drawer=window.matchMedia('(max-width: 900px)').matches;
-      const className=drawer?'ai-open':'assistant-collapsed';
-      const expanded=drawer?!root.classList.contains(className):root.classList.contains(className);
-      root.classList.toggle(className,drawer?expanded:!expanded);
+      const expanded=drawer?!root.classList.contains('ai-open'):root.classList.contains('assistant-collapsed');
+      if(drawer)root.classList.toggle('ai-open',expanded);
+      else root.classList.toggle('assistant-collapsed',!expanded);
       root.classList.remove('explorer-open','explorer-collapsed');
       $('#dev-ai-toggle').setAttribute('aria-expanded',String(expanded));
       $('#dev-explorer-toggle').setAttribute('aria-expanded','false');
@@ -401,9 +401,11 @@
     if(opened)return;
     buildUI();workspace=load();
     root.classList.remove('closing','ai-open','explorer-open','explorer-collapsed','assistant-collapsed');
-    $('#dev-ai-toggle').setAttribute('aria-expanded','false');
-    $('#dev-explorer-toggle').setAttribute('aria-expanded','true');
-    $('#dev-explorer-toggle').setAttribute('aria-label','Collapse Explorer');
+    const compact=window.matchMedia('(max-width: 620px)').matches;
+    const mobile=window.matchMedia('(max-width: 900px)').matches;
+    $('#dev-ai-toggle').setAttribute('aria-expanded',String(!mobile));
+    $('#dev-explorer-toggle').setAttribute('aria-expanded',String(!compact));
+    $('#dev-explorer-toggle').setAttribute('aria-label',compact?'Expand Explorer':'Collapse Explorer');
     if(!workspace.files.some(f=>f.name===activeFile))activeFile=workspace.files[0].name;
     $('#dev-project-name').value=workspace.name||'Untitled project';
     renderFiles();openFile(activeFile);
