@@ -1,7 +1,7 @@
 /* LifeLink Developer Mode: additive, lazy-loaded, browser-native workspace. */
 (function () {
   'use strict';
-  const VERSION = '0.2.0', PREFIX = 'lifelink.dev.workspace.v1:', MAX_FILE = 250000, MAX_LOG = 350, SAVE_DELAY = 520, MAX_LOG_LINE = 12000;
+  const VERSION = '0.2.0', PREFIX = 'lifelink.dev.workspace.v1:', MAX_FILE = 250000, MAX_LOG = 350, SAVE_DELAY = 800, MAX_LOG_LINE = 12000;
   const $ = (s, r) => (r || document).querySelector(s);
   const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
   const svg = path => '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' + path + '</svg>';
@@ -18,7 +18,7 @@
   };
   let root = null, editor = null, workspace = null, activeFile = 'index.html';
   let opened = false, outputMode = 'console', aiBusy = false, aiMessages = [], latestCodeBlocks = [], previewToken = '';
-  let saveTimer = null, logFrame = 0, logQueue = [], lastErrorText = '';
+  let saveTimer = null, logFrame = 0, logQueue = [], lastErrorText = '', cursorTimer = null;
 
   function key() {
     const owner = typeof S !== 'undefined' && S && S.ownerEmail ? S.ownerEmail :
@@ -138,14 +138,14 @@
     $('#dev-project-name').addEventListener('input',e=>{workspace.name=e.target.value.slice(0,60);scheduleSave();});
     editor.addEventListener('input',()=>{
       const file=current(); if(file)file.content=editor.value.slice(0,MAX_FILE);
-      scheduleSave(); updateCursor();
+      scheduleSave(); scheduleCursorUpdate();
     });
     editor.addEventListener('keydown',e=>{
       if(e.key==='Tab'){e.preventDefault();editor.setRangeText('  ',editor.selectionStart,editor.selectionEnd,'end');editor.dispatchEvent(new Event('input',{bubbles:true}));}
       if((e.ctrlKey||e.metaKey)&&e.key.toLowerCase()==='s'){e.preventDefault();save(true);}
       if((e.ctrlKey||e.metaKey)&&e.key==='Enter'){e.preventDefault();runActive();}
     });
-    editor.addEventListener('click',updateCursor); editor.addEventListener('keyup',updateCursor);
+    editor.addEventListener('click',scheduleCursorUpdate); editor.addEventListener('keyup',scheduleCursorUpdate);
     $('#dev-terminal-run').addEventListener('click',terminal);
     $('#dev-terminal-command').addEventListener('keydown',e=>{if(e.key==='Enter'){e.preventDefault();terminal();}});
     $('#dev-ai-composer').addEventListener('submit',e=>{e.preventDefault();askAI($('#dev-ai-input').value);});
@@ -172,10 +172,17 @@
     $('#dev-language-status').textContent=ext(name).toUpperCase()+' · UTF-8';
     renderFiles(); updateCursor(); editor.focus();
   }
+  function scheduleCursorUpdate() {
+    if(cursorTimer)return;
+    cursorTimer=setTimeout(()=>{cursorTimer=null;updateCursor();},80);
+  }
   function updateCursor() {
-    const before=editor.value.slice(0,editor.selectionStart), lines=before.split('\n');
-    $('#dev-cursor-status').textContent='Ln '+lines.length+', Col '+(lines[lines.length-1].length+1);
-    $('#dev-language-status').textContent=ext(activeFile).toUpperCase()+' · '+editor.value.length.toLocaleString()+' chars';
+    const value=editor.value, position=editor.selectionStart;
+    let line=1;
+    for(let i=0;i<position;i++)if(value.charCodeAt(i)===10)line++;
+    const breakAt=value.lastIndexOf('\n',position-1);
+    $('#dev-cursor-status').textContent='Ln '+line+', Col '+(position-breakAt);
+    $('#dev-language-status').textContent=ext(activeFile).toUpperCase()+' · '+value.length.toLocaleString()+' chars';
   }
   function newFile(e) {
     e.preventDefault();
