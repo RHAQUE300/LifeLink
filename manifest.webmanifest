@@ -1,0 +1,46 @@
+{
+  "id": "./",
+  "name": "LifeLink",
+  "short_name": "LifeLink",
+  "description": "Your personal LifeLink workspace for tasks, notes, planning and connected apps.",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "display_override": [
+    "standalone",
+    "minimal-ui",
+    "browser"
+  ],
+  "background_color": "#eef3fb",
+  "theme_color": "#4f7cff",
+  "orientation": "any",
+  "categories": [
+    "productivity",
+    "utilities"
+  ],
+  "icons": [
+    {
+      "src": "./favicon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    }
+  ],
+  "shortcuts": [
+    {
+      "name": "To Do",
+      "short_name": "To Do",
+      "url": "./#/todo"
+    },
+    {
+      "name": "Calendar",
+      "short_name": "Calendar",
+      "url": "./#/calendar"
+    },
+    {
+      "name": "Notes",
+      "short_name": "Notes",
+      "url": "./#/notes"
+    }
+  ]
+}
