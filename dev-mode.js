@@ -325,10 +325,11 @@
     const catalog=await ensureRuntimeCatalog();
     const compiler=preferredCompiler(file.name);
     if(!compiler)throw new Error('No hosted compiler is currently listed for '+(runtimeLanguage(file.name)||ext(file.name))+'. Choose another file or select a compiler manually.');
-    const total=file.content.length+workspace.files.filter(x=>x.name!==file.name&&x.content.length>0).filter(x=>runtimeLanguage(x.name)===runtimeLanguage(file.name)||(['C','C++'].includes(runtimeLanguage(file.name))&&['h','hpp','hh','hxx'].includes(ext(x.name)))).slice(0,20).reduce((n,x)=>n+x.content.length,0);
-    if(total>180000)throw new Error('This shared compiler accepts only small projects here. Reduce the combined source size below 180 KB.');
-    const mainLanguage=runtimeLanguage(file.name);
-    const sourceFiles=workspace.files.filter(x=>x.name!==file.name&&x.content.length>0).filter(x=>runtimeLanguage(x.name)===mainLanguage||(['C','C++'].includes(mainLanguage)&&['h','hpp','hh','hxx'].includes(ext(x.name)))).slice(0,20);
+    const mainLanguage=compiler.language;
+    const isRelated=x=>runtimeLanguage(x.name)===mainLanguage||(['C','C++'].includes(mainLanguage)&&['h','hpp','hh','hxx'].includes(ext(x.name)));
+    const sourceFiles=workspace.files.filter(x=>x.name!==file.name&&x.content.length>0).filter(isRelated).slice(0,20);
+    const total=file.content.length+sourceFiles.reduce((n,x)=>n+x.content.length,0);
+    if(total>180000)throw new Error('This shared compiler accepts only small projects here. Reduce the related source files below 180 KB.');
     const payload={compiler:compiler.name,code:file.content,stdin:$('#dev-stdin').value||''};
     if(sourceFiles.length)payload.codes=sourceFiles.map(x=>({file:x.name,code:x.content}));
     log('$ Wandbox · '+compiler.language+' · '+compiler.version,'system');
