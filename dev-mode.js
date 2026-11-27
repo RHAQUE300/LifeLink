@@ -1,7 +1,7 @@
 /* LifeLink Developer Mode: additive, lazy-loaded, browser-native workspace. */
 (function () {
   'use strict';
-  const VERSION = '0.9.1', PREFIX = 'lifelink.dev.workspace.v1:', MAX_FILE = 250000, MAX_LOG = 350, SAVE_DELAY = 800, MAX_LOG_LINE = 12000;
+  const VERSION = '0.9.2', PREFIX = 'lifelink.dev.workspace.v1:', MAX_FILE = 250000, MAX_LOG = 350, SAVE_DELAY = 800, MAX_LOG_LINE = 12000;
   const $ = (s, r) => (r || document).querySelector(s);
   const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
   const svg = path => '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' + path + '</svg>';
@@ -353,9 +353,9 @@
       });
       const result=await response.json();
       if(!response.ok)throw new Error(result.message||('Compiler returned HTTP '+response.status));
-      if(result.compiler_message)appendRuntimeOutput('Compiler output:\n'+result.compiler_message,result.compiler_error?'error':'warn');
+      const compilerOutput=String(result.compiler_message||result.compiler_output||'');\n      const programOutput=String(result.program_message||result.program_output||'');\n      if(compilerOutput)appendRuntimeOutput('Compiler output:\n'+compilerOutput,result.compiler_error?'error':'warn');
       if(result.compiler_error)appendRuntimeOutput(result.compiler_error,'error');
-      if(result.program_message)appendRuntimeOutput('Program output:\n'+result.program_message,'result');
+      if(programOutput)appendRuntimeOutput('Program output:\n'+programOutput,'result');
       if(result.program_error)appendRuntimeOutput('Runtime error:\n'+result.program_error,'error');
       if(result.signal)appendRuntimeOutput('Process signal: '+result.signal,'warn');
       if(result.status!==undefined&&String(result.status)!=='0'){
@@ -363,11 +363,11 @@
         appendRuntimeOutput('Execution failed (status '+result.status+'). '+detail,'error');
         return 'Compiler result: failed.\n'+detail;
       }
-      if(!result.compiler_message&&!result.program_message&&!result.program_error&&!result.compiler_error)appendRuntimeOutput('Compiler completed with no output.','result');
+      if(!compilerOutput&&!programOutput&&!result.program_error&&!result.compiler_error)appendRuntimeOutput('Compiler completed with no output.','result');
       status('Execution finished','saved');
       return 'Compiler: '+compiler.language+' ('+compiler.version+').\n'+
-        'Compiler diagnostics:\n'+String(result.compiler_message||result.compiler_error||'None')+'\n'+
-        'Program stdout:\n'+String(result.program_message||'')+'\n'+
+        'Compiler diagnostics:\n'+String(compilerOutput||result.compiler_error||'None')+'\n'+
+        'Program stdout:\n'+String(programOutput)+'\n'+
         'Program stderr:\n'+String(result.program_error||'')+'\n'+
         'Exit status: '+String(result.status===undefined?'unknown':result.status);
     }catch(error){
@@ -470,7 +470,7 @@
         'Return sections: Project level and evidence; Critical errors; Other issues; Helpful improvements; Suggested fixes (name the exact file for every change).',
         'Project metrics: '+JSON.stringify(report.metrics),
         'Static checks: '+JSON.stringify(report.issues),
-        'Execution output: '+String(runtimeText||'No execution output was available.'),
+        'Execution output: '+redactPotentialSecrets(String(runtimeText||'No execution output was available.')),
         'Project source files:'+projectSourceForAI()
       ].join('\n\n');
       const model=$('#af-model'),selected=model?model.value:'auto';
