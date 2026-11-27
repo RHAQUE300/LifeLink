@@ -69,21 +69,22 @@ self.addEventListener("fetch", event => {
   if (!/\.(?:css|js|mjs|svg|webmanifest|png|webp|ico|woff2?)$/i.test(url.pathname)) return;
   if (/\/api\//i.test(url.pathname)) return;
 
-  event.respondWith((async () => {
-    const cache = await caches.open(ASSET_CACHE);
-    const cached = await cache.match(request);
-    const refresh = fetch(request).then(response => {
-      if (response && response.ok && response.type !== "opaque") {
-        cache.put(request, response.clone()).catch(() => {});
-      }
-      return response;
-    });
-    if (cached) {
-      event.waitUntil(refresh.catch(() => {}));
-      return cached;
+  const cachePromise = caches.open(ASSET_CACHE);
+  const refreshPromise = fetch(request).then(async response => {
+    if (response && response.ok && response.type !== "opaque") {
+      const cache = await cachePromise;
+      await cache.put(request, response.clone());
     }
+    return response;
+  });
+  // Register background refresh synchronously while the fetch event is active.
+  event.waitUntil(refreshPromise.then(() => {}, () => {}));
+  event.respondWith((async () => {
+    const cache = await cachePromise;
+    const cached = await cache.match(request);
+    if (cached) return cached;
     try {
-      return await refresh;
+      return await refreshPromise;
     } catch {
       return new Response("This LifeLink resource is not available offline.", {
         status: 503,
