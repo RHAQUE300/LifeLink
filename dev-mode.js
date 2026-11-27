@@ -1,7 +1,7 @@
 /* LifeLink Developer Mode: additive, lazy-loaded, browser-native workspace. */
 (function () {
   'use strict';
-  const VERSION = '0.9.0', PREFIX = 'lifelink.dev.workspace.v1:', MAX_FILE = 250000, MAX_LOG = 350, SAVE_DELAY = 800, MAX_LOG_LINE = 12000;
+  const VERSION = '0.9.1', PREFIX = 'lifelink.dev.workspace.v1:', MAX_FILE = 250000, MAX_LOG = 350, SAVE_DELAY = 800, MAX_LOG_LINE = 12000;
   const $ = (s, r) => (r || document).querySelector(s);
   const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
   const svg = path => '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' + path + '</svg>';
@@ -225,7 +225,10 @@
     pas:'Pascal',pp:'Pascal',f:'Fortran',for:'Fortran',f90:'Fortran',f95:'Fortran',
     d:'D',nim:'Nim',zig:'Zig',v:'V',cr:'Crystal',elm:'Elm',plsql:'SQL',sql:'SQL',
     vb:'Visual Basic',vbs:'Visual Basic',jl:'Julia',m:'Objective-C',mm:'Objective-C++',
-    wasm:'WebAssembly',wat:'WebAssembly'
+    adb:'Ada',ads:'Ada',asm:'Assembly',s:'Assembly',awk:'AWK',cob:'COBOL',cbl:'COBOL',
+    coffee:'CoffeeScript',groovy:'Groovy',gvy:'Groovy',lisp:'Common Lisp',lsp:'Common Lisp',
+    scm:'Scheme',ss:'Scheme',tcl:'Tcl',rkt:'Racket',fth:'Forth',pro:'Prolog',st:'Smalltalk',
+    sol:'Solidity',vala:'Vala',re:'Reason',res:'Reason',wasm:'WebAssembly',wat:'WebAssembly'
   };
   function redactPotentialSecrets(value) {
     return String(value||'').replace(/\b(?:sk-[A-Za-z0-9_-]{18,}|AKIA[0-9A-Z]{16}|AIza[0-9A-Za-z_-]{30,}|gh[pousr]_[A-Za-z0-9]{30,}|xox[baprs]-[A-Za-z0-9-]{20,}|eyJ[A-Za-z0-9_-]{10,}\.eyJ[A-Za-z0-9_-]{10,}(?:\.[A-Za-z0-9_-]{10,})?)\b/g,'[REDACTED CREDENTIAL]');
