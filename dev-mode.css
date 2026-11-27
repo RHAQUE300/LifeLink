@@ -250,3 +250,22 @@
 @media(prefers-reduced-motion:reduce){
   #dev-body,#dev-explorer,#dev-assistant{transition:none!important}
 }
+
+/* v0.5.0 — per-file management and shared LifeLink AI model selection. */
+.dev-file-row{display:flex;align-items:center;gap:2px;min-width:0;border-radius:8px}
+.dev-file-row:hover{background:rgba(90,120,190,.06)}
+.dev-file-row .dev-file{flex:1;min-width:0;width:auto}
+.dev-file-actions{display:flex;gap:1px;opacity:0;transition:opacity .16s ease}
+.dev-file-row:hover .dev-file-actions,.dev-file-row:focus-within .dev-file-actions{opacity:1}
+.dev-file-action{width:25px;height:25px;display:grid;place-items:center;flex:none;border:0;border-radius:6px;background:transparent;color:#738099;cursor:pointer}
+.dev-file-action svg{width:13px;height:13px}
+.dev-file-action:hover{background:rgba(83,119,205,.13);color:#3157a8}
+.dev-file-action.delete:hover{background:rgba(220,70,90,.12);color:#c43c50}
+#dev-ai-model-row{display:flex;align-items:center;gap:9px;padding:8px 12px;border-bottom:1px solid rgba(30,40,65,.08)}
+#dev-ai-model-row label{font-size:10px;font-weight:700;color:#7c8799;white-space:nowrap}
+#dev-ai-model{min-width:0;flex:1;padding:6px 8px;border:1px solid rgba(90,105,135,.2);border-radius:8px;background:#fff;color:#273248;font-size:11px}
+[data-theme=dark] #dev-ai-model-row{border-color:rgba(255,255,255,.1)}
+[data-theme=dark] #dev-ai-model-row label{color:#99a4b8}
+[data-theme=dark] #dev-ai-model{background:#20232a;color:#f2f4f8;border-color:rgba(255,255,255,.14)}
+[data-theme=dark] .dev-file-action{color:#aab6ca}
+@media(hover:none){.dev-file-actions{opacity:1}}
