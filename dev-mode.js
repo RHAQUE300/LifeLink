@@ -177,7 +177,7 @@
     if(!codeMirror){if(status)status.textContent=modeLabel+' · UTF-8';return;}
     const chosen=selectedMode==='auto'?info:languageForMode(selectedMode);
     if(!chosen){codeMirror.setOption('mode','text/plain');return;}
-    const files=chosen.files||[];
+    const files=chosen.files|| (chosen.mode==='null'?[]:[chosen.mode+'/'+chosen.mode]);
     const loadModes=files.reduce((p,file)=>p.then(()=>loadScriptOnce('https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/mode/'+file+'.min.js',()=>!!(window.CodeMirror&&window.CodeMirror.modes&&window.CodeMirror.modes[chosen.mode]))),Promise.resolve());
     loadModes.then(()=>codeMirror.setOption('mode',chosen.mime||chosen.mode)).catch(()=>{codeMirror.setOption('mode','text/plain');log('Syntax mode could not be loaded for '+modeLabel+'.','warn');});
     if(status)status.textContent=modeLabel+' · '+codeMirror.getValue().length.toLocaleString()+' chars';
@@ -425,7 +425,7 @@
     for(let i=0;i<position;i++)if(value.charCodeAt(i)===10)line++;
     const breakAt=value.lastIndexOf('\n',position-1);
     $('#dev-cursor-status').textContent='Ln '+line+', Col '+(position-breakAt);
-    $('#dev-language-status').textContent=ext(activeFile).toUpperCase()+' · '+value.length.toLocaleString()+' chars';
+    $('#dev-language-status').textContent=languageFor(activeFile).label+' · '+value.length.toLocaleString()+' chars';
   }
   function newFile(e) {
     e.preventDefault();
