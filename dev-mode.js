@@ -381,7 +381,8 @@
       if((e.ctrlKey||e.metaKey)&&e.key.toLowerCase()==='s'){e.preventDefault();save(true);}
       if((e.ctrlKey||e.metaKey)&&e.key==='Enter'){e.preventDefault();runActive();}
     });
-    editor.addEventListener('click',scheduleCursorUpdate); editor.addEventListener('keyup',scheduleCursorUpdate);\n    $('#dev-language-mode').addEventListener('change',e=>{selectedMode=e.target.value;setLanguageMode(activeFile);});
+    editor.addEventListener('click',scheduleCursorUpdate); editor.addEventListener('keyup',scheduleCursorUpdate);
+    $('#dev-language-mode').addEventListener('change',e=>{selectedMode=e.target.value;setLanguageMode(activeFile);});
     $('#dev-terminal-run').addEventListener('click',terminal);
     $('#dev-terminal-command').addEventListener('keydown',e=>{if(e.key==='Enter'){e.preventDefault();terminal();}});
     $('#dev-ai-composer').addEventListener('submit',e=>{e.preventDefault();askAI($('#dev-ai-input').value);});
