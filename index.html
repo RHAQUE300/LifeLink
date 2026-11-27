@@ -4551,6 +4551,10 @@ async function aiExportMessage(index,format){
     }
   });
   updateInstallButton();
+  const appHeader=document.getElementById('app-header');
+  if(appHeader&&'MutationObserver' in window){
+    new MutationObserver(updateInstallButton).observe(appHeader,{attributes:true,attributeFilter:['style']});
+  }
 
   if('serviceWorker' in navigator&&/^https?:$/.test(location.protocol)){
     window.addEventListener('load',()=>{
