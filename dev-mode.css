@@ -494,7 +494,7 @@
   #dev-full .dev-head-btn{padding:7px 8px}
   #dev-full .dev-head-btn .dev-btn-label{display:none}
   #dev-full #dev-body,#dev-full.explorer-collapsed #dev-body,#dev-full.assistant-collapsed #dev-body,#dev-full.explorer-collapsed.assistant-collapsed #dev-body{grid-template-columns:minmax(0,1fr)}
-  #dev-full #dev-explorer{position:absolute;left:0;top:0;bottom:0;width:min(300px,88vw);z-index:4;transform:translateX(-102%);box-shadow:12px 0 30px rgba(20,30,50,.18)}
+  #dev-full #dev-explorer{position:absolute;left:0;top:58px;bottom:0;width:min(300px,88vw);z-index:4;transform:translateX(-102%);box-shadow:12px 0 30px rgba(20,30,50,.18)}
   #dev-full.explorer-open #dev-explorer{transform:translateX(0)}
   #dev-full #dev-explorer-resize,#dev-full #dev-assistant-resize{display:none}
   #dev-full #dev-center{grid-template-rows:minmax(180px,1fr) minmax(155px,34%)}
