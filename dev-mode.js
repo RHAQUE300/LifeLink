@@ -304,7 +304,7 @@
     try{
       const model=$('#af-model'), selected=model?model.value:'auto';
       const answer=String(await window.callLLM(aiMessages.slice(-14),{sys:sys,webSearch:false,timeout:90000})||'').trim()||'The AI returned an empty answer.';
-      const blocks=[];latestCodeBlocks=blocks;renderAI('assistant',answer,blocks);
+      renderAI('assistant',answer,latestCodeBlocks);
       aiMessages.push({role:'assistant',text:answer});if(aiMessages.length>20)aiMessages=aiMessages.slice(-20);
       const provider=typeof S!=='undefined'&&S&&S.aiLastProvider?S.aiLastProvider:selected;
       $('#dev-ai-provider').textContent=provider||'LifeLink AI';status('AI response received');
