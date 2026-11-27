@@ -4505,69 +4505,7 @@ async function aiExportMessage(index,format){
       zip.file("mimetype",mimes[format],{compression:"STORE"});
       if(format==="epub"){
         zip.file("META-INF/container.xml",'<?xml version="1.0"?><container xmlns="urn:oasis:names:tc:opendocument:xmlns:container" version="1.0"><rootfiles><rootfile full-path="OEBPS/content.opf" media-type="application/oebps-package+xml"/></rootfiles></container>');
-        zip.file("OEBPS/chapter.xhtml",'<?xml version="1.0" encoding="UTF-8"?><html xmlns="http://www.w3.org/1999/xhtml"><head><title>LifeLink AI</title></head><body>'+text.split(/\n+/).map(x=>'<p>'+aiEscapeXml(x)+'</p>').join("")+'<script>
-/* LifeLink Progressive Web App: install affordance + offline app-shell registration. */
-(function(){
-  const installButton=document.getElementById('pwa-install-btn');
-  let installPrompt=null;
-  const isIOS=()=>/iPad|iPhone|iPod/.test(navigator.userAgent)||(navigator.platform==='MacIntel'&&navigator.maxTouchPoints>1);
-  const isStandalone=()=>window.matchMedia('(display-mode: standalone)').matches||navigator.standalone===true;
-  const notify=message=>{if(typeof window.toast==='function')window.toast(message);else console.info(message)};
-  function updateInstallButton(){
-    if(!installButton)return;
-    if(isStandalone()){installButton.hidden=true;return}
-    installButton.hidden=!(installPrompt||isIOS());
-    const header=document.getElementById('app-header');
-    installButton.style.bottom=header&&header.style.display==='flex'?'88px':'18px';
-  }
-  window.updateLifeLinkPwaInstallButton=updateInstallButton;
-
-  window.addEventListener('beforeinstallprompt',event=>{
-    event.preventDefault();
-    installPrompt=event;
-    updateInstallButton();
-  });
-  window.addEventListener('appinstalled',()=>{
-    installPrompt=null;
-    updateInstallButton();
-    notify('LifeLink has been installed.');
-  });
-  if(installButton)installButton.addEventListener('click',async()=>{
-    if(installPrompt){
-      const promptEvent=installPrompt;
-      installPrompt=null;
-      try{
-        await promptEvent.prompt();
-        const choice=await promptEvent.userChoice;
-        notify(choice&&choice.outcome==='accepted'?'LifeLink is being installed.':'Installation was cancelled.');
-      }catch(error){notify('The install prompt could not be opened. Use your browser menu to install LifeLink.')}
-      updateInstallButton();
-      return;
-    }
-    if(isIOS()){
-      notify('To install LifeLink on iPhone or iPad, tap Share, then choose Add to Home Screen.');
-    }else{
-      notify('Use your browser menu or address-bar install icon to install LifeLink.');
-    }
-  });
-  updateInstallButton();
-  const appHeader=document.getElementById('app-header');
-  if(appHeader&&'MutationObserver' in window){
-    new MutationObserver(updateInstallButton).observe(appHeader,{attributes:true,attributeFilter:['style']});
-  }
-
-  if('serviceWorker' in navigator&&/^https?:$/.test(location.protocol)){
-    window.addEventListener('load',()=>{
-      navigator.serviceWorker.register('./service-worker.js',{scope:'./',updateViaCache:'none'})
-        .then(registration=>registration.update().catch(()=>{}))
-        .catch(error=>console.warn('LifeLink offline support could not be enabled:',error));
-    },{once:true});
-  }
-
-  window.addEventListener('offline',()=>notify('You are offline. LifeLink can load its saved app shell, but sign-in, syncing, AI and connected services need internet.'));
-  window.addEventListener('online',()=>notify('Connection restored.'));
-})();
-</script>
+        zip.file("OEBPS/chapter.xhtml",'<?xml version="1.0" encoding="UTF-8"?><html xmlns="http://www.w3.org/1999/xhtml"><head><title>LifeLink AI</title></head><body>'+text.split(/\n+/).map(x=>'<p>'+aiEscapeXml(x)+'</p>').join("")+'
 </body></html>');
         zip.file("OEBPS/content.opf",'<?xml version="1.0"?><package xmlns="http://www.idpf.org/2007/opf" version="3.0" unique-identifier="id"><metadata xmlns:dc="http://purl.org/dc/elements/1.1/"><dc:identifier id="id">lifelink-ai-answer</dc:identifier><dc:title>LifeLink AI answer</dc:title><dc:language>en</dc:language></metadata><manifest><item id="chapter" href="chapter.xhtml" media-type="application/xhtml+xml"/></manifest><spine><itemref idref="chapter"/></spine></package>');
       }else{
@@ -4733,4 +4671,67 @@ window.loadDeveloperMode = async function(button) {
     if (button) button.disabled = false;
   }
 };
-</script></body></html>
+</script><script>
+/* LifeLink Progressive Web App: install affordance + offline app-shell registration. */
+(function(){
+  const installButton=document.getElementById('pwa-install-btn');
+  let installPrompt=null;
+  const isIOS=()=>/iPad|iPhone|iPod/.test(navigator.userAgent)||(navigator.platform==='MacIntel'&&navigator.maxTouchPoints>1);
+  const isStandalone=()=>window.matchMedia('(display-mode: standalone)').matches||navigator.standalone===true;
+  const notify=message=>{if(typeof window.toast==='function')window.toast(message);else console.info(message)};
+  function updateInstallButton(){
+    if(!installButton)return;
+    if(isStandalone()){installButton.hidden=true;return}
+    installButton.hidden=!(installPrompt||isIOS());
+    const header=document.getElementById('app-header');
+    installButton.style.bottom=header&&header.style.display==='flex'?'88px':'18px';
+  }
+  window.updateLifeLinkPwaInstallButton=updateInstallButton;
+
+  window.addEventListener('beforeinstallprompt',event=>{
+    event.preventDefault();
+    installPrompt=event;
+    updateInstallButton();
+  });
+  window.addEventListener('appinstalled',()=>{
+    installPrompt=null;
+    updateInstallButton();
+    notify('LifeLink has been installed.');
+  });
+  if(installButton)installButton.addEventListener('click',async()=>{
+    if(installPrompt){
+      const promptEvent=installPrompt;
+      installPrompt=null;
+      try{
+        await promptEvent.prompt();
+        const choice=await promptEvent.userChoice;
+        notify(choice&&choice.outcome==='accepted'?'LifeLink is being installed.':'Installation was cancelled.');
+      }catch(error){notify('The install prompt could not be opened. Use your browser menu to install LifeLink.')}
+      updateInstallButton();
+      return;
+    }
+    if(isIOS()){
+      notify('To install LifeLink on iPhone or iPad, tap Share, then choose Add to Home Screen.');
+    }else{
+      notify('Use your browser menu or address-bar install icon to install LifeLink.');
+    }
+  });
+  updateInstallButton();
+  const appHeader=document.getElementById('app-header');
+  if(appHeader&&'MutationObserver' in window){
+    new MutationObserver(updateInstallButton).observe(appHeader,{attributes:true,attributeFilter:['style']});
+  }
+
+  if('serviceWorker' in navigator&&/^https?:$/.test(location.protocol)){
+    window.addEventListener('load',()=>{
+      navigator.serviceWorker.register('./service-worker.js',{scope:'./',updateViaCache:'none'})
+        .then(registration=>registration.update().catch(()=>{}))
+        .catch(error=>console.warn('LifeLink offline support could not be enabled:',error));
+    },{once:true});
+  }
+
+  window.addEventListener('offline',()=>notify('You are offline. LifeLink can load its saved app shell, but sign-in, syncing, AI and connected services need internet.'));
+  window.addEventListener('online',()=>notify('Connection restored.'));
+})();
+</script>
+</body></html>
