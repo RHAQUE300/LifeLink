@@ -4505,8 +4505,7 @@ async function aiExportMessage(index,format){
       zip.file("mimetype",mimes[format],{compression:"STORE"});
       if(format==="epub"){
         zip.file("META-INF/container.xml",'<?xml version="1.0"?><container xmlns="urn:oasis:names:tc:opendocument:xmlns:container" version="1.0"><rootfiles><rootfile full-path="OEBPS/content.opf" media-type="application/oebps-package+xml"/></rootfiles></container>');
-        zip.file("OEBPS/chapter.xhtml",'<?xml version="1.0" encoding="UTF-8"?><html xmlns="http://www.w3.org/1999/xhtml"><head><title>LifeLink AI</title></head><body>'+text.split(/\n+/).map(x=>'<p>'+aiEscapeXml(x)+'</p>').join("")+'
-</body></html>');
+        zip.file("OEBPS/chapter.xhtml",'<?xml version="1.0" encoding="UTF-8"?><html xmlns="http://www.w3.org/1999/xhtml"><head><title>LifeLink AI</title></head><body>'+text.split(/\n+/).map(x=>'<p>'+aiEscapeXml(x)+'</p>').join("")+'</body></html>');
         zip.file("OEBPS/content.opf",'<?xml version="1.0"?><package xmlns="http://www.idpf.org/2007/opf" version="3.0" unique-identifier="id"><metadata xmlns:dc="http://purl.org/dc/elements/1.1/"><dc:identifier id="id">lifelink-ai-answer</dc:identifier><dc:title>LifeLink AI answer</dc:title><dc:language>en</dc:language></metadata><manifest><item id="chapter" href="chapter.xhtml" media-type="application/xhtml+xml"/></manifest><spine><itemref idref="chapter"/></spine></package>');
       }else{
         const ns='xmlns:office="urn:oasis:names:tc:opendocument:xmlns:office:1.0" xmlns:text="urn:oasis:names:tc:opendocument:xmlns:text:1.0" xmlns:table="urn:oasis:names:tc:opendocument:xmlns:table:1.0" xmlns:draw="urn:oasis:names:tc:opendocument:xmlns:drawing:1.0"';
