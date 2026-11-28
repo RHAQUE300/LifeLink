@@ -1,7 +1,7 @@
 /* LifeLink PWA service worker.
    Cache only the application shell and same-origin static assets.
    Authentication, account data, AI, APIs and third-party services are never cached. */
-const VERSION = "v3-install-notice";
+const VERSION = "v4-notification-click";
 const SHELL_CACHE = "lifelink-shell-" + VERSION;
 const ASSET_CACHE = "lifelink-assets-" + VERSION;
 const APP_BASE = new URL(self.registration.scope);
@@ -93,5 +93,20 @@ self.addEventListener("fetch", event => {
         headers: { "Content-Type": "text/plain; charset=utf-8", "Cache-Control": "no-store" }
       });
     }
+  })());
+});
+
+self.addEventListener("notificationclick", event => {
+  event.notification.close();
+  event.waitUntil((async () => {
+    const clientsList = await self.clients.matchAll({ type: "window", includeUncontrolled: true });
+    for (const client of clientsList) {
+      if ("focus" in client) {
+        await client.focus();
+        try { await client.navigate(new URL("#/activity", APP_ROOT).href); } catch {}
+        return;
+      }
+    }
+    if (self.clients.openWindow) await self.clients.openWindow(new URL("#/activity", APP_ROOT).href);
   })());
 });
