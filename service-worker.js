@@ -1,7 +1,7 @@
 /* LifeLink PWA service worker.
    Cache only the application shell and same-origin static assets.
    Authentication, account data, AI, APIs and third-party services are never cached. */
-const VERSION = "v5-sound-controls";
+const VERSION = "v6-volume-separation-modern-sounds";
 const SHELL_CACHE = "lifelink-shell-" + VERSION;
 const ASSET_CACHE = "lifelink-assets-" + VERSION;
 const APP_BASE = new URL(self.registration.scope);
