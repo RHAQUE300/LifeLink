@@ -879,9 +879,7 @@ function freshUserData(name){
     tasks:[],
     events:[],
     notes:[],
-    notifs:[
-      {id:uid(),type:'System',text:'Welcome to LifeLink! Please add your connectors in the Apps tab to sync your services.',ts:d,read:false,dismissable:true}
-    ],
+    notifs:[],
     sessions:[],
     oauth:{githubClientId:'',googleClientId:'',connected:{}},
     googleServices:[],
@@ -900,6 +898,30 @@ let userAccounts;
 try{userAccounts=JSON.parse(localStorage.getItem('lifelink.accounts')||'null');}
 catch(error){console.warn('LifeLink could not read saved workspace data; preserving the original storage and starting in sign-in mode.',error);userAccounts=null;}
 if(!userAccounts||typeof userAccounts!=='object'||Array.isArray(userAccounts))userAccounts={"demo@lifelink.com":{pass:"password123",data:null}};
+
+/* One-time global cleanup migration for every locally stored account on this browser. */
+(function runGlobalActivityCleanup(){
+  const migrationKey='lifelink-global-activity-cleanup-v1';
+  try{
+    if(localStorage.getItem(migrationKey)==='done')return;
+    let accountsChanged=false,notificationsRemoved=0,completedRemoved=0;
+    Object.values(userAccounts).forEach(account=>{
+      if(!account||typeof account!=='object'||!account.data||typeof account.data!=='object')return;
+      const data=account.data;
+      if(Array.isArray(data.notifs)){notificationsRemoved+=data.notifs.length;data.notifs=[];accountsChanged=true}
+      if(Array.isArray(data.tasks)){
+        const before=data.tasks.length;
+        data.tasks=data.tasks.filter(task=>task&&task.done!==true);
+        completedRemoved+=before-data.tasks.length;
+        if(before!==data.tasks.length)accountsChanged=true;
+      }
+      if(Array.isArray(data.recentActivity)&&data.recentActivity.length){data.recentActivity=[];accountsChanged=true}
+    });
+    if(accountsChanged)localStorage.setItem('lifelink.accounts',JSON.stringify(userAccounts));
+    localStorage.setItem(migrationKey,'done');
+    console.info('LifeLink global cleanup applied on this browser:',{notificationsRemoved,completedRemoved});
+  }catch(error){console.warn('LifeLink global cleanup will retry on the next visit:',error)}
+})();
 let S = null;
 
 const nameFromEmail=e=>{const n=String(e||'').split('@')[0];return n?n.charAt(0).toUpperCase()+n.slice(1):'User'};
@@ -1341,7 +1363,7 @@ settings:()=>`<h1>Settings</h1><p class="sub">Account: <b>${esc(currentEmail)}</
   <div class="row" style="border:0;padding:0;flex-wrap:wrap"><button class="btn pri" onclick="openAIFull()">Open chat &amp; choose model</button><button class="btn" data-a="clearchats">Clear chat history</button></div>
 </div>
 <div class="glass card"><h2>AI learning &amp; memory</h2><p class="sub" style="font-size:13px">LifeLink can learn from explicit preferences and your feedback. Memories are stored locally with this prototype’s account data; they do not retrain the underlying model.</p><div class="row"><label style="flex:1">Automatically learn explicit preferences and corrections</label><input id="ai-learn-enabled" type="checkbox" ${S.aiLearning?.enabled!==false?'checked':''} style="width:auto"></div><p class="sub" style="font-size:12px">${(S.aiLearning?.memories||[]).length} saved memories · ${(S.aiLearning?.feedback||[]).length} feedback examples</p><div style="max-height:220px;overflow:auto">${(S.aiLearning?.memories||[]).length?S.aiLearning.memories.slice(-12).reverse().map(m=>`<div class="row" style="align-items:flex-start"><span style="flex:1;font-size:12px">${esc(m.text||'')}</span><button class="btn" data-a="aimemdel" data-i="${m.id}" style="padding:2px 7px">×</button></div>`).join(''):'<p class="sub">No saved memories yet. Explicit preferences and corrections can be learned from chat.</p>'}</div><div class="row" style="border:0;flex-wrap:wrap"><button class="btn" data-a="aimemclear">Clear learned memories &amp; feedback</button></div></div>
-<div class="glass card"><h2>Data</h2><div class="row" style="border:0;flex-wrap:wrap"><button class="btn" data-a="exp">Export JSON</button><label class="btn">Import JSON<input id="imp" type="file" accept=".json" hidden></label><button class="btn" data-a="rmdemo">Remove sample data</button><button class="btn" data-a="cleanuprecents">Clear notifications &amp; completed tasks</button><button class="btn" data-a="reset">Reset account data</button></div></div></div>`,
+<div class="glass card"><h2>Data</h2><div class="row" style="border:0;flex-wrap:wrap"><button class="btn" data-a="exp">Export JSON</button><label class="btn">Import JSON<input id="imp" type="file" accept=".json" hidden></label><button class="btn" data-a="rmdemo">Remove sample data</button><button class="btn" data-a="reset">Reset account data</button></div></div></div>`,
 task:id=>{const t=S.tasks.find(x=>x.id==id);if(!t)return `<h1>Task not found</h1><a class="btn" href="#/todo">Back to To Do</a>`;U.tid=id;
  return `<h1>#${t.n} ${esc(t.title)}</h1><p class="sub">${esc(t.src)} · <span class="tag ${PC[t.pri]}">${t.pri}</span> · Due ${t.due||'—'} · ${t.done?'Completed':'In progress'}</p><div class="grid" style="grid-template-columns:1fr 300px"><div class="col"><div class="glass card"><h2>Progress <span id="wpv">${t.prog}%</span></h2><input id="wp" type="range" min="0" max="100" value="${t.prog}" aria-label="Progress"><div class="row" style="border:0"><button class="btn${t.done?'':' pri'}" data-a="tick2" data-i="${t.id}">${t.done?'Reopen':'Mark complete'}</button><button class="btn" data-a="edit" data-i="${t.id}">Edit details</button></div></div><div class="glass card"><h2>Notes</h2><textarea id="wn" rows="10" placeholder="Write here. Saved automatically.">${esc(t.notes)}</textarea></div><div class="glass card"><h2>Resources and links</h2>${t.links.map((l,li)=>`<div class="row"><a href="#" data-a="openlink" data-k="task" data-i="${li}">${esc(l.t)} ↗</a></div>`).join('')||empty('No links yet')}<button class="btn" data-a="addlink" data-i="${t.id}">Add link</button></div></div><aside class="glass card"><h2>Switch task</h2>${bubbleTasks().map((x,i)=>`<div class="bub" onclick="openTaskBubble('${x.id}')" style="${x.id==id?'outline:2px solid var(--ac)':''}"><span class="num">${i+1}</span><b>${esc(x.title)}</b></div>`).join('')||empty('No open tasks')}</aside></div>`}};
 
@@ -3840,7 +3862,7 @@ const X=(i,b)=>{const t=S.tasks.find(x=>x.id==i),delT=()=>{S.tasks=S.tasks.filte
  tcus:()=>ask('Custom session',[['m','Minutes*','number']],{m:30},o=>{if(!T.run){T.len=Math.min(180,Math.max(1,+o.m||25));T.brk=false;T.left=T.len*60;render()}}),
  exp:()=>{const out=JSON.parse(JSON.stringify(S));delete out.aiHist;delete out.chats;delete out.curChat;delete out.loggedIn;if(out.aiCfg)out.aiCfg.apiKey='';const u=URL.createObjectURL(new Blob([JSON.stringify(out,null,1)],{type:'application/json'})),a=document.createElement('a');a.href=u;a.download='lifelink-'+currentEmail+'-backup.json';a.click();setTimeout(()=>URL.revokeObjectURL(u),2000);toast('Backup downloaded (API keys are not included)')},
  rmdemo:()=>{['tasks','events','notes','notifs'].forEach(k=>S[k]=S[k].filter(x=>!x.demo));save();render();toast('Sample data removed')},
- cleanuprecents:()=>askConfirm('Clear notifications & completed tasks','This permanently deletes all notifications and completed tasks from the currently signed-in LifeLink account. Unfinished tasks, notes, events, links, settings and connected accounts will be kept.',()=>{const notificationCount=S.notifs.length,completedCount=S.tasks.filter(t=>t.done).length;S.notifs=[];S.tasks=S.tasks.filter(t=>!t.done);expandedNotificationIds.clear();save();badge();render();toast(`Cleared ${notificationCount} notification(s) and deleted ${completedCount} completed task(s).`)}),
+
  logout:async()=>{
    stopAIOrganiserLoop();
    save();
