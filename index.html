@@ -1422,7 +1422,9 @@ function tl(){
      return `<div class="bub todo-task-row"><input type="checkbox" style="width:auto;flex:none" data-a="tick" data-i="${t.id}" ${t.done?'checked':''} aria-label="Complete ${esc(t.title)}"><span class="num">${number}</span><a href="#/task/${t.id}" style="flex:1;min-width:0;${t.done?'text-decoration:line-through;opacity:.5':''}"><b>${esc(t.title)}</b><div class="sub" style="margin:0;font-size:12px">${esc(t.src)} · ${t.due||'No deadline'}</div></a><span class="tag ${PC[t.pri]}">${t.pri}</span><button class="btn" data-a="edit" data-i="${t.id}">Edit</button><button class="btn" data-a="del" data-i="${t.id}" aria-label="Delete task">✕</button></div>`;
    }
    const eventAction=item.kind==='local'?'evedit':'gcalopen';
-   return `<div class="bub todo-task-row todo-calendar-row"><span class="num" style="background:rgba(79,124,255,.16);color:var(--ink)">${number}</span><button class="todo-event-open" data-a="${eventAction}" data-i="${esc(item.id)}" style="flex:1;min-width:0;text-align:left;border:0;background:none;cursor:pointer;padding:0"><b>${esc(item.title)}</b><div class="sub" style="margin:0;font-size:12px">${esc(item.date)}${item.time?' · '+esc(item.time):' · All day'} · ${esc(item.source)}</div></button><span class="tag">Event</span></div>`;
+   const eventKey=item.kind+':'+item.id;
+   const eventDone=!!(S.todoEventDone&&S.todoEventDone[eventKey]);
+   return `<div class="bub todo-task-row todo-calendar-row"><input type="checkbox" style="width:auto;flex:none" data-a="eventtick" data-i="${esc(eventKey)}" ${eventDone?'checked':''} aria-label="Complete ${esc(item.title)}"><span class="num" style="background:rgba(79,124,255,.16);color:var(--ink)">${number}</span><button class="todo-event-open" data-a="${eventAction}" data-i="${esc(item.id)}" style="flex:1;min-width:0;text-align:left;border:0;background:none;cursor:pointer;padding:0;${eventDone?'text-decoration:line-through;opacity:.5':''}"><b>${esc(item.title)}</b><div class="sub" style="margin:0;font-size:12px">${esc(item.date)}${item.time?' · '+esc(item.time):' · All day'} · ${esc(item.source)}</div></button><span class="tag">Event</span></div>`;
  }).join('');
  $('#tl').innerHTML=rows||empty('No tasks or calendar events match.');
 }
@@ -3862,6 +3864,7 @@ document.addEventListener('pointerup',stopIslandDrag);document.addEventListener(
 
 const X=(i,b)=>{const t=S.tasks.find(x=>x.id==i),delT=()=>{S.tasks=S.tasks.filter(x=>x!==t);save();render()};return{
  tick:()=>{t.done=b.checked;if(t.done){t.prog=100;note('Tasks','Completed: '+t.title)}save();render()},
+ eventtick:()=>{S.todoEventDone=S.todoEventDone||{};const key=String(i||'');S.todoEventDone[key]=!!b.checked;if(!b.checked)delete S.todoEventDone[key];save();render()},
  tick2:()=>{t.done=!t.done;if(t.done)t.prog=100;save();render()},
  newtask:()=>ask('New task',F,{pri:S.p.dPri},o=>{addTask(o);render()}),
 
