@@ -600,7 +600,7 @@ body::-webkit-scrollbar,
     <button class="btn" onclick="recordBrowserCompatibility('not-working')" style="padding:6px 10px;font-size:11px">Not working</button>
   </div>
   <div id="browser-loading" aria-live="polite"><div class="browser-loading-card"><span class="browser-spinner" aria-hidden="true"></span><span id="browser-loading-text">Opening inside LifeLink…</span></div></div>
-  <iframe id="browser-frame" title="LifeLink embedded app" sandbox="allow-downloads allow-forms allow-modals allow-popups allow-same-origin allow-scripts allow-storage-access-by-user-activation" allow="clipboard-read; clipboard-write; fullscreen; autoplay; picture-in-picture; encrypted-media; camera; microphone; storage-access" referrerpolicy="strict-origin-when-cross-origin" loading="eager"></iframe>
+  <iframe id="browser-frame" title="LifeLink embedded app" sandbox="allow-downloads allow-forms allow-modals allow-same-origin allow-scripts allow-storage-access-by-user-activation" allow="clipboard-read; clipboard-write; fullscreen; autoplay; picture-in-picture; encrypted-media; camera; microphone; storage-access" referrerpolicy="strict-origin-when-cross-origin" loading="eager"></iframe>
 </div>
 
 <div id="ai-full" role="dialog" aria-modal="true" aria-label="LifeLink AI">
@@ -1268,7 +1268,7 @@ function closeBrowser(){
   browserCloseTimer=setTimeout(()=>{
     if($('#browser-modal').classList.contains('open'))return;
     const frame=$('#browser-frame');
-    if(frame){frame.removeAttribute('src');frame.src='about:blank';frame.style.display='block';frame.classList.remove('loaded');frame.referrerPolicy='strict-origin-when-cross-origin';}
+    if(frame){frame.onload=null;frame.onerror=null;frame.removeAttribute('src');frame.src='about:blank';frame.style.display='block';frame.classList.remove('loaded');frame.referrerPolicy='strict-origin-when-cross-origin';}
     hideBrowserDiagnostics();
   },420);
 }
