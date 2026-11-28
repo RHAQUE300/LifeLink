@@ -87,6 +87,8 @@ input,select,textarea{border:1px solid rgba(0,0,0,.1);background:rgba(255,255,25
 }
 #browser-modal.open{opacity:1;transform:translateY(0) scale(1);pointer-events:auto;visibility:visible}
 #browser-toolbar{padding:12px 16px;background:rgba(0,0,0,.03);display:flex;align-items:center;gap:10px;border-bottom:1px solid rgba(0,0,0,.08)}
+#browser-fallback{flex:0 0 auto}
+#browser-fallback .btn{white-space:nowrap}
 #browser-frame{flex:1;border:0;width:100%;background:#fff;opacity:0;transition:opacity .34s var(--motion-ease, cubic-bezier(.22,1,.36,1))}#browser-frame.loaded{opacity:1}
 #browser-loading{position:absolute;inset:58px 0 0;z-index:3;display:grid;place-items:center;background:rgba(245,248,255,.48);backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);opacity:0;visibility:hidden;pointer-events:none;transition:opacity .28s var(--motion-ease),visibility .28s}
 #browser-loading.open{opacity:1;visibility:visible}
@@ -589,22 +591,16 @@ body::-webkit-scrollbar,
     <span id="browser-status" class="sub" style="font-size:11px;white-space:nowrap;max-width:310px;overflow:hidden;text-overflow:ellipsis">Ready to open inside LifeLink</span>
     <button class="btn" onclick="closeBrowser()">✕ Close</button>
     <input id="browser-url" readonly style="flex:1;background:rgba(0,0,0,.04);font-size:13px">
-    <button class="btn" id="browser-embed-btn" onclick="forceEmbedBrowser()" style="display:none">Try Inline Embed</button>
-    <button class="btn pri" onclick="openBrowserExternal()">Open in New Tab ↗</button>
+    <span class="sub" id="browser-mode-label" style="font-size:11px;white-space:nowrap">LifeLink inline app</span>
   </div>
-  <div id="browser-fallback" style="display:none;flex:1;place-items:center;padding:32px;text-align:center;background:radial-gradient(circle at 50% 30%,rgba(79,124,255,.08),transparent)">
-    <div class="glass card" style="max-width:440px;padding:28px">
-      <div style="font-size:36px;margin-bottom:10px">↗</div>
-      <h2 id="bf-title" style="font-size:20px;margin-bottom:6px">External Web App</h2>
-      <p id="bf-description" class="sub" style="font-size:13.5px;margin-bottom:18px">Some websites block being embedded by other apps. LifeLink will always attempt the inline view, but it cannot override a site’s own security policy. Try opening it in a new tab if the embedded view stays blank.</p>
-      <div style="display:flex;gap:10px;justify-content:center;flex-wrap:wrap">
-        <button class="btn pri" onclick="openBrowserPopup()">Open App Window</button>
-        <button class="btn" onclick="openBrowserExternal()">Open in New Tab ↗</button>
-      </div>
-    </div>
+  <div id="browser-fallback" role="status" aria-live="polite" style="display:none;align-items:center;gap:10px;flex-wrap:wrap;padding:10px 14px;border-bottom:1px solid var(--gb);background:rgba(79,124,255,.06)">
+    <div style="flex:1;min-width:180px"><b id="bf-title" style="font-size:12px">Inline compatibility check</b><div id="bf-description" class="sub" style="font-size:11px;margin:3px 0 0">LifeLink cannot inspect another website's page. Tell us whether this embedded app is working.</div></div>
+    <button class="btn" onclick="forceEmbedBrowser()" style="padding:6px 10px;font-size:11px">Retry inline</button>
+    <button class="btn" onclick="recordBrowserCompatibility('working')" style="padding:6px 10px;font-size:11px">Works</button>
+    <button class="btn" onclick="recordBrowserCompatibility('not-working')" style="padding:6px 10px;font-size:11px">Not working</button>
   </div>
   <div id="browser-loading" aria-live="polite"><div class="browser-loading-card"><span class="browser-spinner" aria-hidden="true"></span><span id="browser-loading-text">Opening inside LifeLink…</span></div></div>
-  <iframe id="browser-frame" sandbox="allow-downloads allow-forms allow-modals allow-popups allow-popups-to-escape-sandbox allow-same-origin allow-scripts allow-storage-access-by-user-activation allow-top-navigation-by-user-activation" allow="clipboard-read; clipboard-write; fullscreen; autoplay; picture-in-picture; encrypted-media; camera; microphone" referrerpolicy="strict-origin-when-cross-origin" loading="eager"></iframe>
+  <iframe id="browser-frame" title="LifeLink embedded app" sandbox="allow-downloads allow-forms allow-modals allow-popups allow-same-origin allow-scripts allow-storage-access-by-user-activation" allow="clipboard-read; clipboard-write; fullscreen; autoplay; picture-in-picture; encrypted-media; camera; microphone; storage-access" referrerpolicy="strict-origin-when-cross-origin" loading="eager"></iframe>
 </div>
 
 <div id="ai-full" role="dialog" aria-modal="true" aria-label="LifeLink AI">
@@ -1029,10 +1025,20 @@ function toast(m){
   clearTimeout(toast.t);toast.t=setTimeout(()=>t.classList.remove('open'),3200);
 }
 let browserStatusTimer=null,browserCloseTimer=null,activeBrowserApp=null;
+const EMBED_COMPAT_KEY='lifelink.embed.compat.v1';
+function browserOriginKey(url){
+  try{return new URL(url).origin}catch{return ''}
+}
+function readEmbedCompatibility(){
+  try{const value=JSON.parse(localStorage.getItem(EMBED_COMPAT_KEY)||'{}');return value&&typeof value==='object'&&!Array.isArray(value)?value:{}}catch{return {}}
+}
 function appIntegrationInfo(app){
   const name=String(app?.name||'Website');
-  const host=(()=>{try{return new URL(app?.url||'').hostname.replace(/^www\./,'')}catch{return ''}})();
-  return {name,host,kind:'web',description:'LifeLink is trying the provider’s normal website view. Some providers permit embedding; others require their own browser window or sign-in flow.'};
+  const host=(()=>{try{return new URL(app?.url||'').hostname.toLowerCase().replace(/^www\\./,'')}catch{return ''}})();
+  const origin=browserOriginKey(app?.url||'');
+  const saved=readEmbedCompatibility()[origin]||null;
+  const crimson=host==='crimsoneducation.org'||host.endsWith('.crimsoneducation.org');
+  return {name,host,origin,kind:'web',profile:saved,knownWorking:crimson,description:crimson?'You reported that Crimson Education works inline. LifeLink will use the normal embedded view and check this page too.':'LifeLink will try the provider’s normal embedded website view. The provider may restrict framing or third-party sign-in.'};
 }
 function setBrowserLoading(label){
   const loading=$('#browser-loading'),text=$('#browser-loading-text');
@@ -1040,62 +1046,87 @@ function setBrowserLoading(label){
   if(loading)loading.classList.add('open');
 }
 function clearBrowserLoading(){const loading=$('#browser-loading');if(loading)loading.classList.remove('open')}
+function showBrowserDiagnostics(title,description){
+  const panel=$('#browser-fallback');
+  if($('#bf-title'))$('#bf-title').textContent=title||'Inline compatibility check';
+  if($('#bf-description'))$('#bf-description').textContent=description||'LifeLink cannot inspect another website’s page. Tell us whether this embedded app is working.';
+  if(panel)panel.style.display='flex';
+}
+function hideBrowserDiagnostics(){const panel=$('#browser-fallback');if(panel)panel.style.display='none'}
+function recordBrowserCompatibility(result){
+  const origin=browserOriginKey(activeBrowserApp?.url||$('#browser-url').value||'');
+  if(!origin)return;
+  const records=readEmbedCompatibility();
+  records[origin]={status:result,confirmedAt:new Date().toISOString(),method:'user-feedback'};
+  try{localStorage.setItem(EMBED_COMPAT_KEY,JSON.stringify(records))}catch(error){toast('Could not save compatibility feedback in this browser');return}
+  const status=$('#browser-status');
+  if(status)status.textContent=result==='working'?'Marked as working inline':'Marked as not working inline · native integration may be needed';
+  showBrowserDiagnostics(result==='working'?'Thanks — inline confirmed':'Thanks — compatibility issue recorded',result==='working'?'This origin is now recorded as user-confirmed working on this browser. Individual pages may still behave differently.':'This origin is recorded as not working inline. LifeLink will not claim it is compatible; a supported native integration may be the next route.');
+  toast(result==='working'?'Inline compatibility saved':'Compatibility issue saved');
+}
+function setBrowserFrameHandlers(target,info){
+  const iframe=$('#browser-frame'),status=$('#browser-status');
+  iframe.onload=()=>{
+    if($('#browser-url').value!==target)return;
+    iframe.classList.add('loaded');clearBrowserLoading();
+    if(status)status.textContent='Frame response received · confirm that the app is visible and interactive';
+    showBrowserDiagnostics('Did this app open correctly?',info.knownWorking?'Crimson Education is your known-working inline reference. Please confirm this page too.':'A frame response does not prove the website rendered. Confirm whether you can see and use the app.');
+  };
+  iframe.onerror=()=>{
+    clearBrowserLoading();
+    if(status)status.textContent='The browser reported an inline loading error';
+    showBrowserDiagnostics('Inline loading error','The browser reported a frame error. The provider may be unavailable or may restrict embedding. LifeLink cannot override the provider’s framing policy.');
+  };
+}
 function openBrowser(u,app=null){
   let target=String(u||'').trim();
-  if(!/^https?:\/\//i.test(target))target='https://'+target;
+  if(!/^https?:\\/\\//i.test(target))target='https://'+target;
   try{
     const parsed=new URL(target);
     if(!['http:','https:'].includes(parsed.protocol))throw new Error('Invalid protocol');
     target=parsed.href;
   }catch(e){toast('Enter a valid website URL');return}
   $('#browser-url').value=target;
-  activeBrowserApp=app||{name:new URL(target).hostname.replace(/^www\./,'') ,url:target};
+  activeBrowserApp=app||{name:new URL(target).hostname.replace(/^www\\./,'') ,url:target};
+  activeBrowserApp.url=target;
   const info=appIntegrationInfo(activeBrowserApp);
-  clearTimeout(browserCloseTimer);
-  const iframe=$('#browser-frame'),fb=$('#browser-fallback'),eb=$('#browser-embed-btn'),status=$('#browser-status');
+  clearTimeout(browserCloseTimer);clearTimeout(browserStatusTimer);
+  const iframe=$('#browser-frame'),status=$('#browser-status');
   iframe.referrerPolicy='strict-origin-when-cross-origin';
-  fb.style.display='none';eb.style.display='inline-block';iframe.style.display='block';
-  iframe.classList.remove('loaded');
-  clearTimeout(browserStatusTimer);setBrowserLoading('Opening '+info.name+' inside LifeLink…');
+  hideBrowserDiagnostics();iframe.style.display='block';iframe.classList.remove('loaded');
+  setBrowserLoading('Opening '+info.name+' inside LifeLink…');
   if(status)status.textContent='Opening '+info.name+' inside LifeLink…';
-  const fallbackTitle=$('#bf-title'),fallbackDescription=$('#bf-description');
-  if(fallbackTitle)fallbackTitle.textContent=info.name;
-  if(fallbackDescription)fallbackDescription.textContent=info.description;
-  iframe.onload=()=>{
-    iframe.classList.add('loaded');clearBrowserLoading();
-    if(status&&$('#browser-url').value===target)status.textContent='Frame loaded · if it looks blank, the provider may block embedding';
-  };
-  iframe.onerror=()=>{
-    clearBrowserLoading();
-    if(status)status.textContent='This page could not be loaded in the inline viewer.';
-  };
+  const mode=$('#browser-mode-label');
+  if(mode)mode.textContent=info.profile?.status==='working'?'Inline · previously confirmed':info.knownWorking?'Inline · user-reported working':'Inline · checking compatibility';
+  setBrowserFrameHandlers(target,info);
   iframe.src=target;
   $('#browser-modal').classList.add('open');
   browserStatusTimer=setTimeout(()=>{
-    if(status&&$('#browser-url').value===target&&status.textContent.startsWith('Opening ')){
-      status.textContent=info.name+' is taking longer than expected. The page may be slow or may restrict embedding.';
-      iframe.classList.add('loaded');clearBrowserLoading();
-    }
-  },15000);
+    if($('#browser-url').value!==target||!status||!status.textContent.startsWith('Opening '))return;
+    clearBrowserLoading();iframe.classList.add('loaded');
+    status.textContent='Still waiting · page may be slow, require sign-in, or restrict framing';
+    showBrowserDiagnostics('Still waiting for the embedded app','LifeLink cannot read cross-origin page contents or reliably distinguish a slow page from a framing restriction. Keep the app here, retry inline, or report whether it works.');
+  },18000);
 }
 function forceEmbedBrowser(){
   if(activeBrowserApp?.kind==='drive-file')return;
   const target=String(activeBrowserApp?.url||$('#browser-url').value||'');
-  if(!/^https?:\/\//i.test(target)){toast('There is no website to retry');return}
-  clearTimeout(browserCloseTimer);clearTimeout(browserStatusTimer);
-  const iframe=$('#browser-frame'),fallback=$('#browser-fallback'),button=$('#browser-embed-btn'),status=$('#browser-status');
-  fallback.style.display='none';button.style.display='none';iframe.style.display='block';
-  iframe.classList.remove('loaded');setBrowserLoading('Retrying inside LifeLink…');
-  if(status)status.textContent='Retrying inside LifeLink…';
-  iframe.onload=()=>{iframe.classList.add('loaded');clearBrowserLoading();if(status)status.textContent='Frame loaded · if it looks blank, the provider may block embedding'};
-  iframe.onerror=()=>{clearBrowserLoading();if(status)status.textContent='This page could not be loaded in the inline viewer.'};
-  iframe.src=target;
+  if(!/^https?:\\/\\//i.test(target)){toast('There is no website to retry');return}
+  clearTimeout(browserStatusTimer);
+  const iframe=$('#browser-frame'),status=$('#browser-status');
+  hideBrowserDiagnostics();iframe.style.display='block';iframe.classList.remove('loaded');
+  setBrowserLoading('Retrying '+(activeBrowserApp?.name||'app')+' inside LifeLink…');
+  if(status)status.textContent='Retrying inline…';
+  const info=appIntegrationInfo(activeBrowserApp||{url:target});
+  setBrowserFrameHandlers(target,info);
+  iframe.src='about:blank';
+  requestAnimationFrame(()=>{iframe.src=target});
   browserStatusTimer=setTimeout(()=>{
-    if(status&&status.textContent.startsWith('Retrying ')){
-      iframe.classList.add('loaded');clearBrowserLoading();
-      status.textContent='The provider may be slow or may restrict embedding.';
-    }
-  },15000);
+    if($('#browser-url').value!==target||!status||!status.textContent.startsWith('Retrying '))return;
+    clearBrowserLoading();iframe.classList.add('loaded');
+    status.textContent='Still waiting · compatibility cannot yet be confirmed';
+    showBrowserDiagnostics('Still waiting for the embedded app','This may be a slow response, a sign-in issue or a provider framing restriction. LifeLink will keep the app inside this window.');
+  },18000);
 }
 function prepareDrivePreview(file){
   clearTimeout(browserCloseTimer);
@@ -1232,14 +1263,6 @@ async function uploadGoogleDriveFiles(files){
     if(activeGoogleService==='drive')refreshGoogleService();
   }
 }
-function openBrowserPopup(){
-  const url=activeBrowserApp?.kind==='drive-file'?$('#browser-frame').src:$('#browser-url').value;
-  if(url&&url!=='about:blank')window.open(url,'lifelink_app','noopener,noreferrer');
-}
-function openBrowserExternal(){
-  const url=activeBrowserApp?.kind==='drive-file'?$('#browser-frame').src:$('#browser-url').value;
-  if(url&&url!=='about:blank')window.open(url,'_blank','noopener,noreferrer');
-}
 function closeBrowser(){
   clearTimeout(browserStatusTimer);clearTimeout(browserCloseTimer);activeBrowserApp=null;
   $('#browser-modal').classList.remove('open');clearBrowserLoading();
@@ -1247,7 +1270,7 @@ function closeBrowser(){
     if($('#browser-modal').classList.contains('open'))return;
     const frame=$('#browser-frame');
     if(frame){frame.removeAttribute('src');frame.src='about:blank';frame.style.display='block';frame.classList.remove('loaded');frame.referrerPolicy='strict-origin-when-cross-origin';}
-    $('#browser-fallback').style.display='none';
+    hideBrowserDiagnostics();
   },420);
 }
 
