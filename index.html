@@ -1119,8 +1119,7 @@ function forceEmbedBrowser(){
   if(status)status.textContent='Retrying inline…';
   const info=appIntegrationInfo(activeBrowserApp||{url:target});
   setBrowserFrameHandlers(target,info);
-  iframe.src='about:blank';
-  requestAnimationFrame(()=>{iframe.src=target});
+  iframe.src=target;
   browserStatusTimer=setTimeout(()=>{
     if($('#browser-url').value!==target||!status||!status.textContent.startsWith('Retrying '))return;
     clearBrowserLoading();iframe.classList.add('loaded');
@@ -1131,9 +1130,9 @@ function forceEmbedBrowser(){
 function prepareDrivePreview(file){
   clearTimeout(browserCloseTimer);
   activeBrowserApp={name:String(file?.name||'Drive file'),fileId:file?.id,kind:'drive-file'};
-  const iframe=$('#browser-frame'),fb=$('#browser-fallback'),eb=$('#browser-embed-btn'),status=$('#browser-status');
+  const iframe=$('#browser-frame'),fb=$('#browser-fallback'),status=$('#browser-status');
   iframe.referrerPolicy='no-referrer';
-  fb.style.display='none';eb.style.display='none';iframe.style.display='block';
+  fb.style.display='none';iframe.style.display='block';
   iframe.classList.remove('loaded');iframe.onload=null;iframe.onerror=null;
   iframe.removeAttribute('src');iframe.src='about:blank';
   $('#browser-url').value='Google Drive · '+String(file?.name||'Drive file');
