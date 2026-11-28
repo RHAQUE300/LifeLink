@@ -1033,7 +1033,7 @@ async function playLifeLinkTone(kind){
     if(ctx.state==='suspended')await ctx.resume();
     if(ctx.state!=='running')return false;
     const now=ctx.currentTime+.015;
-    const tones=kind==='click'?[{f:760,t:0,d:.065,v:.085,to:570}]:[{f:660,t:0,d:.14,v:.105,to:760},{f:880,t:.13,d:.18,v:.09,to:1010}];
+    const tones=kind==='toggle'?[{f:590,t:0,d:.075,v:.09,to:720}]:kind==='click'?[{f:760,t:0,d:.065,v:.085,to:570}]:[{f:660,t:0,d:.14,v:.105,to:760},{f:880,t:.13,d:.18,v:.09,to:1010}];
     tones.forEach(t=>{
       const osc=ctx.createOscillator(),gain=ctx.createGain();
       osc.type='sine';osc.frequency.setValueAtTime(t.f,now+t.t);osc.frequency.exponentialRampToValueAtTime(t.to,now+t.t+t.d);
@@ -1055,11 +1055,30 @@ async function previewLifeLinkSounds(){
   }
   if(!played)toast('Sound could not start. Check your browser tab sound and Windows volume, then try again.');
 }
+let lifeLinkLastInteractionSound=0;
+function playLifeLinkInteractionSound(kind='click'){
+  const now=performance.now();
+  if(now-lifeLinkLastInteractionSound<75)return;
+  lifeLinkLastInteractionSound=now;
+  void playLifeLinkTone(kind);
+}
 document.addEventListener('click',event=>{
-  const target=event.target instanceof Element?event.target.closest('button,[role="button"],a.btn,input[type="checkbox"]'):null;
-  if(!target||target.disabled||target.getAttribute('aria-disabled')==='true')return;
-  if(target.id==='request-desktop-notifications'||target.id==='test-lifelink-sounds')return;
-  void playLifeLinkTone('click');
+  const target=event.target instanceof Element?event.target.closest('button,a[href],[role="button"],[role="tab"],[role="menuitem"],summary,[data-a],[data-action],[data-tab],[data-nav],[onclick],.clickable,.nav-item,.tab,.icon-btn,.switch,.toggle,input[type="button"],input[type="submit"],input[type="reset"]'):null;
+  if(!target||target.disabled||target.getAttribute('aria-disabled')==='true'||target.getAttribute('aria-hidden')==='true')return;
+  if(target.id==='test-lifelink-sounds')return;
+  if(target.closest('[inert]'))return;
+  // Every actionable surface gets the same subtle LifeLink interaction sound.
+  playLifeLinkInteractionSound('click');
+},true);
+document.addEventListener('change',event=>{
+  const target=event.target;
+  if(!(target instanceof Element)||!target.matches('input[type="checkbox"],input[type="radio"],input[type="range"],select,[role="switch"],[role="checkbox"],[role="radio"]'))return;
+  if(target.disabled||target.getAttribute('aria-disabled')==='true')return;
+  playLifeLinkInteractionSound('toggle');
+},true);
+document.addEventListener('submit',event=>{
+  const form=event.target;
+  if(form instanceof HTMLFormElement&&!form.querySelector(':disabled'))playLifeLinkInteractionSound('click');
 },true);
 function desktopNotificationStatus(){
   if(!('Notification' in window))return 'This browser does not support desktop notifications.';
