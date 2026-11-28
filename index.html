@@ -540,13 +540,20 @@ body::-webkit-scrollbar,
 }
 </style>
 <link rel="icon" type="image/svg+xml" href="./favicon.svg?v=20261128-2"><link rel="shortcut icon" type="image/svg+xml" href="./favicon.svg?v=20261128-2"><link rel="apple-touch-icon" sizes="192x192" href="./lifelink-icon-192.png"><style id="lifelink-pwa-styles">
-.pwa-install-btn{position:fixed;right:20px;bottom:18px;z-index:90;display:flex;align-items:center;gap:8px;padding:11px 17px;border:1px solid rgba(255,255,255,.7);border-radius:999px;background:#1d2433;color:#fff;box-shadow:0 10px 30px rgba(25,35,65,.22);font:600 13px/1.2 "Plus Jakarta Sans","Segoe UI",system-ui,sans-serif;cursor:pointer;transition:transform .22s cubic-bezier(.22,1,.36,1),box-shadow .22s,opacity .22s}
-.pwa-install-btn:hover{transform:translateY(-2px);box-shadow:0 14px 34px rgba(25,35,65,.28)}
-.pwa-install-btn:active{transform:scale(.97)}
-.pwa-install-btn[hidden]{display:none!important}
-[data-theme="dark"] .pwa-install-btn{background:#f5f5f7;color:#111;border-color:rgba(255,255,255,.7)}
-@media(max-width:520px){.pwa-install-btn{right:12px;padding:10px 14px;font-size:12px}}
-@media(prefers-reduced-motion:reduce){.pwa-install-btn{transition:none}}
+#pwa-install-notice{position:fixed;right:20px;bottom:22px;z-index:1200;width:min(360px,calc(100vw - 32px));padding:17px 18px;border:1px solid var(--border,rgba(130,145,175,.28));border-radius:20px;background:var(--surface,rgba(255,255,255,.96));color:var(--text,#20283a);box-shadow:0 18px 55px rgba(20,30,55,.2);backdrop-filter:blur(22px);-webkit-backdrop-filter:blur(22px);font:500 13px/1.5 "Plus Jakarta Sans","Segoe UI",system-ui,sans-serif;animation:pwaNoticeIn .38s cubic-bezier(.22,1,.36,1)}
+#pwa-install-notice[hidden]{display:none!important}
+#pwa-install-notice .pwa-notice-top{display:flex;align-items:center;gap:12px;margin-bottom:8px}
+#pwa-install-notice .pwa-notice-orb{width:34px;height:34px;flex:0 0 34px;border-radius:50%;background:url("./lifelink-icon-192.png") center/cover no-repeat}
+#pwa-install-notice .pwa-notice-title{font-weight:750;font-size:14px;flex:1}
+#pwa-install-notice .pwa-notice-close{border:0;background:transparent;color:inherit;opacity:.65;font-size:20px;line-height:1;cursor:pointer;padding:4px}
+#pwa-install-notice .pwa-notice-actions{display:flex;justify-content:flex-end;gap:8px;margin-top:13px}
+#pwa-install-notice button{border-radius:999px;padding:8px 14px;font:650 12px inherit;cursor:pointer}
+#pwa-install-notice .pwa-notice-dismiss{border:1px solid var(--border,rgba(130,145,175,.3));background:transparent;color:inherit}
+#pwa-install-notice .pwa-notice-install{border:1px solid #4f7cff;background:#4f7cff;color:white}
+[data-theme="dark"] #pwa-install-notice{background:rgba(28,32,44,.97);color:#f4f6fc;border-color:rgba(255,255,255,.13)}
+@keyframes pwaNoticeIn{from{opacity:0;transform:translateY(12px) scale(.98)}to{opacity:1;transform:translateY(0) scale(1)}}
+@media(max-width:520px){#pwa-install-notice{right:12px;bottom:14px;width:calc(100vw - 24px)}}
+@media(prefers-reduced-motion:reduce){#pwa-install-notice{animation:none}}
 </style>
 </head><body>
 
@@ -570,7 +577,7 @@ body::-webkit-scrollbar,
 </div>
 
 <div id="toast" class="glass" role="status"></div>
-<button id="pwa-install-btn" class="pwa-install-btn" type="button" hidden aria-label="Install LifeLink"><span aria-hidden="true">↓</span> Install LifeLink</button>
+<section id="pwa-install-notice" class="glass" role="status" aria-live="polite" hidden><div class="pwa-notice-top"><span class="pwa-notice-orb" aria-hidden="true"></span><strong class="pwa-notice-title">Install LifeLink</strong><button class="pwa-notice-close" id="pwa-install-dismiss" type="button" aria-label="Dismiss install notification">×</button></div><div id="pwa-install-copy">Keep LifeLink close by with its own app window and icon.</div><div class="pwa-notice-actions"><button class="pwa-notice-dismiss" id="pwa-install-not-now" type="button">Not now</button><button class="pwa-notice-install" id="pwa-install-action" type="button">Install</button></div></section>
 
 <div id="island" class="glass">
   <div id="island-header"><span id="island-title">Panel</span><span style="display:flex;gap:8px"><button class="btn" id="island-expand" style="padding:3px 12px;font-size:12px">Show more</button><button class="btn" onclick="closeIsland()" style="padding:3px 10px;font-size:12px">✕</button></span></div>
@@ -4671,55 +4678,66 @@ window.loadDeveloperMode = async function(button) {
   }
 };
 </script><script>
-/* LifeLink Progressive Web App: install affordance + offline app-shell registration. */
+/* LifeLink Progressive Web App: one-time install notification + offline app-shell registration. */
 (function(){
-  const installButton=document.getElementById('pwa-install-btn');
+  const notice=document.getElementById('pwa-install-notice');
+  const installAction=document.getElementById('pwa-install-action');
+  const dismissButtons=[document.getElementById('pwa-install-dismiss'),document.getElementById('pwa-install-not-now')];
+  const copy=document.getElementById('pwa-install-copy');
+  const dismissedKey='lifelink-pwa-install-notice-dismissed-v1';
   let installPrompt=null;
   const isIOS=()=>/iPad|iPhone|iPod/.test(navigator.userAgent)||(navigator.platform==='MacIntel'&&navigator.maxTouchPoints>1);
   const isStandalone=()=>window.matchMedia('(display-mode: standalone)').matches||navigator.standalone===true;
-  const notify=message=>{if(typeof window.toast==='function')window.toast(message);else console.info(message)};
-  function updateInstallButton(){
-    if(!installButton)return;
-    if(isStandalone()){installButton.hidden=true;return}
-    installButton.hidden=!(installPrompt||isIOS());
-    const header=document.getElementById('app-header');
-    installButton.style.bottom=header&&header.style.display==='flex'?'88px':'18px';
+  const wasDismissed=()=>{try{return localStorage.getItem(dismissedKey)==='1'}catch(error){return false}};
+  const markDismissed=()=>{try{localStorage.setItem(dismissedKey,'1')}catch(error){}};
+  function hideNotice(){if(notice)notice.hidden=true}
+  function showNotice(){
+    if(!notice||isStandalone()||wasDismissed())return;
+    notice.hidden=false;
   }
-  window.updateLifeLinkPwaInstallButton=updateInstallButton;
-
+  function dismissNotice(){markDismissed();hideNotice()}
+  dismissButtons.forEach(button=>button&&button.addEventListener('click',dismissNotice));
   window.addEventListener('beforeinstallprompt',event=>{
     event.preventDefault();
     installPrompt=event;
-    updateInstallButton();
+    if(copy)copy.textContent='Install LifeLink for quick access, its own app icon and a focused app window.';
+    if(installAction)installAction.textContent='Install';
+    showNotice();
   });
   window.addEventListener('appinstalled',()=>{
     installPrompt=null;
-    updateInstallButton();
-    notify('LifeLink has been installed.');
+    markDismissed();
+    hideNotice();
+    if(typeof window.toast==='function')window.toast('LifeLink has been installed.');
   });
-  if(installButton)installButton.addEventListener('click',async()=>{
+  if(installAction)installAction.addEventListener('click',async()=>{
     if(installPrompt){
       const promptEvent=installPrompt;
       installPrompt=null;
       try{
         await promptEvent.prompt();
         const choice=await promptEvent.userChoice;
-        notify(choice&&choice.outcome==='accepted'?'LifeLink is being installed.':'Installation was cancelled.');
-      }catch(error){notify('The install prompt could not be opened. Use your browser menu to install LifeLink.')}
-      updateInstallButton();
+        if(choice&&choice.outcome==='accepted')markDismissed();
+        hideNotice();
+      }catch(error){
+        if(copy)copy.textContent='Use your browser menu or address-bar install icon to install LifeLink.';
+        installAction.textContent='Got it';
+        installAction.onclick=dismissNotice;
+      }
       return;
     }
     if(isIOS()){
-      notify('To install LifeLink on iPhone or iPad, tap Share, then choose Add to Home Screen.');
+      if(copy)copy.textContent='To install LifeLink, tap Share in Safari, then choose “Add to Home Screen”.';
+      installAction.textContent='Got it';
+      installAction.onclick=dismissNotice;
     }else{
-      notify('Use your browser menu or address-bar install icon to install LifeLink.');
+      if(copy)copy.textContent='Use your browser menu or address-bar install icon to install LifeLink.';
+      installAction.textContent='Got it';
+      installAction.onclick=dismissNotice;
     }
   });
-  updateInstallButton();
-  const appHeader=document.getElementById('app-header');
-  if(appHeader&&'MutationObserver' in window){
-    new MutationObserver(updateInstallButton).observe(appHeader,{attributes:true,attributeFilter:['style']});
-  }
+  if(isIOS())showNotice();
+  window.updateLifeLinkPwaInstallButton=showNotice;
 
   if('serviceWorker' in navigator&&/^https?:$/.test(location.protocol)){
     window.addEventListener('load',()=>{
@@ -4728,9 +4746,8 @@ window.loadDeveloperMode = async function(button) {
         .catch(error=>console.warn('LifeLink offline support could not be enabled:',error));
     },{once:true});
   }
-
+  const notify=message=>{if(typeof window.toast==='function')window.toast(message);else console.info(message)};
   window.addEventListener('offline',()=>notify('You are offline. LifeLink can load its saved app shell, but sign-in, syncing, AI and connected services need internet.'));
   window.addEventListener('online',()=>notify('Connection restored.'));
-})();
-</script>
+})();</script>
 </body></html>
