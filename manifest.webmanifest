@@ -20,6 +20,12 @@
   ],
   "icons": [
     {
+      "src": "./lifelink-logo.webp",
+      "sizes": "128x128",
+      "type": "image/webp",
+      "purpose": "any"
+    },
+    {
       "src": "./favicon.svg",
       "sizes": "any",
       "type": "image/svg+xml",
