@@ -1404,29 +1404,27 @@ function tl(){
    if(googleConnectionStatus===null)refreshGoogleConnectionStatus().then(()=>{if(googleConnectionStatus?.accounts?.length)refreshGoogleCalendar()}).catch(()=>{});
    else if(googleConnectionStatus?.accounts?.length)refreshGoogleCalendar();
  }
- const filtered=S.tasks.filter(t=>(U.f=='All'?!(S.p.hideDone&&t.done):(U.f=='Done')==t.done)&&(t.title+t.src).toLowerCase().includes(q));
- const a=sortTasksLikeBubbles(filtered);
+ const today=ymd(new Date());
+ const tasks=S.tasks.filter(t=>(U.f=='All'?!(S.p.hideDone&&t.done):(U.f=='Done')==t.done)&&(t.title+t.src).toLowerCase().includes(q));
  const d=S.tasks.filter(t=>t.done).length,p=S.tasks.length?Math.round(d/S.tasks.length*100):0;
  $('#pb').style.width=p+'%';$('#pg').textContent=`${d} of ${S.tasks.length} complete (${p}%)`;
- let visibleNumber=0;
- const groups=['High','Medium','Low'].map(priority=>{
-   const tasks=a.filter(t=>(PC[t.pri]?t.pri:'Medium')===priority);
-   if(!tasks.length)return '';
-   const rows=tasks.map(t=>{
-     const number=++visibleNumber;
-     return `<div class="bub todo-task-row"><input type="checkbox" style="width:auto;flex:none" data-a="tick" data-i="${t.id}" ${t.done?'checked':''} aria-label="Complete ${esc(t.title)}"><span class="num">${number}</span><a href="#/task/${t.id}" style="flex:1;min-width:0;${t.done?'text-decoration:line-through;opacity:.5':''}"><b>${esc(t.title)}</b><div class="sub" style="margin:0;font-size:12px">${esc(t.src)} · ${t.due||'No deadline'}</div></a><span class="tag ${PC[t.pri]}">${t.pri}</span><button class="btn" data-a="edit" data-i="${t.id}">Edit</button><button class="btn" data-a="del" data-i="${t.id}" aria-label="Delete task">✕</button></div>`;
-   }).join('');
-   return `<section class="todo-priority-group"><div class="todo-priority-heading"><h3>${priority} priority</h3><span class="tag ${PC[priority]}">${tasks.length}</span></div>${rows}</section>`;
- }).join('');
- const today=ymd(new Date());
+ const taskItems=tasks.map(task=>({kind:'task',id:task.id,title:task.title||'Untitled task',date:task.due||'',sort:(task.due||'9999-12-31')+'T00:00',task}));
  const localEvents=(S.events||[]).filter(event=>event.date>=today&&(String(event.title||'')+' '+event.date+' '+(event.time||'')).toLowerCase().includes(q))
-   .map(event=>({id:event.id,title:event.title||'Untitled event',date:event.date||'',time:event.time||'',source:'LifeLink calendar',kind:'local',sort:(event.date||'')+'T'+(event.time||'00:00')}));
+   .map(event=>({kind:'local',id:event.id,title:event.title||'Untitled event',date:event.date||'',time:event.time||'',source:'LifeLink calendar',sort:(event.date||'')+'T'+(event.time||'00:00'),event}));
  const remoteEvents=(googleCalendarEvents||[]).filter(event=>event.status!=='cancelled'&&googleEventDay(event)>=today&&
    (String(event.summary||'')+' '+googleEventDay(event)+' '+(googleEventTime(event)||'')+' '+(event.location||'')).toLowerCase().includes(q))
-   .map(event=>({id:event.id,title:event.summary||'Untitled event',date:googleEventDay(event),time:googleEventTime(event),source:'Google Calendar',kind:'google',sort:(googleEventDay(event)||'')+'T'+(String(event.start||'').length>10?new Date(event.start).toISOString().slice(11,16):'00:00')}));
- const calendarItems=[...localEvents,...remoteEvents].sort((a,b)=>a.sort.localeCompare(b.sort));
- const calendarHtml=calendarItems.length?'<section class="todo-priority-group todo-calendar-group"><div class="todo-priority-heading"><h3>Calendar events</h3><span class="tag">'+calendarItems.length+'</span></div>'+calendarItems.map(event=>'<div class="bub todo-task-row todo-calendar-row"><span class="num" style="background:rgba(79,124,255,.16);color:var(--ink)">▣</span><button class="todo-event-open" data-a="'+(event.kind==='local'?'evedit':'gcalopen')+'" data-i="'+esc(event.id)+'" style="flex:1;min-width:0;text-align:left;border:0;background:none;cursor:pointer;padding:0"><b>'+esc(event.title)+'</b><div class="sub" style="margin:0;font-size:12px">'+esc(event.date)+(event.time?' · '+esc(event.time):' · All day')+' · '+esc(event.source)+'</div></button><span class="tag">Event</span></div>').join('')+'</section>':'';
- $('#tl').innerHTML=(groups||'')+calendarHtml||empty('No tasks or calendar events match.');
+   .map(event=>({kind:'google',id:event.id,title:event.summary||'Untitled event',date:googleEventDay(event),time:googleEventTime(event),source:'Google Calendar',sort:(googleEventDay(event)||'9999-12-31')+'T'+(String(event.start||'').length>10?new Date(event.start).toISOString().slice(11,16):'00:00'),event}));
+ const items=[...taskItems,...localEvents,...remoteEvents].sort((a,b)=>a.sort.localeCompare(b.sort)||(a.kind==='task'?-1:b.kind==='task'?1:a.title.localeCompare(b.title)));
+ const rows=items.map((item,index)=>{
+   const number=index+1;
+   if(item.kind==='task'){
+     const t=item.task;
+     return `<div class="bub todo-task-row"><input type="checkbox" style="width:auto;flex:none" data-a="tick" data-i="${t.id}" ${t.done?'checked':''} aria-label="Complete ${esc(t.title)}"><span class="num">${number}</span><a href="#/task/${t.id}" style="flex:1;min-width:0;${t.done?'text-decoration:line-through;opacity:.5':''}"><b>${esc(t.title)}</b><div class="sub" style="margin:0;font-size:12px">${esc(t.src)} · ${t.due||'No deadline'}</div></a><span class="tag ${PC[t.pri]}">${t.pri}</span><button class="btn" data-a="edit" data-i="${t.id}">Edit</button><button class="btn" data-a="del" data-i="${t.id}" aria-label="Delete task">✕</button></div>`;
+   }
+   const eventAction=item.kind==='local'?'evedit':'gcalopen';
+   return `<div class="bub todo-task-row todo-calendar-row"><span class="num" style="background:rgba(79,124,255,.16);color:var(--ink)">${number}</span><button class="todo-event-open" data-a="${eventAction}" data-i="${esc(item.id)}" style="flex:1;min-width:0;text-align:left;border:0;background:none;cursor:pointer;padding:0"><b>${esc(item.title)}</b><div class="sub" style="margin:0;font-size:12px">${esc(item.date)}${item.time?' · '+esc(item.time):' · All day'} · ${esc(item.source)}</div></button><span class="tag">Event</span></div>`;
+ }).join('');
+ $('#tl').innerHTML=rows||empty('No tasks or calendar events match.');
 }
 function nl(){const q=U.nq.toLowerCase();$('#nl').innerHTML=S.notes.filter(n=>(n.title+n.body).toLowerCase().includes(q)).sort((a,b)=>b.ts-a.ts).map(n=>`<div class="row" data-a="pick" data-i="${n.id}" style="cursor:pointer;${n.id==U.nid?'font-weight:600':''}"><div style="min-width:0"><div>${esc(n.title||'Untitled')}</div><div class="sub" style="margin:0;font-size:12px">${ago(n.ts)}</div></div></div>`).join('')||empty('No matches')}
 function appCardNode(app, mode, stateText, actionLabel, actionName, actionId, secondAction) {
