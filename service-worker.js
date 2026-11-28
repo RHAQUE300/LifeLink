@@ -1,7 +1,7 @@
 /* LifeLink PWA service worker.
    Cache only the application shell and same-origin static assets.
    Authentication, account data, AI, APIs and third-party services are never cached. */
-const VERSION = "v2";
+const VERSION = "v3";
 const SHELL_CACHE = "lifelink-shell-" + VERSION;
 const ASSET_CACHE = "lifelink-assets-" + VERSION;
 const APP_BASE = new URL(self.registration.scope);
@@ -13,6 +13,7 @@ const CORE_FILES = [
   INDEX_URL,
   new URL("manifest.webmanifest", APP_BASE).href,
   new URL("favicon.svg", APP_BASE).href,
+  new URL("lifelink-icon-192.png", APP_BASE).href,
   new URL("lifelink-logo.webp", APP_BASE).href,
   OFFLINE_URL
 ];
