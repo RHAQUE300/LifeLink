@@ -1034,7 +1034,7 @@ function readEmbedCompatibility(){
 }
 function appIntegrationInfo(app){
   const name=String(app?.name||'Website');
-  const host=(()=>{try{return new URL(app?.url||'').hostname.toLowerCase().replace(/^www\\./,'')}catch{return ''}})();
+  const host=(()=>{try{return new URL(app?.url||'').hostname.toLowerCase().replace(/^www\./,'')}catch{return ''}})();
   const origin=browserOriginKey(app?.url||'');
   const saved=readEmbedCompatibility()[origin]||null;
   const crimson=host==='crimsoneducation.org'||host.endsWith('.crimsoneducation.org');
@@ -1080,14 +1080,14 @@ function setBrowserFrameHandlers(target,info){
 }
 function openBrowser(u,app=null){
   let target=String(u||'').trim();
-  if(!/^https?:\\/\\//i.test(target))target='https://'+target;
+  if(!/^https?:\/\//i.test(target))target='https://'+target;
   try{
     const parsed=new URL(target);
     if(!['http:','https:'].includes(parsed.protocol))throw new Error('Invalid protocol');
     target=parsed.href;
   }catch(e){toast('Enter a valid website URL');return}
   $('#browser-url').value=target;
-  activeBrowserApp=app||{name:new URL(target).hostname.replace(/^www\\./,'') ,url:target};
+  activeBrowserApp=app||{name:new URL(target).hostname.replace(/^www\./,'') ,url:target};
   activeBrowserApp.url=target;
   const info=appIntegrationInfo(activeBrowserApp);
   clearTimeout(browserCloseTimer);clearTimeout(browserStatusTimer);
@@ -1111,7 +1111,7 @@ function openBrowser(u,app=null){
 function forceEmbedBrowser(){
   if(activeBrowserApp?.kind==='drive-file')return;
   const target=String(activeBrowserApp?.url||$('#browser-url').value||'');
-  if(!/^https?:\\/\\//i.test(target)){toast('There is no website to retry');return}
+  if(!/^https?:\/\//i.test(target)){toast('There is no website to retry');return}
   clearTimeout(browserStatusTimer);
   const iframe=$('#browser-frame'),status=$('#browser-status');
   hideBrowserDiagnostics();iframe.style.display='block';iframe.classList.remove('loaded');
