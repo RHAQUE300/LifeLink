@@ -497,6 +497,14 @@ body::-webkit-scrollbar,
 /* Keep the Task Bubbles heading and its first card closely, evenly spaced. */
 .home-task-bubbles-head{margin-bottom:3px!important}
 .home-task-bubbles-head+.bub{margin-top:0!important}
+.todo-priority-group{margin-top:16px}
+.todo-priority-group:first-child{margin-top:4px}
+.todo-priority-heading{display:flex;align-items:center;gap:8px;margin:0 0 9px;padding-bottom:7px;border-bottom:1px solid var(--gb)}
+.todo-priority-heading h3{font-size:14px;font-weight:650;margin:0}
+.todo-task-row{cursor:default;flex-wrap:wrap}
+.todo-task-row:hover{transform:none}
+.todo-task-row>a{overflow-wrap:anywhere}
+.todo-task-row .num{width:34px;height:34px}
 </style>
 <style id="lifelink-narrow-dock-v2">
 /* Compact the main LifeLink dock instead of squeezing five text labels onto narrow screens. */
@@ -1305,7 +1313,8 @@ function askConfirm(title,msg,onYes){
 const F=[['title','Title*','text'],['src','Source','text'],['pri','Priority','select',['High','Medium','Low']],['due','Deadline','date']],
 EF=[['title','Title*','text'],['date','Date*','date'],['time','Time','time'],['task','Also create a task bubble','checkbox']];
 const openT=()=>S.tasks.filter(t=>!t.done).sort((a,b)=>(a.due||'9').localeCompare(b.due||'9'));
-const bubbleTasks=()=>S.tasks.filter(t=>!t.done).sort((a,b)=>{const rank={High:0,Medium:1,Low:2};const priority=(rank[a.pri]??1)-(rank[b.pri]??1);if(priority)return priority;const dueA=a.due||'9999-12-31',dueB=b.due||'9999-12-31';return dueA.localeCompare(dueB)||(a.n||0)-(b.n||0)});
+const sortTasksLikeBubbles=tasks=>tasks.slice().sort((a,b)=>{const rank={High:0,Medium:1,Low:2};const priority=(rank[a.pri]??1)-(rank[b.pri]??1);if(priority)return priority;const dueA=a.due||'9999-12-31',dueB=b.due||'9999-12-31';return dueA.localeCompare(dueB)||(a.n||0)-(b.n||0)});
+const bubbleTasks=()=>sortTasksLikeBubbles(S.tasks.filter(t=>!t.done));
 const bubble=(t,index)=>`<div class="bub" onclick="openTaskBubble('${t.id}')"><span class="num">${index+1}</span><div style="flex:1;min-width:0"><b>${esc(t.title)}</b><div class="sub" style="margin:0;font-size:12px">${esc(t.src)} · ${t.due||'No deadline'}</div></div><span class="tag ${PC[t.pri]}">${t.pri}</span></div>`;
 function openTaskBubble(id){location.hash='#/task/'+id}
 
@@ -1364,7 +1373,7 @@ home:()=>{const o=openT(),h=new Date().getHours(),wk=(S.sessions||[]).filter(s=>
 <div class="glass card"><h2>Upcoming Tasks</h2>${o.slice(0,5).map(t=>`<div class="row"><span class="tag">${t.due||'—'}</span><a href="#/task/${t.id}" style="flex:1">${esc(t.title)}</a></div>`).join('')||empty('Nothing due. Add a task to get started.')}</div>
 <div class="glass card"><h2>Recent Activity</h2>${S.notifs.slice(0,4).map(n=>`<div class="row"><span style="flex:1">${esc(n.text)}</span><span class="sub" style="margin:0">${ago(n.ts)}</span></div>`).join('')||empty('No activity yet')}</div></div>
 <aside class="glass card"><div class="home-task-bubbles-head" style="display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap"><h2 style="margin:0">Task Bubbles <span class="tag">${Math.min(o.length,25)}</span></h2><span class="tag" title="AI checks connected sources automatically">✦ Auto-organising</span></div>${bubbleTasks().slice(0,10).map((t,i)=>bubble(t,i)).join('')||empty('No open tasks')}<button class="btn" data-a="newtask">New task</button></aside></div>`},
-todo:()=>`<h1>To Do</h1><p class="sub" id="pg"></p><div class="glass card"><div class="row" style="border:0"><input id="q" placeholder="Search tasks" value="${esc(U.q)}"><select id="f" style="width:auto">${['All','Open','Done'].map(x=>`<option${U.f==x?' selected':''}>${x}</option>`).join('')}</select><select id="s" style="width:auto">${['Deadline','Priority','Source'].map(x=>`<option${U.s==x?' selected':''}>${x}</option>`).join('')}</select><button class="btn pri" data-a="newtask">Add task</button></div><div class="bar"><i id="pb"></i></div><div id="tl"></div></div>`,
+todo:()=>`<h1>To Do</h1><p class="sub" id="pg"></p><div class="glass card"><div class="row" style="border:0"><input id="q" placeholder="Search tasks" value="${esc(U.q)}"><select id="f" style="width:auto">${['All','Open','Done'].map(x=>`<option${U.f==x?' selected':''}>${x}</option>`).join('')}</select><button class="btn pri" data-a="newtask">Add task</button></div><div class="bar"><i id="pb"></i></div><div id="tl"></div></div>`,
 calendar:()=>{const c=U.cm,y=c.getFullYear(),m=c.getMonth(),wk=U.cv=='Week',W=S.p.wk=='Mon'?1:0,st=wk?new Date(y,m,c.getDate()-(c.getDay()-W+7)%7):new Date(y,m,1-(new Date(y,m,1).getDay()-W+7)%7),td=ymd(new Date());let cells='';
  for(let i=0;i<(wk?7:42);i++){const d=new Date(st);d.setDate(st.getDate()+i);const k=ymd(d);
   const local=S.events.filter(e=>e.date==k).sort((a,b)=>(a.time||'').localeCompare(b.time||'')).map(e=>`<span class="ev" data-a="evedit" data-i="${e.id}">${e.time||''} ${esc(e.title)}</span>`).join('');
@@ -1389,10 +1398,24 @@ settings:()=>`<h1>Settings</h1><p class="sub">Account: <b>${esc(currentEmail)}</
 task:id=>{const t=S.tasks.find(x=>x.id==id);if(!t)return `<h1>Task not found</h1><a class="btn" href="#/todo">Back to To Do</a>`;U.tid=id;
  return `<h1>#${t.n} ${esc(t.title)}</h1><p class="sub">${esc(t.src)} · <span class="tag ${PC[t.pri]}">${t.pri}</span> · Due ${t.due||'—'} · ${t.done?'Completed':'In progress'}</p><div class="grid" style="grid-template-columns:1fr 300px"><div class="col"><div class="glass card"><h2>Progress <span id="wpv">${t.prog}%</span></h2><input id="wp" type="range" min="0" max="100" value="${t.prog}" aria-label="Progress"><div class="row" style="border:0"><button class="btn${t.done?'':' pri'}" data-a="tick2" data-i="${t.id}">${t.done?'Reopen':'Mark complete'}</button><button class="btn" data-a="edit" data-i="${t.id}">Edit details</button></div></div><div class="glass card"><h2>Notes</h2><textarea id="wn" rows="10" placeholder="Write here. Saved automatically.">${esc(t.notes)}</textarea></div><div class="glass card"><h2>Resources and links</h2>${t.links.map((l,li)=>`<div class="row"><a href="#" data-a="openlink" data-k="task" data-i="${li}">${esc(l.t)} ↗</a></div>`).join('')||empty('No links yet')}<button class="btn" data-a="addlink" data-i="${t.id}">Add link</button></div></div><aside class="glass card"><h2>Switch task</h2>${bubbleTasks().map((x,i)=>`<div class="bub" onclick="openTaskBubble('${x.id}')" style="${x.id==id?'outline:2px solid var(--ac)':''}"><span class="num">${i+1}</span><b>${esc(x.title)}</b></div>`).join('')||empty('No open tasks')}</aside></div>`}};
 
-function tl(){const R={High:0,Medium:1,Low:2},q=U.q.toLowerCase();
- const a=S.tasks.filter(t=>(U.f=='All'?!(S.p.hideDone&&t.done):(U.f=='Done')==t.done)&&(t.title+t.src).toLowerCase().includes(q)).sort((x,y)=>U.s=='Priority'?R[x.pri]-R[y.pri]:U.s=='Source'?x.src.localeCompare(y.src):(x.due||'9').localeCompare(y.due||'9'));
- const d=S.tasks.filter(t=>t.done).length,p=S.tasks.length?Math.round(d/S.tasks.length*100):0;$('#pb').style.width=p+'%';$('#pg').textContent=`${d} of ${S.tasks.length} complete (${p}%)`;
- $('#tl').innerHTML=a.map(t=>`<div class="row"><input type="checkbox" style="width:auto" data-a="tick" data-i="${t.id}" ${t.done?'checked':''} aria-label="Complete ${esc(t.title)}"><span class="num" style="width:26px;height:26px;font-size:12px">${t.n}</span><a href="#/task/${t.id}" style="flex:1;${t.done?'text-decoration:line-through;opacity:.5':''}">${esc(t.title)}<div class="sub" style="margin:0;font-size:12px">${esc(t.src)} · ${t.due||'no deadline'}</div></a><span class="tag ${PC[t.pri]}">${t.pri}</span><button class="btn" data-a="edit" data-i="${t.id}">Edit</button><button class="btn" data-a="del" data-i="${t.id}" aria-label="Delete task">✕</button></div>`).join('')||empty('No tasks match.')}
+function tl(){
+ const q=U.q.toLowerCase();
+ const filtered=S.tasks.filter(t=>(U.f=='All'?!(S.p.hideDone&&t.done):(U.f=='Done')==t.done)&&(t.title+t.src).toLowerCase().includes(q));
+ const a=sortTasksLikeBubbles(filtered);
+ const d=S.tasks.filter(t=>t.done).length,p=S.tasks.length?Math.round(d/S.tasks.length*100):0;
+ $('#pb').style.width=p+'%';$('#pg').textContent=`${d} of ${S.tasks.length} complete (${p}%)`;
+ let visibleNumber=0;
+ const groups=['High','Medium','Low'].map(priority=>{
+   const tasks=a.filter(t=>(PC[t.pri]?t.pri:'Medium')===priority);
+   if(!tasks.length)return '';
+   const rows=tasks.map(t=>{
+     const number=++visibleNumber;
+     return `<div class="bub todo-task-row"><input type="checkbox" style="width:auto;flex:none" data-a="tick" data-i="${t.id}" ${t.done?'checked':''} aria-label="Complete ${esc(t.title)}"><span class="num">${number}</span><a href="#/task/${t.id}" style="flex:1;min-width:0;${t.done?'text-decoration:line-through;opacity:.5':''}"><b>${esc(t.title)}</b><div class="sub" style="margin:0;font-size:12px">${esc(t.src)} · ${t.due||'No deadline'}</div></a><span class="tag ${PC[t.pri]}">${t.pri}</span><button class="btn" data-a="edit" data-i="${t.id}">Edit</button><button class="btn" data-a="del" data-i="${t.id}" aria-label="Delete task">✕</button></div>`;
+   }).join('');
+   return `<section class="todo-priority-group"><div class="todo-priority-heading"><h3>${priority} priority</h3><span class="tag ${PC[priority]}">${tasks.length}</span></div>${rows}</section>`;
+ }).join('');
+ $('#tl').innerHTML=groups||empty('No tasks match.');
+}
 function nl(){const q=U.nq.toLowerCase();$('#nl').innerHTML=S.notes.filter(n=>(n.title+n.body).toLowerCase().includes(q)).sort((a,b)=>b.ts-a.ts).map(n=>`<div class="row" data-a="pick" data-i="${n.id}" style="cursor:pointer;${n.id==U.nid?'font-weight:600':''}"><div style="min-width:0"><div>${esc(n.title||'Untitled')}</div><div class="sub" style="margin:0;font-size:12px">${ago(n.ts)}</div></div></div>`).join('')||empty('No matches')}
 function appCardNode(app, mode, stateText, actionLabel, actionName, actionId, secondAction) {
   const card=document.createElement('div');
@@ -3920,7 +3943,7 @@ document.addEventListener('click',e=>{
 });
 document.addEventListener('keydown',e=>{if(e.key==='Enter'&&e.target?.id==='google-app-search'&&S?.loggedIn){e.preventDefault();googleServiceQuery=e.target.value.trim();refreshGoogleService(googleServiceQuery)}});
 document.addEventListener('input',e=>{if(!S.loggedIn)return;const el=e.target,id=el.id,v=el.value,t=S.tasks.find(x=>x.id==U.tid),n=S.notes.find(x=>x.id==U.nid);
- if(id==='google-service-search'){filterGoogleServices(v)}else if(id==='google-app-search'){googleServiceQuery=v}else if(id=='q'){U.q=v;tl()}else if(id=='f'){U.f=v;tl()}else if(id=='s'){U.s=v;tl()}else if(id=='aq'){U.aq=v;al()}else if(id=='nq'){U.nq=v;nl()}else if(id=='cv'){U.cv=v;render()}
+ if(id==='google-service-search'){filterGoogleServices(v)}else if(id==='google-app-search'){googleServiceQuery=v}else if(id=='q'){U.q=v;tl()}else if(id=='f'){U.f=v;tl()}else if(id=='aq'){U.aq=v;al()}else if(id=='nq'){U.nq=v;nl()}else if(id=='cv'){U.cv=v;render()}
  else if((id=='nt'||id=='nb')&&n){n[id=='nt'?'title':'body']=v;n.ts=Date.now();save();$('#sv').textContent='Saved '+new Date().toLocaleTimeString();nl()}
  else if(id=='wn'&&t){t.notes=v;save()}else if(id=='wp'&&t){t.prog=+v;$('#wpv').textContent=v+'%';save()}else if(id=='pn'){S.name=v.trim()||'User';save();updateAvatar()}else if(id==='ai-learn-enabled'){S.aiLearning.enabled=el.checked;save();toast(el.checked?'Adaptive learning enabled':'Adaptive learning paused')}});
 
