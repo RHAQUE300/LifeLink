@@ -128,6 +128,7 @@
     wasm:{label:'WebAssembly text',mode:'wast',mime:'text/webassembly'},wat:{label:'WebAssembly text',mode:'wast',mime:'text/webassembly'}
   };
   let codeMirror = null, codeMirrorReady = null, selectedMode = 'auto';
+  let aiModelHome = null, aiModelHomeNext = null;
   function languageFor(name) { return LANGUAGE_MODES[ext(name)] || {label:'Plain Text',mode:'null',mime:'text/plain'}; }
   function loadScriptOnce(src, test) {
     if(test())return Promise.resolve();
@@ -569,7 +570,7 @@
       '<div id="dev-terminal-bar"><span id="dev-terminal-prompt">dev&gt;</span><input id="dev-terminal-command" autocomplete="off" spellcheck="false" aria-label="Terminal command" placeholder="help · run · preview · ls">'+
       '<button id="dev-terminal-run">Run</button></div></section></main>'+
       '<div class="dev-resize-handle" id="dev-assistant-resize" role="separator" aria-orientation="vertical" aria-label="Resize AI Assistant panel" aria-valuemin="240" aria-valuemax="500" tabindex="0"></div>'+
-      '<aside id="dev-assistant"><div id="dev-ai-model-row"><label for="dev-ai-model">Model</label><select id="dev-ai-model" aria-label="AI model"></select><button class="dev-pane-hide" id="dev-assistant-hide" type="button" title="Hide AI Assistant panel" aria-label="Hide AI Assistant panel">'+I.assistantHide+'</button></div>'+
+      '<aside id="dev-assistant"><div id="dev-ai-model-row"><label for="af-model">AI model</label><span id="dev-ai-provider" aria-live="polite"></span><button class="dev-pane-hide" id="dev-assistant-hide" type="button" title="Hide AI Assistant panel" aria-label="Hide AI Assistant panel">'+I.assistantHide+'</button></div>'+
       '<div id="dev-ai-messages"><div class="dev-empty">Describe what you want to build, ask for an explanation, or send an error to AI. The assistant can use your active file and project structure as context.</div></div>'+
       '<form id="dev-ai-composer"><textarea id="dev-ai-input" placeholder="Ask AI to build, debug or explain code…" maxlength="12000"></textarea>'+
       '<div id="dev-ai-send-row"><span id="dev-ai-hint">AI uses your connected LifeLink provider.</span><button id="dev-ai-send" type="submit">Ask AI ↗</button></div></form></aside></div>'+
@@ -737,7 +738,7 @@
     $('#dev-terminal-run').addEventListener('click',terminal);
     $('#dev-terminal-command').addEventListener('keydown',e=>{if(e.key==='Enter'){e.preventDefault();terminal();}});
     $('#dev-ai-composer').addEventListener('submit',e=>{e.preventDefault();askAI($('#dev-ai-input').value);});
-    $('#dev-ai-model').addEventListener('change',e=>{if(typeof window.selectAIModel==='function')window.selectAIModel(e.target.value);syncAIModel();});
+    
     $('#dev-runtime-choice').addEventListener('change',e=>{selectedRuntime=e.target.value;try{localStorage.setItem(key()+':runtime',selectedRuntime)}catch(err){};});
     $('#dev-stdin-toggle').addEventListener('click',()=>{$('#dev-stdin').hidden=!$('#dev-stdin').hidden;if(!$('#dev-stdin').hidden)$('#dev-stdin').focus();});
     $('#dev-modal-cancel').addEventListener('click',()=>finishDialog(false));
@@ -824,13 +825,24 @@
     if(activeFile===name)openFile(workspace.files[Math.min(index,workspace.files.length-1)].name);else renderFiles();
     save(false);tell('Deleted '+name);
   }
+  function mountAIModel() {
+    const model=$('#af-model'),row=$('#dev-ai-model-row');
+    if(!model||!row)return;
+    if(!aiModelHome){aiModelHome=model.parentNode;aiModelHomeNext=model.nextSibling;}
+    model.classList.add('dev-shared-ai-model');
+    row.insertBefore(model,$('#dev-assistant-hide'));
+    syncAIModel();
+  }
+  function restoreAIModel() {
+    const model=$('#af-model');
+    if(!model||!aiModelHome)return;
+    model.classList.remove('dev-shared-ai-model');
+    aiModelHome.insertBefore(model,aiModelHomeNext&&aiModelHomeNext.parentNode===aiModelHome?aiModelHomeNext:null);
+  }
   function syncAIModel() {
-    const source=$('#af-model'),target=$('#dev-ai-model');if(!source||!target)return;
-    const selected=source.value||'auto';
-    target.innerHTML=Array.from(source.options).map(option=>'<option value="'+esc(option.value)+'">'+esc(option.textContent)+'</option>').join('');
-    target.value=selected;
-    const provider=$('#dev-ai-provider'),availability=window.aiModelAvailability||{};
-    if(provider)provider.textContent=selected==='auto'?'Auto · connected models':(availability[selected]?'Connected · '+target.selectedOptions[0].textContent:'Not connected');
+    const source=$('#af-model'),provider=$('#dev-ai-provider');if(!source)return;
+    const selected=source.value||'auto',availability=window.aiModelAvailability||{};
+    if(provider)provider.textContent=selected==='auto'?'Auto · connected models':(availability[selected]?'Connected':'Provider not connected');
   }
   function clearLogs() {
     logQueue.length=0;
@@ -1023,7 +1035,7 @@
   }
   function open() {
     if(opened)return;
-    buildUI();workspace=load();
+    buildUI();mountAIModel();workspace=load();
     root.classList.remove('closing','ai-open','explorer-open','explorer-collapsed','assistant-collapsed');
     loadPanelLayout();
     const compact=window.matchMedia('(max-width: 620px)').matches;
@@ -1051,6 +1063,7 @@
   }
   function close() {
     if(!opened||!root)return;
+    restoreAIModel();
     flushSave(false);
     root.classList.remove('ai-open','explorer-open');
     $('#dev-ai-toggle').setAttribute('aria-expanded','false');
